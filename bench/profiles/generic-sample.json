@@ -1,0 +1,23 @@
+{
+  "name": "generic-sample",
+  "description": "The small XcodeGen + CocoaPods workspace in examples/generic-sample: a check of the benchmark itself. Plain worktrees are set up the usual way (xcodegen, pod install) and built with xcodebuild into the global DerivedData; xcfs uses the sample's own config.",
+  "agents": 2,
+  "plain": {
+    "create": ["git worktree add -q -b {branch} {dest}", "cd {dest} && xcodegen generate --quiet && pod install --silent"],
+    "build": "xcodebuild build -workspace GenApp.xcworkspace -scheme GenApp -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet",
+    "remove": "git worktree remove --force {dest} && git branch -D {branch}"
+  },
+  "xcfs": {
+    "config": {
+      "version": 1,
+      "seed": ["Pods", "GenApp.xcodeproj", "GenApp.xcworkspace"],
+      "toolchains": [{"adapter": "xcode", "workspace": "GenApp.xcworkspace", "scheme": "GenApp",
+                      "configurations": {"sim-debug": {"configuration": "Debug", "destination": "generic/platform=iOS Simulator"}},
+                      "buildSettings": {"CODE_SIGNING_ALLOWED": "NO"}}]
+    }
+  },
+  "edits": [
+    {"name": "edit a function body", "file": "App/Other.swift", "find": "return 3", "replace": "return 3 + {n} - {n}"},
+    {"name": "add a declaration to the pod", "file": "LocalPod/Sources/LocalPodThing.swift", "append": "public enum XcfsBench{n} { public static let v = {n} }\n"}
+  ]
+}

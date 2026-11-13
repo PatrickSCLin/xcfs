@@ -14,7 +14,7 @@ LINK = SB + "-link"  # a symlink to the sandbox, for the physical-path test
 PY = sys.argv[sys.argv.index("--python") + 1] if "--python" in sys.argv else sys.executable
 ONLY = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
 ENV = dict(os.environ, XCFS_STATE=SB + "/state", XCFS_DD_ROOT=SB + "/dd", XDG_CONFIG_HOME=SB + "/config",
-           XCFS_CACHE=SB + "/cache", XCFS_POOL_ROOT=SB + "/pool")
+           XCFS_CACHE=SB + "/cache", XCFS_POOL_ROOT=SB + "/pool", XCFS_BAZEL_USER_ROOT=SB + "/bazel-root")
 for k in ("CLAUDE_CODE_SESSION_ID", "XCFS_SESSION"):  # the caller's own session must not leak into the tests
     ENV.pop(k, None)
 L28 = "abcdefghijklmnopqrstuvwxyzab"
@@ -825,6 +825,74 @@ def t43_session_failure_modes():
     assert out["reused_description"] and json.load(open(SB + "/req.json"))["buildDescriptionID"] == "d1", out
     sb.quit()
     return "error-then-hang detected in %.1fs" % (time.time() - t0)
+
+
+def git_commit(path, msg):
+    sh("git", "-C", path, "add", "-A"); sh("git", "-C", path, "-c", "user.name=t", "-c", "user.email=t@t.invalid", "commit", "-q", "-m", msg)
+
+
+@test
+def t44_submodules_come_along_locally():
+    lib = SB + "/r44-lib"; sh("git", "init", "-q", "-b", "main", lib)
+    open(lib + "/lib.c", "w").write("int v = 1;\n"); git_commit(lib, "v1")
+    repo = toy_repo("r44", slots=1); E = toy_env()
+    sh("git", "-C", repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", lib, "vendor/lib"); git_commit(repo, "add submodule")
+    w = xcfs("new", repo, "sub", env=E); assert w["_code"] == 0, w; wt = w["worktree"]
+    assert open(wt + "/vendor/lib/lib.c").read() == "int v = 1;\n"
+    assert os.path.realpath(sh("git", "-C", wt + "/vendor/lib", "remote", "get-url", "origin")) == repo + "/vendor/lib", \
+        "the submodule was not cloned from the source checkout"
+    assert sh("git", "-C", wt, "status", "--porcelain") == ""
+    open(wt + "/vendor/lib/lib.c", "w").write("int v = 2;\n"); git_commit(wt + "/vendor/lib", "only here")
+    sh("git", "-C", wt + "/vendor/lib", "checkout", "-q", "--detach")
+    r = xcfs("rm", wt, "--apply", env=E); assert r["_code"] == 5, r      # the superproject sees the moved submodule
+    git_commit(wt, "record the new submodule commit")
+    r = xcfs("rm", wt, "--apply", env=E); assert r["_code"] == 5 and "only in this checkout" in r["error"], r
+    sh("git", "-C", wt, "reset", "-q", "--hard", "HEAD~1"); sh("git", "-C", wt, "submodule", "update", "-q")
+    assert xcfs("rm", wt, "--apply", "--prune-branch", env=E)["_code"] == 0
+    # a branch whose submodule points at a newer commit (the source's copy has it): a slot follows it both ways
+    open(lib + "/lib.c", "w").write("int v = 3;\n"); git_commit(lib, "v3")
+    sh("git", "-C", repo + "/vendor/lib", "pull", "-q", "origin", "main")
+    sh("git", "-C", repo, "checkout", "-q", "-b", "bump"); git_commit(repo, "bump submodule"); sh("git", "-C", repo, "checkout", "-q", "main")
+    sh("git", "-C", repo, "submodule", "update", "-q")
+    c = xcfs("checkout", repo, "bump", env=E); assert c["_code"] == 0, c
+    assert open(c["worktree"] + "/vendor/lib/lib.c").read() == "int v = 3;\n", "the slot's submodule did not follow"
+    r = xcfs("release", c["worktree"], "--no-warm", env=E); assert r["_code"] == 0, r
+    assert open(c["worktree"] + "/vendor/lib/lib.c").read() == "int v = 1;\n", "the slot's submodule did not go back"
+    assert xcfs("pool", "resize", repo, "0", env=E)["_code"] == 0
+
+
+FAKE_BAZEL = r"""OB="$XCFS_BAZEL_USER_ROOT/$(python3 -c 'import hashlib,os;print(hashlib.md5(os.getcwd().encode()).hexdigest())')"
+mkdir -p "$OB/server" "$OB/execroot"; echo "WORKSPACE: $(pwd -P)" > "$OB/README"; echo x > "$OB/execroot/out.o"
+if [ ! -f "$OB/server/server.pid.txt" ] || ! kill -0 "$(cat "$OB/server/server.pid.txt")" 2>/dev/null; then
+  sleep 300 >/dev/null 2>&1 & echo $! > "$OB/server/server.pid.txt"
+fi
+[ -f FAIL ] && { echo "ERROR: $(pwd -P)/BUILD:3:1: broken target"; exit 1; }
+echo built"""
+
+
+@test
+def t45_bazel_output_base_belongs_to_its_checkout():
+    repo = mkrepo("r45", cfg=dict(CFG, toolchains=[{"adapter": "bazel", "build": FAKE_BAZEL}], pool={"slots": 1}))
+    open(repo + "/MODULE.bazel", "w").write("module(name = 'x')\n"); git_commit(repo, "bazel")
+    import hashlib
+    ob_of = lambda p: SB + "/bazel-root/" + hashlib.md5(p.encode()).hexdigest()
+    wt = xcfs("new", repo, "b")["worktree"]
+    r = xcfs("build", wt); assert r["_code"] == 0 and r["output_base"] == ob_of(wt), r
+    pid = int(open(ob_of(wt) + "/server/server.pid.txt").read())
+    open(wt + "/FAIL", "w").write(""); r = xcfs("build", wt); os.remove(wt + "/FAIL")
+    assert r["_code"] == 8 and r["diagnostics"][0]["file"] == wt + "/BUILD" and r["diagnostics"][0]["line"] == 3, r
+    r = xcfs("rm", wt, "--apply"); assert r["_code"] == 0 and r["caches"] == 1, r
+    assert wait_gone(ob_of(wt)), "the output base outlived its worktree"
+    assert wait_for(lambda: subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode != 0, 10), "server left running"
+    c = xcfs("checkout", repo, "s"); src = c["worktree"]
+    assert xcfs("build", src)["_code"] == 0 and os.path.isdir(ob_of(src))
+    pid = int(open(ob_of(src) + "/server/server.pid.txt").read())
+    assert xcfs("release", src, "--no-warm", "--prune-branch")["_code"] == 0
+    assert wait_for(lambda: subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode != 0, 10), "server of a returned slot left running"
+    assert os.path.isfile(ob_of(src) + "/execroot/out.o"), "a returned slot lost its build state"
+    assert xcfs("pool", "resize", repo, "0")["_code"] == 0 and wait_gone(ob_of(src)), "a retired slot kept its output base"
+    os.makedirs(SB + "/bazel-root/" + "0" * 32); open(SB + "/bazel-root/" + "0" * 32 + "/README", "w").write("WORKSPACE: /no/such/place\n")
+    r = xcfs("gc", "--foreign"); assert any("workspace is gone" in k for k, _ in r["foreign"]), r["foreign"]
 
 
 

@@ -1,0 +1,44 @@
+{
+  "name": "Telegram-iOS",
+  "description": "https://github.com/TelegramMessenger/Telegram-iOS, a large Bazel-built iOS app with 12 git submodules, built for the iOS Simulator (debug_sim_arm64) with the repository's fake code-signing data. Both sides share one Bazel disk cache ($XCFS_BENCH_CACHE), as the project's README recommends, and it is already filled by a build of the source checkout: this measures what parallel checkouts cost on top of a warm cache. Plain worktrees fetch their submodules the way `git clone --recursive` would; xcfs clones them from the source checkout.",
+  "agents": 3,
+  "versionCommand": "python3 -c \"import json; v = json.load(open('versions.json')); print('bazel %s, project wants Xcode %s' % (v['bazel'].split(':')[0], v['xcode']))\"",
+  "plain": {
+    "create": [
+      "git worktree add -q -b {branch} {dest}",
+      "git -C {dest} submodule update --init --recursive --depth 1 -j 8"
+    ],
+    "build": "python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir=\"$XCFS_BENCH_CACHE\" build --configurationPath=build-system/appstore-configuration.json --codesigningInformationPath=build-system/fake-codesigning --configuration=debug_sim_arm64 --buildNumber=1",
+    "remove": "rm -rf {dest} && git worktree prune && git branch -D {branch}"
+  },
+  "xcfs": {
+    "config": {
+      "version": 1,
+      "toolchains": [
+        {
+          "adapter": "bazel",
+          "build": "python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir=\"$XCFS_BENCH_CACHE\" build --configurationPath=build-system/appstore-configuration.json --codesigningInformationPath=build-system/fake-codesigning --configuration=debug_sim_arm64 --buildNumber=1"
+        }
+      ]
+    }
+  },
+  "edits": [
+    {
+      "name": "edit a function body in a leaf module",
+      "file": "submodules/TelegramUI/Components/CreateBotScreen/Sources/CreateBotScreen.swift",
+      "find": "            environment.controller()?.push(controller)\n        }",
+      "replace": "            environment.controller()?.push(controller)\n            _ = {n}\n        }"
+    },
+    {
+      "name": "edit a function body in a module 48 others import",
+      "file": "submodules/TextFormat/Sources/CountNicePercent.swift",
+      "find": "    var result: [Int] = []",
+      "replace": "    var result: [Int] = []\n    _ = {n}"
+    },
+    {
+      "name": "add a public declaration to that module",
+      "file": "submodules/TextFormat/Sources/CountNicePercent.swift",
+      "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { return {n} }\n"
+    }
+  ]
+}

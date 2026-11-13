@@ -214,8 +214,9 @@ class ExternalAdapter(Adapter):
 
 
 def builtin_adapters():
+    from .adapters.bazel import BazelAdapter
     from .adapters.xcode import XcodeAdapter
-    return {"xcode": XcodeAdapter()}
+    return {"xcode": XcodeAdapter(), "bazel": BazelAdapter()}
 
 
 _CACHE = {}

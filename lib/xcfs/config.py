@@ -160,7 +160,8 @@ def repo_set(repo, cfg):
         if not os.path.isdir(src) or not git_ok(src, "rev-parse", "--git-dir") or toplevel(src) != src:
             raise Fail("repos: %s is not the top of a git repository" % src)
         if git(repo, "ls-files", "--stage", "--", rel, check=False).startswith("160000"):
-            raise Fail("repos: %s is a git submodule of the primary repository; submodules are not supported" % rel)
+            raise Fail("repos: %s is a git submodule of the primary repository: submodules come along by themselves, "
+                       "do not list them under repos" % rel)
         if not git_ok(repo, "check-ignore", "-q", rel):
             raise Fail("repos: %s must be git-ignored by the primary repository, or every worktree looks dirty" % rel)
         out.append((rel, src, e.get("baseline")))

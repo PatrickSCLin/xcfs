@@ -137,6 +137,8 @@ def retire_slot(slot, row, cfg, out=say):
     (deleted in the background), git forgets the worktrees."""
     src = row["src"]
     builds.retire_outputs(src, cfg, "slot", slot)
+    for d in worktree.owned_caches(src, cfg):  # build state the toolchain keeps outside the slot (keyed by its path)
+        trash_and_delete(d, os.path.join(os.path.dirname(d), worktree.TRASH))
     if os.path.isdir(slot):
         trash_and_delete(slot, os.path.join(os.path.dirname(slot), worktree.TRASH))
     for info in worktree.repos_of(row, src).values():
@@ -148,8 +150,8 @@ def retire_slot(slot, row, cfg, out=say):
 
 
 # ------------------------------------------------------------------ switching
-def switch_to(src, rev):
-    git(src, "checkout", "-q", "--detach", rev)
+def switch_to(path, rev, source=None):
+    worktree.switch(path, source or config.main_checkout(path), "--detach", rev)
 
 
 def bring_to_baseline(slot, row, repo, cfg, fetch=False):
@@ -168,7 +170,7 @@ def bring_to_baseline(slot, row, repo, cfg, fetch=False):
     for rel, info in worktree.repos_of(row, src).items():
         p = worktree.path_of(src, rel)
         if git(p, "rev-parse", "HEAD") != revs[rel] or git(p, "branch", "--show-current", check=False):
-            switch_to(p, revs[rel])
+            switch_to(p, revs[rel], info["source"])
             changed = True
         info["baseline"] = revs[rel]
     return revs, changed, stale
@@ -322,14 +324,14 @@ def checkout(repo, branch, start, session, settings, wait=0):
         repos = worktree.repos_of(row, src)
         p = src
         if worktree.branch_exists(repo, branch):
-            git(p, "checkout", "-q", branch)
+            worktree.switch(p, repo, branch)
         else:
-            git(p, "checkout", "-q", "-b", branch, start or revs["."])
+            worktree.switch(p, repo, "-b", branch, start or revs["."])
             made = True
         repos["."].update(branch=branch, made_branch=made)
         for rel, nsrc, _ in sets[1:]:
             if rel in repos and worktree.branch_exists(nsrc, branch) and not worktree.checked_out_at(nsrc, branch):
-                git(worktree.path_of(src, rel), "checkout", "-q", branch)
+                worktree.switch(worktree.path_of(src, rel), nsrc, branch)
                 repos[rel].update(branch=branch, made_branch=False)
         after_switch(slot, row, repo, cfg)
     except BaseException:
@@ -338,7 +340,7 @@ def checkout(repo, branch, start, session, settings, wait=0):
             for rel, info in worktree.repos_of(row, src).items():
                 pth = worktree.path_of(src, rel)
                 if info.get("baseline") and not git(pth, "status", "--porcelain", check=False):
-                    switch_to(pth, info["baseline"])
+                    switch_to(pth, info["baseline"], info["source"])
             if worktree.branch_exists(repo, branch) and not worktree.checked_out_at(repo, branch) and \
                     not worktree.own_commits(repo, branch) and made:
                 run("git", "-C", repo, "branch", "-D", branch, check=False)
@@ -378,7 +380,7 @@ def release(slot, row, settings, prune_branch=False, discard_ignored=False, rewa
     revs = {rel: (info.get("baseline") or rec["repos"].get(rel, {}).get("baseline")) for rel, info in repos.items()}
     for rel, info in repos.items():
         if revs[rel]:
-            switch_to(worktree.path_of(src, rel), revs[rel])
+            switch_to(worktree.path_of(src, rel), revs[rel], info["source"])
     deleted = worktree.prune_branches(repos, out) if prune_branch else []
     for info in repos.values():
         info.update(branch=None, made_branch=False)

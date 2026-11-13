@@ -25,6 +25,42 @@ def checked_out_at(src, branch):
     return None
 
 
+def submodule_overrides(src):
+    """Config overrides that make `git submodule update` clone each submodule from the source checkout's own copy:
+    a local clone (objects hard-linked, no network) instead of a fresh download per checkout."""
+    if not os.path.isfile(os.path.join(src, ".gitmodules")):
+        return []
+    out = ["-c", "protocol.file.allow=always"]
+    listing = git(src, "config", "-f", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$", check=False)
+    for line in listing.splitlines():
+        key, _, path = line.partition(" ")
+        name = key[len("submodule."):-len(".path")]
+        local = os.path.join(src, path)
+        if os.path.exists(os.path.join(local, ".git")):
+            out += ["-c", "submodule.%s.url=%s" % (name, local)]
+    return out
+
+
+def sync_submodules(src, target):
+    """Check out the submodules a commit records. From the source checkout's copies first; if those lack a needed
+    commit, from the submodules' own remotes."""
+    if not os.path.isfile(os.path.join(target, ".gitmodules")):
+        return False
+    args = ["submodule", "update", "--init", "--recursive", "--checkout", "-j", "8"]
+    r = run("git", "-C", target, *submodule_overrides(src), *args, check=False, timeout=3600)
+    if r.returncode != 0:
+        r = run("git", "-C", target, *args, check=False, timeout=3600)
+        if r.returncode != 0:
+            raise Fail("git submodule update failed in %s: %s" % (target, (r.stderr or r.stdout).strip()[-400:]))
+    return True
+
+
+def switch(path, src, *checkout_args):
+    """git checkout in a checkout of src, then bring its submodules along."""
+    git(path, "checkout", "-q", *checkout_args)
+    sync_submodules(src, path)
+
+
 def add_worktree(src, dest, mode):
     """mode: ("branch", name, start-or-None) or ("detach", rev). Returns True when this call created the branch."""
     with state.repo_lock(src):
@@ -50,6 +86,7 @@ def materialize(repo, cfg, dest, plan, on_progress=None):
                 os.makedirs(os.path.dirname(target), exist_ok=True)
             mb = add_worktree(src, target, mode)
             made[rel] = {"source": src, "branch": mode[1] if mode[0] == "branch" else None, "made_branch": mb}
+            sync_submodules(src, target)
             if on_progress:
                 on_progress(made)
         return made
@@ -95,7 +132,26 @@ def unsaved_work(root, repos, carried):
         dirty = [l for l in git(p, "status", "--porcelain").splitlines() if l.strip()]
         if dirty:
             return DIRTY, "%d uncommitted file(s)%s" % (len(dirty), "" if rel == "." else " in " + rel)
+        lost = submodule_commits_only_here(p, repos[rel].get("source"))
+        if lost:
+            return DIRTY, "submodule commit(s) that exist only in this checkout: %s" % ", ".join(lost)
     return 0, ""
+
+
+def submodule_commits_only_here(path, src):
+    """Submodules whose checked-out commit the source checkout's copy does not have: a commit made here would vanish
+    with this checkout's submodule repositories."""
+    if not src or not os.path.isfile(os.path.join(path, ".gitmodules")):
+        return []
+    out = []
+    listing = run("git", "-C", path, "submodule", "foreach", "--quiet", "--recursive",
+                  'echo "$displaypath $(git rev-parse HEAD)"', check=False).stdout
+    for line in listing.splitlines():
+        sub, _, sha = line.rpartition(" ")
+        mine = os.path.join(src, sub)
+        if sha and os.path.exists(os.path.join(mine, ".git")) and not git_ok(mine, "cat-file", "-e", sha + "^{commit}"):
+            out.append(sub)
+    return out
 
 
 def stray_commits(root, repos):
