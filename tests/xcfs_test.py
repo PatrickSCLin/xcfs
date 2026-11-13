@@ -614,6 +614,9 @@ def t35_xcode_diagnostics_are_parsed():
     d = parse_diagnostics(lines)
     assert [(x["severity"], x["line"]) for x in d] == [("error", 12), ("error", 0), ("warning", 3)], d
     assert d[0]["file"] == f and d[0]["column"] == 5 and d[1]["file"] is None
+    from xcfs.adapters.xcode import first_json_object
+    out = 'Resolve Package Graph\n{ broken log line\nFetching {x}\n{"project": {"schemes": ["App"]}}\ntrailing'
+    assert first_json_object(out) == {"project": {"schemes": ["App"]}}, first_json_object(out)
 
 
 def toy_repo(name, slots=2, extra=None):

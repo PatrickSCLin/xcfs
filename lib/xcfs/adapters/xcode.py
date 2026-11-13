@@ -26,6 +26,21 @@ def developer_dir():
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
+def first_json_object(text):
+    """The first JSON object in text that also holds log lines (some of them with braces)."""
+    dec = json.JSONDecoder()
+    i = text.find("{")
+    while i != -1:
+        try:
+            obj, _ = dec.raw_decode(text, i)
+            if isinstance(obj, dict):
+                return obj
+        except ValueError:
+            pass
+        i = text.find("{", i + 1)
+    return None
+
+
 def parse_diagnostics(lines, limit_warnings=100):
     seen, out, warnings = set(), [], 0
     for line in lines:
@@ -148,17 +163,24 @@ class XcodeAdapter(Adapter):
         if ctx.resources.get("scheme"):
             return ctx.resources["scheme"]
         args, cwd = self.container_args(ctx)
-        r = run("xcodebuild", "-list", "-json", *args, cwd=cwd, check=False, timeout=600)
-        try:
-            data = json.loads(r.stdout[r.stdout.index("{"):])
-        except ValueError:
-            raise Fail("cannot list schemes (give \"scheme\" in the config): %s" % (r.stderr or r.stdout).strip()[:300])
-        info = data.get("workspace") or data.get("project") or {}
-        schemes = info.get("schemes") or []
-        if not schemes:
-            raise Fail("no schemes found in %s; give \"scheme\" in the config" % ctx.toolchain_root, USAGE)
         want = os.path.splitext(os.path.basename((args or [ctx.toolchain_root])[-1]))[0]
-        s = want if want in schemes else schemes[0]
+        container = args[-1] if args else ctx.toolchain_root
+        shared = [os.path.splitext(os.path.basename(f))[0]
+                  for f in glob.glob(os.path.join(container, "xcshareddata", "xcschemes", "*.xcscheme"))]
+        if want in shared:  # the common case, answered without resolving any package
+            s = want
+        else:
+            # `xcodebuild -list` resolves packages: into this checkout's own directory, never the global DerivedData
+            pk = os.path.join(self.derived_data(ctx, self.conf(ctx.entry, None)[0]), "SourcePackages")
+            r = run("xcodebuild", "-list", "-json", *args, "-clonedSourcePackagesDirPath", pk, cwd=cwd, check=False,
+                    timeout=1800)
+            data = first_json_object(r.stdout)
+            info = (data or {}).get("workspace") or (data or {}).get("project") or {}
+            schemes = info.get("schemes") or []
+            if not schemes:
+                raise Fail("cannot list schemes (give \"scheme\" in the config): %s" % (r.stderr or r.stdout).strip()[-300:],
+                           USAGE)
+            s = want if want in schemes else schemes[0]
         ctx.resources["scheme"] = s
         return s
 

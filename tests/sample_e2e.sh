@@ -26,6 +26,9 @@ finish() {
   [ "${code}" = 0 ] && echo "sample_e2e: ok" || echo "sample_e2e: FAILED" >&2
 }
 trap finish EXIT
+# xcfs must never leave folders in the global DerivedData: every build it runs has its own.
+GLOBAL_DD=~/Library/Developer/Xcode/DerivedData
+dd_before=$(ls "${GLOBAL_DD}" 2>/dev/null | sort)
 step() { printf '\n== %s\n' "$*"; }
 fail() { echo "sample_e2e: $*" >&2; exit 1; }
 json() { python3 -c 'import json, sys; print(json.loads(sys.argv[1])[sys.argv[2]])' "$1" "$2"; }
@@ -105,6 +108,11 @@ out=$(cd "${wt}" && "${XCFS}" reap --apply --prune-branch --json)
 sleep 2
 ! xcrun simctl list devices | grep -q "${sim}" || fail "the worktree's simulator was not deleted"
 echo "worktree, its build output, its simulator and its empty branch are gone; registry empty"
+
+step "nothing in the global DerivedData (worktree part)"
+dd_new=$(comm -13 <(echo "${dd_before}") <(ls "${GLOBAL_DD}" 2>/dev/null | sort))
+[ -z "${dd_new}" ] || fail "new folders in the global DerivedData: ${dd_new}"
+echo "none"
 
 step "pool: warm one slot (a full build at the baseline, as the background would do)"
 out=$("${XCFS}" pool warm "${src}" --slots 1 --json) || fail "pool warm failed: ${out}"
@@ -190,3 +198,8 @@ sleep 1
 ! pgrep -f "xcode_session.*$(basename "${swt}")" >/dev/null || fail "the session outlived its worktree"
 echo "session stopped with its worktree"
 unset XCFS_DRIVER
+
+step "nothing in the global DerivedData (whole run)"
+dd_new=$(comm -13 <(echo "${dd_before}") <(ls "${GLOBAL_DD}" 2>/dev/null | sort))
+[ -z "${dd_new}" ] || fail "new folders in the global DerivedData: ${dd_new}"
+echo "none"

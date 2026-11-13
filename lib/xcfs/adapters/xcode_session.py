@@ -112,21 +112,45 @@ def export_pif(adapter, ctx, scheme):
         return path, False
     args, cwd = adapter.container_args(ctx)
     tmp = path + ".%d.tmp" % os.getpid()
-    cmd = ["xcodebuild", "-dumpPIF", tmp, *args]
-    if args:
-        cmd += ["-scheme", scheme]
+    # Never the global DerivedData: without a location of its own, the export resolves packages into (and logs to) a
+    # global folder that no checkout owns and nothing ever removes. -derivedDataPath needs -scheme; the scheme Xcode
+    # generates for a package is named after its product or "<package>-Package", so a package tries those in turn.
+    own = os.path.join(ctx.build_dir, "swbuild", "pif")
+    extra = []
     if ctx.entry.get("packagesDir"):
-        cmd += ["-clonedSourcePackagesDirPath", os.path.join(ctx.toolchain_root, ctx.entry["packagesDir"])]
+        extra = ["-clonedSourcePackagesDirPath", os.path.join(ctx.toolchain_root, ctx.entry["packagesDir"])]
+    candidates = [scheme] if args else package_schemes(cwd, scheme)
     t0 = time.time()
-    r = run(*cmd, cwd=cwd, check=False, timeout=1800)
+    for sch in candidates:
+        cmd = ["xcodebuild", "-dumpPIF", tmp, *args, "-scheme", sch, "-derivedDataPath", own, *extra]
+        r = run(*cmd, cwd=cwd, check=False, timeout=1800)
+        if r.returncode == 0 and os.path.isfile(tmp) and os.path.getsize(tmp) > 0:
+            break
     if r.returncode != 0 or not os.path.isfile(tmp) or os.path.getsize(tmp) == 0:
-        raise Fail("PIF export failed (%d): %s" % (r.returncode, "\n".join(
-            l for l in (r.stderr + r.stdout).splitlines() if "error" in l.lower())[:600] or r.stderr[-400:]))
+        errs = [l for l in (r.stderr + r.stdout).splitlines()
+                if re.search(r"\berror\b", l) and "DVTProvisioning" not in l and "result bundle" not in l]
+        raise Fail("PIF export failed (%d): %s" % (r.returncode, "\n".join(errs)[:600] or (r.stderr or r.stdout)[-400:]))
     os.replace(tmp, path)
     for old in sorted(glob.glob(os.path.join(d, "*.json")), key=os.path.getmtime)[:-3]:
         os.remove(old)
     say("  exported PIF in %.1fs" % (time.time() - t0))
     return path, True
+
+
+def package_schemes(pkg_dir, scheme):
+    """Scheme names Xcode may have generated for a Swift package."""
+    name = os.path.basename(pkg_dir)
+    try:
+        m = re.search(r'Package\s*\(\s*name\s*:\s*"([^"]+)"', open(os.path.join(pkg_dir, "Package.swift")).read())
+        if m:
+            name = m.group(1)
+    except OSError:
+        pass
+    out = []
+    for c in (scheme, name + "-Package", name):
+        if c and c not in out:
+            out.append(c)
+    return out
 
 
 def load_pif(path):

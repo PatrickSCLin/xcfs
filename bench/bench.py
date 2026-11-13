@@ -42,6 +42,7 @@ for k in ("CLAUDE_CODE_SESSION_ID",):
 # A cache every checkout shares (a build tool's disk cache, say): the profile's commands find it in $XCFS_BENCH_CACHE.
 ENV["XCFS_BENCH_CACHE"] = os.path.realpath(arg("--cache", os.path.join(WORK, "shared-cache")))
 RESULTS = {"profile": PROFILE["name"], "agents": N, "started": STAMP, "machine": {}, "plain": {}, "xcfs": {}}
+VARIANTS = PROFILE["xcfs"].get("variants") or {"xcfs": {}}
 
 
 def say(*a):
@@ -85,9 +86,13 @@ def shell(cmd, cwd, log_name, timeout=None, env=None):
     return round(time.time() - t0, 1), code, f0 - free_kb()
 
 
+XENV = {}  # the environment of the xcfs variant being measured
+
+
 def xcfs(*args, cwd=None, log_name="xcfs"):
     f0, t0 = free_kb(), time.time()
-    r = subprocess.run([sys.executable, XCFS, *args, "--json"], capture_output=True, text=True, env=ENV, cwd=cwd or WORK)
+    r = subprocess.run([sys.executable, XCFS, *args, "--json"], capture_output=True, text=True, env=XENV or ENV,
+                       cwd=cwd or WORK)
     with open(os.path.join(LOG, log_name + ".log"), "a") as log:
         log.write("$ xcfs %s\n%s\n%s\n" % (" ".join(args), r.stdout[-20000:], r.stderr[-5000:]))
     try:
@@ -169,7 +174,7 @@ def machine():
 
 def xcfs_build_dir(root):
     try:
-        return json.load(open(os.path.join(WORK, "xcfs-state", "registry.json")))["builds"].get(root, {}).get("dir")
+        return json.load(open(os.path.join((XENV or ENV)["XCFS_STATE"], "registry.json")))["builds"].get(root, {}).get("dir")
     except (OSError, ValueError):
         return None
 
@@ -242,20 +247,30 @@ def run_plain():
 
 
 # ------------------------------------------------------------------ xcfs pool
-def run_xcfs():
-    res = RESULTS["xcfs"] = {"warm": {}, "checkouts": [], "edit_loop": [], "release": [], "retire": {}}
-    cfg_dir = os.path.join(WORK, "xcfs-config", "xcfs")
+def run_xcfs(variant, overrides):
+    """One xcfs configuration (the profile's config, with a variant's toolchain overrides), in its own state, cache,
+    pool and config directories."""
+    global XENV
+    d = os.path.join(WORK, "xcfs-" + variant)
+    XENV = dict(ENV, XCFS_STATE=d + "/state", XCFS_CACHE=d + "/cache", XCFS_POOL_ROOT=d + "/pool",
+                XDG_CONFIG_HOME=d + "/config")
+    res = RESULTS["xcfs"][variant] = {"overrides": overrides, "warm": {}, "checkouts": [], "edit_loop": [],
+                                      "release": [], "retire": {}}
+    cfg = json.loads(json.dumps(PROFILE["xcfs"]["config"]))
+    for t in cfg.get("toolchains", []):
+        t.update(overrides)
+    cfg_dir = os.path.join(d, "config", "xcfs")
     os.makedirs(cfg_dir, exist_ok=True)
-    json.dump(PROFILE["xcfs"]["config"], open(os.path.join(cfg_dir, os.path.basename(SOURCE) + ".json"), "w"), indent=1)
+    json.dump(cfg, open(os.path.join(cfg_dir, os.path.basename(SOURCE) + ".json"), "w"), indent=1)
     json.dump({"buildTimeout": 6 * 3600, "warmOnRelease": False}, open(os.path.join(cfg_dir, "settings.json"), "w"))
-    if PROFILE["xcfs"]["config"].get("afterSeed") or PROFILE["xcfs"]["config"].get("prepare"):
+    if cfg.get("afterSeed") or cfg.get("prepare"):
         xcfs("trust", SOURCE)
-    say("xcfs: pool warm --slots %d" % N)
+    say("xcfs[%s]: pool warm --slots %d" % (variant, N))
     t, code, d, out = xcfs("pool", "warm", SOURCE, "--slots", str(N), log_name="xcfs-warm")
     if code != 0:
-        raise SystemExit("xcfs pool warm failed: %s" % out.get("error"))
+        raise SystemExit("xcfs pool warm failed: %s %s" % (out.get("error"), [x.get("error") for x in out.get("slots") or []]))
     res["warm"] = {"seconds": t, "disk_kb": d, "slots": out.get("slots")}
-    say("xcfs: warmed %d slot(s) in %.1fs, disk +%.1f GB" % (N, t, d / 2 ** 20))
+    say("xcfs[%s]: warmed %d slot(s) in %.1fs, disk +%.1f GB" % (variant, N, t, d / 2 ** 20))
     wts = []
     for i in range(1, N + 1):
         t1, code, d1, out = xcfs("checkout", SOURCE, "xcfs-bench/xcfs-%d" % i, log_name="xcfs-%d" % i)
@@ -269,15 +284,16 @@ def run_xcfs():
         row = dict({"agent": i, "create_seconds": t1, "create_disk_kb": d1, "first_build_seconds": t2,
                     "build_disk_kb": d2, "warm_at_baseline": out.get("warm_at_baseline")}, **checkout_stats(wt))
         res["checkouts"].append(row)
-        say("xcfs %d: checkout %.1fs, first build %.1fs" % (i, t1, t2))
-    res["edit_loop"] = edit_loop(wts[0], lambda name: xcfs("build", wts[0], log_name="xcfs-edit-loop")[:3], "xcfs")
+        say("xcfs[%s] %d: checkout %.1fs, first build %.1fs" % (variant, i, t1, t2))
+    res["edit_loop"] = edit_loop(wts[0], lambda name: xcfs("build", wts[0], log_name="xcfs-%s-edit-loop" % variant)[:3],
+                                "xcfs[%s]" % variant)
     for i, wt in enumerate(wts, 1):
         t, code, d, out = xcfs("release", wt, "--no-warm", "--prune-branch", log_name="xcfs-%d-release" % i)
         time.sleep(3)
         pids, rss = processes_for(wt)
         res["release"].append({"agent": i, "seconds": t, "ok": code == 0, "processes_left": len(pids),
                                "rss_left_kb": rss, "error": out.get("error")})
-        say("xcfs %d: released in %.1fs; %d process(es) left%s" % (i, t, len(pids), "" if code == 0 else
+        say("xcfs[" + variant + "] %d: released in %.1fs; %d process(es) left%s" % (i, t, len(pids), "" if code == 0 else
                                                                    " -- RELEASE FAILED: %s" % out.get("error")))
     f0 = free_kb()
     t, code, _, out = xcfs("pool", "resize", SOURCE, "0", log_name="xcfs-retire")
@@ -289,7 +305,8 @@ def run_xcfs():
     res["retire"] = {"seconds": t, "ok": code == 0, "reclaimed_kb_after_10s": free_kb() - f0, "caches_left": len(left),
                      "caches_left_kb": du_kb(*left), "processes_left": sum(len(p) for p, _ in procs),
                      "rss_left_kb": sum(r for _, r in procs)}
-    say("xcfs: retired the pool in %.1fs; caches left %d" % (t, len(left)))
+    say("xcfs[%s]: retired the pool in %.1fs; caches left %d" % (variant, t, len(left)))
+    XENV = {}
 
 
 # ------------------------------------------------------------------ report
@@ -301,70 +318,87 @@ def gb(kb):
 
 def report():
     m = RESULTS["machine"]
-    p, x = RESULTS["plain"], RESULTS["xcfs"]
+    sides = ([("plain worktrees", RESULTS["plain"])] if RESULTS["plain"] else []) + \
+        [("xcfs" if n == "xcfs" else "xcfs (%s)" % n, r) for n, r in RESULTS["xcfs"].items()]
     L = ["# Benchmark: %s, %d parallel checkouts" % (PROFILE["name"], N), "",
          "%s · %s, %s cores, %s GB · macOS %s · %s · source %s" % (
              m.get("model"), m.get("cpu"), m.get("cores"), m.get("memory_gb"), m.get("macos"), m.get("xcode"),
              m.get("source_commit")), ""]
+    if m.get("toolchain"):
+        L += ["Toolchain: %s" % m["toolchain"], ""]
     if PROFILE.get("description"):
         L += [PROFILE["description"], ""]
-    pc, xc = p.get("checkouts", []), x.get("checkouts", [])
 
     def avg(rows, f):
         return sum(f(r) for r in rows) / len(rows) if rows else 0
-    if pc and xc:
-        p_disk = sum(r["create_disk_kb"] + r["build_disk_kb"] for r in pc)
-        x_disk = x["warm"]["disk_kb"] + sum(r["create_disk_kb"] + r["build_disk_kb"] for r in xc)
-        p_left = sum(r["caches_left_kb"] for r in p.get("removal", []))
-        x_left = x.get("retire", {}).get("caches_left_kb", 0)
-        L += ["## Summary", "", "| | plain worktrees | xcfs |", "|---|---|---|",
-              "| an agent waits for a new checkout (ready + first build, mean) | %.1f s | %.1f s |" % (
-                  avg(pc, lambda r: r["create_seconds"] + r["first_build_seconds"]),
-                  avg(xc, lambda r: r["create_seconds"] + r["first_build_seconds"])),
-              "| disk for %d checkouts, built (volume free space used) | %s | %s (incl. the pool warm-up) |" % (
-                  N, gb(p_disk), gb(x_disk)),
-              "| resident memory of their processes after building | %s | %s |" % (
-                  gb(sum(r["rss_kb"] for r in pc)), gb(sum(r["rss_kb"] for r in xc))),
-              "| left behind after removing them (plain: `git worktree remove`/`rm`; xcfs: retiring the pool) "
-              "| %s, %d process(es) | %s, %d process(es) |" % (
-                  gb(p_left), sum(r["processes_left"] for r in p.get("removal", [])), gb(x_left),
-                  x.get("retire", {}).get("processes_left", 0)),
-              ""]
-    L += ["## Per checkout", "",
-          "| | agent | ready to build | first build | disk (real, create + build) | checkout (du) | build output (du) | resident memory after build |",
+
+    def col(f):
+        return " | ".join(f(name, d) for name, d in sides)
+    head = "| | " + " | ".join(n for n, _ in sides) + " |"
+    sep = "|---|" + "---|" * len(sides)
+
+    def wait(name, d):
+        rows = d.get("checkouts", [])
+        return "%.1f s" % avg(rows, lambda r: r["create_seconds"] + r["first_build_seconds"]) if rows else "-"
+
+    def disk(name, d):
+        rows = d.get("checkouts", [])
+        kb = sum(r["create_disk_kb"] + r["build_disk_kb"] for r in rows) + (d.get("warm") or {}).get("disk_kb", 0)
+        return gb(kb) + (" (incl. warm-up)" if d.get("warm") else "")
+
+    def warm(name, d):
+        return "%.1f s" % d["warm"]["seconds"] if d.get("warm") else "-"
+
+    def mem(name, d):
+        return gb(sum(r["rss_kb"] for r in d.get("checkouts", [])))
+
+    def left(name, d):
+        if "removal" in d:
+            return "%s, %d process(es)" % (gb(sum(r["caches_left_kb"] for r in d["removal"])),
+                                           sum(r["processes_left"] for r in d["removal"]))
+        r = d.get("retire") or {}
+        return "%s, %d process(es)" % (gb(r.get("caches_left_kb", 0)), r.get("processes_left", 0))
+    L += ["## Summary", "", head, sep,
+          "| an agent waits for a new checkout (ready + first build, mean) | %s |" % col(wait),
+          "| background work before any agent asks | %s |" % col(warm),
+          "| disk for %d built checkouts (volume free space used) | %s |" % (N, col(disk)),
+          "| resident memory of their processes after building | %s |" % col(mem),
+          "| left behind after removing them (plain: removal; xcfs: retiring the pool) | %s |" % col(left), ""]
+    L += ["## Edit loop in the first checkout", "", head, sep]
+    steps = []
+    for _, d in sides:
+        for r in d.get("edit_loop", []):
+            if r["step"] not in steps:
+                steps.append(r["step"])
+    for st in steps:
+        def cell(name, d, st=st):
+            r = next((x for x in d.get("edit_loop", []) if x["step"] == st), None)
+            return "-" if not r else "%.1f s%s" % (r["seconds"], "" if r["ok"] else " (failed)")
+        L.append("| %s | %s |" % (st, col(cell)))
+    L += ["", "## Per checkout", "",
+          "| side | agent | ready to build | first build | disk (real) | checkout (du) | build output (du) | resident memory |",
           "|---|---|---|---|---|---|---|---|"]
-    for side, d in (("plain", p), ("xcfs", x)):
+    for name, d in sides:
         for r in d.get("checkouts", []):
             L.append("| %s | %d | %.1f s | %.1f s | %s | %s | %s | %s (%d proc) |" % (
-                side, r["agent"], r["create_seconds"], r["first_build_seconds"],
-                gb(r["create_disk_kb"] + r["build_disk_kb"]), gb(r["checkout_kb"]), gb(r["caches_kb"]),
-                gb(r["rss_kb"]), r["processes"]))
-    if x.get("warm"):
-        L += ["", "xcfs pool warm-up (background, before any agent asks): %.1f s, disk +%s." % (
-            x["warm"]["seconds"], gb(x["warm"]["disk_kb"]))]
-    L += ["", "## Edit loop in the first checkout", "", "| step | plain | xcfs |", "|---|---|---|"]
-    steps = [r["step"] for r in p.get("edit_loop", []) or x.get("edit_loop", [])]
-    pe = {r["step"]: r for r in p.get("edit_loop", [])}
-    xe = {r["step"]: r for r in x.get("edit_loop", [])}
-    for s in steps:
-        def cell(r):
-            return "-" if not r else "%.1f s%s" % (r["seconds"], "" if r["ok"] else " (failed)")
-        L.append("| %s | %s | %s |" % (s, cell(pe.get(s)), cell(xe.get(s))))
-    L += ["", "## Removal", "", "| | agent | time | left behind | processes still running |", "|---|---|---|---|---|"]
-    for r in p.get("removal", []):
-        L.append("| plain `git worktree remove` | %d | %.1f s | %d cache(s), %s | %d (%s) |" % (
+                name, r["agent"], r["create_seconds"], r["first_build_seconds"], gb(r["create_disk_kb"] + r["build_disk_kb"]),
+                gb(r["checkout_kb"]), gb(r["caches_kb"]), gb(r["rss_kb"]), r["processes"]))
+    L += ["", "## Removal", "", "| side | agent | time | left behind | processes still running |", "|---|---|---|---|---|"]
+    for r in RESULTS["plain"].get("removal", []):
+        L.append("| plain | %d | %.1f s | %d cache(s), %s | %d (%s) |" % (
             r["agent"], r["seconds"], r["caches_left"], gb(r["caches_left_kb"]), r["processes_left"], gb(r["rss_left_kb"])))
-    for r in x.get("release", []):
-        L.append("| xcfs release | %d | %.1f s | (slot kept for the next lease) | %d (%s) |" % (
-            r["agent"], r["seconds"], r["processes_left"], gb(r["rss_left_kb"])))
-    if x.get("retire"):
-        r = x["retire"]
-        L.append("| xcfs pool resize 0 | all | %.1f s | %d cache(s), %s | %d (%s) |" % (
-            r["seconds"], r["caches_left"], gb(r["caches_left_kb"]), r.get("processes_left", 0),
-            gb(r.get("rss_left_kb", 0))))
+    for name, d in sides[1 if RESULTS["plain"] else 0:]:
+        for r in d.get("release", []):
+            L.append("| %s release | %d | %.1f s | (slot kept for the next lease)%s | %d (%s) |" % (
+                name, r["agent"], r["seconds"], "" if r.get("ok", True) else " FAILED", r["processes_left"],
+                gb(r["rss_left_kb"])))
+        r = d.get("retire") or {}
+        if r:
+            L.append("| %s pool resize 0 | all | %.1f s | %d cache(s), %s | %d (%s) |" % (
+                name, r["seconds"], r["caches_left"], gb(r["caches_left_kb"]), r.get("processes_left", 0),
+                gb(r.get("rss_left_kb", 0))))
     text = "\n".join(L) + "\n"
-    home = os.path.expanduser("~")
-    for a, b in ((WORK, "<work>"), (SOURCE, "<source>"), (home, "~")):
+    for a, b in ((WORK, "<work>"), (SOURCE, "<source>"), (os.path.expanduser("~"), "~")):
         text = text.replace(a, b)
     return text
 
@@ -377,8 +411,9 @@ def main():
     try:
         if "plain" in PHASES:
             run_plain()
-        if "xcfs" in PHASES:
-            run_xcfs()
+        for name, overrides in VARIANTS.items():
+            if "xcfs" in PHASES or "xcfs:" + name in PHASES:
+                run_xcfs(name, overrides)
     finally:
         base = os.path.join(WORK, "results-%s-%s" % (re.sub(r"\W+", "-", PROFILE["name"]).lower(), STAMP))
         data = json.dumps(RESULTS, indent=1)
