@@ -475,6 +475,9 @@ if op in ("build", "warm"):
         out(ok=False, seconds=0.01, resources=res, diagnostics=[{"file": os.path.join(ctx["toolchainRoot"], "toy.txt"),
             "line": 1, "column": 1, "severity": "error", "message": "broken"}])
     out(ok=True, seconds=0.01, diagnostics=[], resources=res, count=res["count"], had_previous=had, build_dir=ctx["buildDir"])
+if op == "afterSwitch":
+    res = dict(ctx["resources"]); res["switches"] = res.get("switches", 0) + 1
+    out(resources=res)
 out(unsupported=True)
 """
 
@@ -611,6 +614,169 @@ def t35_xcode_diagnostics_are_parsed():
     d = parse_diagnostics(lines)
     assert [(x["severity"], x["line"]) for x in d] == [("error", 12), ("error", 0), ("warning", 3)], d
     assert d[0]["file"] == f and d[0]["column"] == 5 and d[1]["file"] is None
+
+
+def toy_repo(name, slots=2, extra=None):
+    cfg = dict({"toolchains": [{"adapter": "toy"}], "pool": {"slots": slots}}, **(extra or {}))
+    repo = mkrepo(name, cfg=dict(CFG, **cfg))
+    open(repo + "/toy.txt", "w").write("fine\n"); sh("git", "-C", repo, "add", "-A"); commit(repo, "toy")
+    return repo
+
+
+def slot_rows(repo=None):
+    try:
+        rows = json.load(open(SB + "/state/registry.json"))["slots"]
+    except FileNotFoundError:
+        return {}
+    return {p: r for p, r in rows.items() if repo is None or r["project"] == repo}
+
+
+def wait_for(pred, sec=30):
+    t = time.time()
+    while time.time() - t < sec:
+        if pred():
+            return True
+        time.sleep(0.2)
+    return False
+
+
+@test
+def t36_pool_lifecycle():
+    E = toy_env(); repo = toy_repo("r36")
+    r = xcfs("pool", "warm", repo, env=E); assert r["_code"] == 0 and len(r["slots"]) == 2 and all(x["ok"] for x in r["slots"]), r
+    rows = slot_rows(repo); assert len(rows) == 2 and all(x["state"] == "idle" for x in rows.values()), rows
+    src = sorted(rows.values(), key=lambda x: x["index"])[0]["src"]
+    assert src.startswith(SB + "/pool/") and ".noindex/slot-1/r36" in src, src
+    pdir = os.path.dirname(os.path.dirname(os.path.dirname(src)))
+    assert "[Excluded]" in sh("tmutil", "isexcluded", os.path.dirname(os.path.dirname(src))), "pool not excluded from backups"
+    assert sh("git", "-C", src, "branch", "--show-current") == "" and sh("git", "-C", src, "rev-parse", "HEAD") == sh("git", "-C", repo, "rev-parse", "main")
+    c = xcfs("checkout", repo, "feat", "--session", "S", env=E)
+    assert c["_code"] == 0 and c["warm_at_baseline"] and c["index"] == 1 and c["made_branch"], c
+    wt = c["worktree"]; assert sh("git", "-C", wt, "branch", "--show-current") == "feat"
+    commit(repo, "baseline moves")                                     # main moves on
+    st = {x["index"]: x for x in xcfs("pool", "status", repo, env=E)["slots"]}
+    assert st[1]["state"] == "leased" and st[1]["session"] == "S" and not st[2]["at_baseline"], st
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0
+    s2 = [x for x in slot_rows(repo).values() if x["index"] == 2][0]
+    assert sh("git", "-C", s2["src"], "rev-parse", "HEAD") == sh("git", "-C", repo, "rev-parse", "main"), "idle slot did not follow the baseline"
+    assert xcfs("pool", "status", repo, env=E)["slots"][1]["at_baseline"]
+    c2 = xcfs("checkout", repo, "feat2", "--session", "S", env=E); assert c2["_code"] == 0 and c2["index"] == 2, c2
+    r = xcfs("checkout", repo, "feat3", env=E); assert r["_code"] == 10, "a full pool must say so: %s" % r
+    assert "feat3" not in branches(repo)
+    r = xcfs("build", wt, env=E); assert r["_code"] == 0 and r["kind"] == "slot", r
+    open(wt + "/main.swift", "a").write("// wip\n")
+    r = xcfs("release", wt, "--no-warm", env=E); assert r["_code"] == 5, r
+    sh("git", "-C", wt, "checkout", "--", "."); commit(wt, "work on feat")
+    r = xcfs("release", wt, "--no-warm", "--prune-branch", env=E); assert r["_code"] == 0 and r["released"], r
+    assert "feat" in branches(repo), "a branch with commits was deleted"
+    assert sh("git", "-C", wt, "branch", "--show-current") == "" and sh("git", "-C", wt, "status", "--porcelain") == ""
+    r = xcfs("release", c2["worktree"], "--prune-branch", env=E)            # warms again in the background
+    assert r["_code"] == 0 and "feat2" not in branches(repo), r
+    assert wait_for(lambda: (lambda x: x["state"] == "idle" and x["warm"]["ok"])([v for v in slot_rows(repo).values() if v["index"] == 2][0])), "no background warm"
+    c3 = xcfs("checkout", repo, "feat3", env=E); assert c3["_code"] == 0 and c3["warm"], c3
+    assert xcfs("release", c3["worktree"], "--no-warm", "--prune-branch", env=E)["_code"] == 0
+    return "2 slots: warm, lease, follow baseline, pool full, release"
+
+
+@test
+def t37_reap_returns_a_sessions_slots():
+    E = toy_env(); repo = toy_repo("r37")
+    a = xcfs("checkout", repo, "a", "--session", "R", env=E); b = xcfs("checkout", repo, "b", "--session", "R", env=E)
+    assert a["_code"] == 0 and b["_code"] == 0 and not a["warm"], (a, b)       # no warm-up: slots made on demand
+    open(b["worktree"] + "/main.swift", "a").write("// wip\n")
+    r = xcfs("reap", "--session", "R", "--apply", "--prune-branch", env=dict(E, XCFS_SESSION="R"))
+    assert r["_code"] == 0 and r["released"] == 1 and r["left"] == [b["slot"]], r
+    st = {x["index"]: x["state"] for x in xcfs("pool", "status", repo, env=E)["slots"]}
+    assert sorted(st.values()) == ["idle", "leased"] or sorted(st.values()) == ["cold", "leased"] or "warming" in st.values(), st
+    sh("git", "-C", b["worktree"], "checkout", "--", ".")
+    assert xcfs("release", b["worktree"], "--no-warm", env=E)["_code"] == 0
+
+
+@test
+def t38_resize_retires_idle_slots_only():
+    E = toy_env(); repo = toy_repo("r38", slots=3)
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0 and len(slot_rows(repo)) == 3
+    c = xcfs("checkout", repo, "x", env=E); assert c["index"] == 1
+    r = xcfs("pool", "resize", repo, "0", env=E)
+    assert r["_code"] == 0 and len(r["retired"]) == 2 and r["retire_on_release"] == [c["slot"]], r
+    assert all(wait_gone(p) for p in r["retired"]) and len(worktrees(repo)) == 2
+    r = xcfs("release", c["worktree"], "--prune-branch", env=E); assert r["action"] == "retired", r
+    assert wait_gone(c["slot"]) and slot_rows(repo) == {} and len(worktrees(repo)) == 1
+
+
+@test
+def t39_gc_handles_stale_leases_and_interrupted_slots():
+    E = toy_env(); repo = toy_repo("r39")
+    a = xcfs("checkout", repo, "a", env=E); b = xcfs("checkout", repo, "b", env=E)
+    open(b["worktree"] + "/main.swift", "a").write("// wip\n")
+    d = json.load(open(SB + "/state/registry.json"))
+    for k in (a["slot"], b["slot"]):
+        d["slots"][k]["lease"]["active"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 3 * 86400))
+    json.dump(d, open(SB + "/state/registry.json", "w"))
+    r = xcfs("gc", env=E); assert slot_rows(repo)[a["slot"]]["state"] == "leased", "dry-run returned a slot"
+    r = xcfs("gc", "--apply", env=E); kinds = " | ".join(k for k, _ in r["actions"])
+    assert "returned" in kinds and "NOT returned" in kinds, r["actions"]
+    rows = slot_rows(repo); assert rows[a["slot"]]["state"] != "leased" and rows[b["slot"]]["state"] == "leased", rows
+    sh("git", "-C", b["worktree"], "checkout", "--", "."); xcfs("release", b["worktree"], "--no-warm", env=E)
+    p = subprocess.Popen([PY, XCFS, "pool", "warm", repo, "--slots", "3"], env=dict(E, TOY_SLEEP="1"),
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    assert wait_for(lambda: any(x["state"] == "creating" for x in slot_rows(repo).values()) or p.poll() is not None, 15)
+    p.kill(); p.wait()
+    creating = [k for k, x in slot_rows(repo).items() if x["state"] in ("creating", "warming")]
+    if creating:  # killed half way: gc puts it right
+        assert xcfs("gc", "--apply", env=E)["_code"] == 0
+        assert all(slot_rows(repo).get(k, {}).get("state") not in ("creating", "warming") for k in creating)
+    return "interrupted: %d" % len(creating)
+
+
+@test
+def t40_checkout_refusals():
+    E = toy_env(); repo = toy_repo("r40", slots=1)
+    sh("git", "-C", repo, "branch", "busy"); plain = SB + "/r40-busy"; sh("git", "-C", repo, "worktree", "add", "-q", plain, "busy")
+    r = xcfs("checkout", repo, "busy", env=E); assert r["_code"] == 1 and "already checked out" in r["error"], r
+    c = xcfs("checkout", repo, "one", env=E); assert c["_code"] == 0
+    t0 = time.time(); r = xcfs("checkout", repo, "two", "--wait", "3", env=E)
+    assert r["_code"] == 10 and time.time() - t0 >= 3, r
+    json.dump({"slotDiskGB": 10 ** 6}, open(SB + "/config/xcfs/settings.json", "w")) if os.path.isdir(SB + "/config/xcfs") else (os.makedirs(SB + "/config/xcfs"), json.dump({"slotDiskGB": 10 ** 6}, open(SB + "/config/xcfs/settings.json", "w")))
+    try:
+        r = xcfs("pool", "warm", repo, "--slots", "2", env=E); assert r["_code"] == 11, r
+    finally:
+        os.remove(SB + "/config/xcfs/settings.json")
+    assert xcfs("release", c["worktree"], "--no-warm", "--prune-branch", env=E)["_code"] == 0
+    assert xcfs("pool", "resize", repo, "0", env=E)["_code"] == 0
+
+
+@test
+def t41_slot_switch_runs_adapter_hooks_and_repository_set():
+    E = toy_env(); repo = toy_repo("r41", slots=1, extra={"repos": [{"path": "mods/lib"}]})
+    sub = nested_repo(repo, "mods/lib"); sh("git", "-C", sub, "branch", "topic")
+    c = xcfs("checkout", repo, "topic", env=E); assert c["_code"] == 0, c
+    assert sh("git", "-C", c["worktree"] + "/mods/lib", "branch", "--show-current") == "topic"
+    reg_ = json.load(open(SB + "/state/registry.json"))
+    sw = reg_["builds"][c["worktree"]]["resources"]["toy"].get("switches", 0); assert sw >= 1, reg_["builds"][c["worktree"]]
+    r = xcfs("release", c["worktree"], "--no-warm", "--prune-branch", env=E); assert r["_code"] == 0, r
+    assert sh("git", "-C", c["worktree"] + "/mods/lib", "branch", "--show-current") == "", "nested repository stayed on the branch"
+    assert "topic" in branches(sub), "a nested branch xcfs did not create was deleted"
+    assert xcfs("pool", "resize", repo, "0", env=E)["_code"] == 0 and len(worktrees(sub)) == 1
+
+
+@test
+def t42_parallel_checkouts_and_toolchain_change():
+    E = toy_env(); repo = toy_repo("r42", slots=2)
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0
+    ps = [subprocess.Popen([PY, XCFS, "checkout", repo, "p%d" % i, "--json"], env=E, stdout=subprocess.PIPE, text=True)
+          for i in range(4)]
+    outs = [json.loads(p.communicate()[0].strip().splitlines()[-1]) for p in ps]
+    ok = [o for o in outs if o["ok"]]
+    assert len(ok) == 2 and len({o["slot"] for o in ok}) == 2, outs
+    assert all("in use" in o["error"] for o in outs if not o["ok"]), outs
+    for o in ok:
+        assert xcfs("release", o["worktree"], "--no-warm", "--prune-branch", env=E)["_code"] == 0
+    c = xcfs("checkout", repo, "after-upgrade", env=dict(E, TOY_VERSION="9"))
+    assert c["_code"] == 0 and c["warm"] and not c["warm_at_baseline"], "a slot built with another toolchain counted as ready: %s" % c
+    r = xcfs("build", c["worktree"], env=dict(E, TOY_VERSION="9"))
+    assert r["_code"] == 0 and not r["had_previous"], "old output was reused after a toolchain change: %s" % r
+    assert xcfs("release", c["worktree"], "--no-warm", "--prune-branch", env=E)["_code"] == 0
 
 
 

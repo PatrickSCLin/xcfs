@@ -105,3 +105,52 @@ out=$(cd "${wt}" && "${XCFS}" reap --apply --prune-branch --json)
 sleep 2
 ! xcrun simctl list devices | grep -q "${sim}" || fail "the worktree's simulator was not deleted"
 echo "worktree, its build output, its simulator and its empty branch are gone; registry empty"
+
+step "pool: warm one slot (a full build at the baseline, as the background would do)"
+out=$("${XCFS}" pool warm "${src}" --slots 1 --json) || fail "pool warm failed: ${out}"
+python3 - "${out}" <<'EOF2'
+import json, sys
+s = json.loads(sys.argv[1])["slots"]
+assert len(s) == 1 and s[0]["ok"], s
+print("slot warmed in %.1fs" % s[0]["seconds"])
+EOF2
+
+step "pool: check out a branch, build it (the slot is already built at the baseline)"
+t=$(now); out=$("${XCFS}" checkout "${src}" feature/pool --json) || fail "checkout failed: ${out}"
+slotwt=$(json "${out}" worktree)
+[ "$(json "${out}" warm_at_baseline)" = True ] || fail "the slot was not warm at the baseline: ${out}"
+echo "checkout: $(secs "${t}")s -> ${slotwt}"
+out=$("${XCFS}" build "${slotwt}" --json) || fail "build in the slot failed: ${out}"
+echo "first build after checkout: $(json "${out}" seconds)s"
+echo 'enum Added { static func v() -> Int { 1 } }' >> "${slotwt}/App/Other.swift"
+out=$("${XCFS}" build "${slotwt}" --json) || fail "incremental build in the slot failed: ${out}"
+echo "build after an edit: $(json "${out}" seconds)s"
+git -C "${slotwt}" -c user.name=t -c user.email=t@t.invalid commit -qam "work in the slot"
+
+step "pool: the baseline moves while the slot is leased; release; the slot follows the baseline"
+echo '// baseline change' >> "${src}/App/App.swift"
+git -C "${src}" -c user.name=t -c user.email=t@t.invalid commit -qam "baseline moves"
+out=$("${XCFS}" release "${slotwt}" --no-warm --json) || fail "release failed: ${out}"
+git -C "${src}" show-ref --verify --quiet refs/heads/feature/pool || fail "the branch with a commit was lost"
+out=$("${XCFS}" pool warm "${src}" --json) || fail "warm after release failed: ${out}"
+[ "$(git -C "${slotwt}" rev-parse HEAD)" = "$(git -C "${src}" rev-parse main)" ] || fail "the slot is not at the new baseline"
+python3 - "${out}" <<'EOF2'
+import json, sys
+s = json.loads(sys.argv[1])["slots"][0]
+assert s["ok"], s
+print("idle update to the new baseline: %.1fs" % s["seconds"])
+EOF2
+t=$(now); out=$("${XCFS}" checkout "${src}" feature/pool --json) || fail "second checkout failed: ${out}"
+out=$("${XCFS}" build "${slotwt}" --json) || fail "build of the existing branch failed: ${out}"
+echo "checkout of an existing branch + build: $(secs "${t}")s"
+"${XCFS}" release "${slotwt}" --no-warm --json >/dev/null || fail "second release failed"
+
+step "pool: retire"
+out=$("${XCFS}" pool resize "${src}" 0 --json) || fail "resize failed: ${out}"
+slotdir=$(dirname "${slotwt}")
+python3 -c 'import os, sys, time
+t = time.time()
+while os.path.exists(sys.argv[1]) and time.time() - t < 60: time.sleep(0.2)
+sys.exit(1 if os.path.exists(sys.argv[1]) else 0)' "${slotdir}" || fail "the slot directory is still there"
+[ "$(git -C "${src}" worktree list | wc -l | tr -d ' ')" = 1 ] || fail "git still lists the slot"
+echo "slot retired; git worktree list is back to the main checkout"

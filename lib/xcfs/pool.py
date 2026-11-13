@@ -46,6 +46,17 @@ def current_baselines(repo, cfg):
     return {rel: config.resolve_baseline(src, spec) for rel, src, spec in config.repo_set(repo, cfg)}
 
 
+def current_versions(repo, cfg):
+    from .adapter import adapters_for
+    return {a.name: a.version() for a, _ in adapters_for(repo, cfg)}
+
+
+def warm_matches(w, revs, versions):
+    """A slot built at these revisions with these toolchain versions: its build output can be reused as is."""
+    return bool(w.get("ok") and w.get("revs") == revs and all(
+        (w.get("versions") or {}).get(k) == v for k, v in versions.items() if v))
+
+
 def check_space(settings, where):
     from .util import free_bytes
     need = settings["slotDiskGB"] * GB
@@ -55,8 +66,11 @@ def check_space(settings, where):
 
 
 def exclude_from_backups(path):
-    # A slot is rebuildable build state: never worth backing up. Ignore failures (no Time Machine, no permission).
-    run("tmutil", "addexclusion", path, check=False)
+    """A slot is rebuildable build state: never worth backing up. This is the attribute `tmutil addexclusion` writes
+    (a sticky exclusion that moves with the directory); writing it directly takes milliseconds instead of ~10 s."""
+    import plistlib
+    value = plistlib.dumps("com.apple.backupd", fmt=plistlib.FMT_BINARY).hex()
+    run("xattr", "-wx", "com.apple.metadata:com_apple_backup_excludeItem", value, path, check=False)
 
 
 # ------------------------------------------------------------------ create / retire
@@ -268,6 +282,7 @@ def checkout(repo, branch, start, session, settings, wait=0):
     if at:
         raise Fail("branch %s is already checked out at %s; a branch can be in one checkout at a time" % (branch, at))
     revs = current_baselines(repo, cfg)
+    versions = current_versions(repo, cfg)
     deadline = time.time() + wait
     lease = {"session": session, "branch": branch, "at": now_iso(), "active": now_iso(), "pid": os.getpid()}
     while True:
@@ -278,7 +293,8 @@ def checkout(repo, branch, start, session, settings, wait=0):
             def score(item):
                 s = item[1]
                 w = s.get("warm") or {}
-                return (0 if w.get("ok") and w.get("revs") == revs else 1 if w.get("ok") else 2, s["index"])
+                stale_tool = any((w.get("versions") or {}).get(k) not in (None, v) for k, v in versions.items())
+                return (0 if warm_matches(w, revs, versions) else 2 if stale_tool or not w.get("ok") else 1, s["index"])
             if free:
                 slot, row = min(free, key=score)
                 row.update(state="leased", lease=lease)
@@ -335,11 +351,12 @@ def checkout(repo, branch, start, session, settings, wait=0):
         reg["slots"][slot]["repos"] = repos
         reg["slots"][slot]["lease"].pop("pid", None)
         w = reg["slots"][slot].get("warm") or {}
-    warm_state = "warm at baseline" if w.get("ok") and w.get("revs") == revs else \
+    at_base = warm_matches(w, revs, versions)
+    warm_state = "warm at baseline" if at_base else \
         "warm at an older baseline" if w.get("ok") else "cold (first build is a full build)"
     say("slot %d: %s  [%s, %s]" % (row["index"], src, branch, warm_state))
     return {"slot": slot, "worktree": src, "branch": branch, "index": row["index"], "made_branch": made,
-            "warm": w.get("ok", False), "warm_at_baseline": bool(w.get("ok") and w.get("revs") == revs),
+            "warm": w.get("ok", False), "warm_at_baseline": at_base,
             "session": session}
 
 
