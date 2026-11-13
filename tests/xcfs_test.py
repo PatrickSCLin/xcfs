@@ -779,6 +779,53 @@ def t42_parallel_checkouts_and_toolchain_change():
     assert xcfs("release", c["worktree"], "--no-warm", "--prune-branch", env=E)["_code"] == 0
 
 
+FAKE_SWB = r"""#!/usr/bin/env python3
+import json, os, sys, time
+mode = open(os.environ["FAKE_MODE"]).read().strip()
+sys.stdout.write("swbuild> "); sys.stdout.flush()
+for line in sys.stdin:
+    if line.startswith("quit"):
+        break
+    if mode == "hang-with-error":
+        sys.stdout.write("Found multiple targets named 'App'"); sys.stdout.flush(); time.sleep(600)
+    if mode == "silent":
+        time.sleep(600)
+    for ev in ({"kind": "reportBuildDescription", "buildDescriptionID": "d1"},
+               {"kind": "taskStarted", "ruleInfo": "SwiftCompile normal arm64 /x/A.swift", "id": 1},
+               {"kind": "error", "message": "boom", "location": {"path": "/tmp/A.swift", "line": 3, "column": 7}},
+               {"kind": "buildCompleted", "result": "failed"}):
+        s = json.dumps(ev); sys.stdout.write("%d\n%s\n" % (len(s), s)); sys.stdout.flush()
+    sys.stdout.write("swbuild> "); sys.stdout.flush()
+"""
+
+
+@test
+def t43_session_failure_modes():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters import xcode_session as xs
+    fake = SB + "/fake-swbuild"; open(fake, "w").write(FAKE_SWB); os.chmod(fake, 0o755)
+    mode = SB + "/fake-mode"; env = dict(os.environ, FAKE_MODE=mode); log = open(SB + "/fake.log", "w")
+    open(mode, "w").write("normal")
+    sb = xs.Swbuild(fake, SB, env, log)
+    r = sb.build("Debug", SB + "/req.json", SB + "/p.json", 20)
+    assert r["result"] == "failed" and r["description"] == "d1" and r["compiled"] == 1, r
+    assert r["diagnostics"][0]["line"] == 3 and r["diagnostics"][0]["message"] == "boom", r
+    open(mode, "w").write("hang-with-error"); sb.restart()
+    t0 = time.time(); r = sb.build("Debug", SB + "/req.json", SB + "/p.json", 60)
+    assert r["result"] == "command-error" and "multiple targets" in r["message"] and time.time() - t0 < 10, r
+    open(mode, "w").write("silent"); sb.restart()
+    json.dump({}, open(SB + "/req.json", "w"))
+    out = xs.handle(sb, {"pif": "p", "kind": "build", "request": SB + "/req.json", "configuration": "Debug", "timeout": 2}, {})
+    assert out["result"] == "timeout" and out["attempts"] == 2, "a hung build was not restarted and retried: %s" % out
+    open(mode, "w").write("normal"); sb.restart()
+    last = {}
+    xs.handle(sb, {"pif": "p", "kind": "build", "request": SB + "/req.json", "configuration": "Debug", "timeout": 20}, last)
+    out = xs.handle(sb, {"pif": "p", "kind": "build", "request": SB + "/req.json", "configuration": "Debug", "timeout": 20}, last)
+    assert out["reused_description"] and json.load(open(SB + "/req.json"))["buildDescriptionID"] == "d1", out
+    sb.quit()
+    return "error-then-hang detected in %.1fs" % (time.time() - t0)
+
+
 
 def main():
     bad = [r for r in results if not r[1]]

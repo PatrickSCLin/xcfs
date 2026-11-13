@@ -92,7 +92,9 @@ def cmd_doctor(a):
     except Fail as e:
         settings = None
         check(False, str(e))
-    root = phys(a.pos[0]) if a.pos else None
+    root = phys(a.pos[0]) if a.pos else (phys(".") if a.flag("session-check") else None)
+    if a.flag("session-check"):
+        os.environ["XCFS_SESSION_CHECK"] = "1"  # adapters with a build session run their regression check now
     if root:
         check(fs_type(root) == "apfs", "%s is on APFS (clonefile needs it)" % root)
         if settings and os.path.isdir(os.path.join(root, ".git")):

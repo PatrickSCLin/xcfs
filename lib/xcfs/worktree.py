@@ -141,7 +141,7 @@ def prune_branches(repos, out):
     return deleted
 
 
-def check_removable(root, row, discard_ignored, skip_pids=()):
+def check_removable(root, row, discard_ignored, skip_pids=(), release=None):
     repos = repos_of(row, root)
     code, why = unsaved_work(root, repos, row.get("carried"))
     if code:
@@ -150,6 +150,8 @@ def check_removable(root, row, discard_ignored, skip_pids=()):
     if lost and not discard_ignored:
         raise Fail("ignored file(s) changed in %s and exist nowhere else: %s (pass --discard-ignored to drop them)"
                    % (root, ", ".join(lost)), IGNORED_CHANGED)
+    if release:
+        release()  # the checkout's own helpers (a build session, a simulator) must not count as "in use"
     busy = users_of(root, skip_pids)
     if busy:
         raise Fail("%s is in use by: %s" % (root, "; ".join(busy[:3])), IN_USE)
@@ -294,7 +296,8 @@ def remove_worktree(path, apply, discard_ignored=False, quiet=False, prune_branc
             out("  would refuse: changed ignored file(s): %s" % ", ".join(lost))
         out("dry-run: nothing removed. re-run with --apply.")
         return {"worktree": wt, "removed": False, "blocked": why or (", ".join(lost) if lost else "")}
-    check_removable(wt, row, discard_ignored)
+    check_removable(wt, row, discard_ignored,
+                    release=lambda: builds.for_each_adapter(wt, repo, cfg, "worktree", "release"))
     with state.registry() as reg:          # the directory is going: the record goes too, whatever git says next
         reg["worktrees"].pop(wt, None)
     res = destroy(wt, row or {"repo": repo}, cfg, out, prune_branch)

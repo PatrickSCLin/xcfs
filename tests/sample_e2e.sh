@@ -154,3 +154,39 @@ while os.path.exists(sys.argv[1]) and time.time() - t < 60: time.sleep(0.2)
 sys.exit(1 if os.path.exists(sys.argv[1]) else 0)' "${slotdir}" || fail "the slot directory is still there"
 [ "$(git -C "${src}" worktree list | wc -l | tr -d ' ')" = 1 ] || fail "git still lists the slot"
 echo "slot retired; git worktree list is back to the main checkout"
+
+step "session: regression check on this Xcode"
+out=$("${XCFS}" doctor "${src}" --session-check --json) || fail "doctor --session-check failed: ${out}"
+python3 - "${out}" <<'EOF2'
+import json, sys
+print("\n".join(m for m in json.loads(sys.argv[1]).get("problems", [])) or "passed")
+EOF2
+
+step "session: build through a persistent swbuild session"
+export XCFS_DRIVER=session
+out=$("${XCFS}" new "${src}" feature/session --json) || fail "new failed: ${out}"
+swt=$(json "${out}" worktree)
+report() { python3 -c 'import json, sys
+d = json.loads(sys.argv[1]); print("%-34s %5.2fs  compile tasks %-3s description reused %s" % (sys.argv[2], d["seconds"], d.get("compile_tasks"), d.get("reused_description")))
+assert d.get("driver") == "session", d' "$1" "$2"; }
+out=$("${XCFS}" build "${swt}" --json) || fail "session cold build failed: ${out}"; report "${out}" "cold build"
+out=$("${XCFS}" build "${swt}" --json) || fail "session no-op failed: ${out}"; report "${out}" "no-op"
+[ "$(json "${out}" compile_tasks)" = 0 ] || fail "a no-op compiled something"
+echo 'enum Added { static func v() -> Int { 1 } }' >> "${swt}/App/Other.swift"
+out=$("${XCFS}" build "${swt}" --json) || fail "session edit build failed: ${out}"; report "${out}" "edit a file"
+echo 'enum Broken { static func f() -> Int { return "x" } }' >> "${swt}/App/Other.swift"
+set +e; out=$("${XCFS}" check "${swt}/App/Other.swift" --json); code=$?; set -e
+[ "${code}" = 8 ] || fail "session check of a broken file exited ${code}: ${out}"
+report "${out}" "check (buildFiles), broken file"
+git -C "${swt}" checkout -q -- App/Other.swift
+out=$("${XCFS}" check "${swt}/App/Other.swift" --json) || fail "session check failed: ${out}"; report "${out}" "check (buildFiles), fixed"
+echo 'enum Fresh { static func v() -> Int { 2 } }' > "${swt}/Synced/Fresh.swift"
+out=$("${XCFS}" build "${swt}" --json) || fail "a new file in a synchronized folder failed: ${out}"
+report "${out}" "new file in a synchronized folder"
+[ "$(json "${out}" pif_exported)" = True ] || fail "the PIF was not re-exported for a new file"
+rm "${swt}/Synced/Fresh.swift"
+out=$("${XCFS}" rm "${swt}" --apply --prune-branch --json) || fail "rm with a running session failed: ${out}"
+sleep 1
+! pgrep -f "xcode_session.*$(basename "${swt}")" >/dev/null || fail "the session outlived its worktree"
+echo "session stopped with its worktree"
+unset XCFS_DRIVER
