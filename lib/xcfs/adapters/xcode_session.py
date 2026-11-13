@@ -290,7 +290,7 @@ def make_request(adapter, ctx, pif, conf, dd, files=None):
             raise Fail("not compiled by any target in the PIF: %s" % ", ".join(missing), USAGE)
     else:
         guids = target_guids(pif, names)
-    table = dict(ctx.entry.get("buildSettings", {}), **conf.get("buildSettings", {}))
+    table = adapter.build_settings(ctx, conf)
     ext, tc = metal_toolchain(ctx)
     if tc:
         table["TOOLCHAINS"] = tc
@@ -371,6 +371,7 @@ class Swbuild:
                             % (shq(configuration), shq(request_file), shq(pif))).encode())
         self.p.stdin.flush()
         diags, seen, desc, result, compiled = [], set(), None, None, 0
+        started, by_kind, slowest, marks = {}, {}, [], {}
         buf = ""
         while True:
             left = timeout - (time.time() - t0)
@@ -410,16 +411,36 @@ class Swbuild:
                         diags.append(d)
                 elif k == "reportBuildDescription":
                     desc = j.get("buildDescriptionID")
-                elif k == "taskStarted" and str(j.get("ruleInfo", "")).startswith(("SwiftCompile", "CompileC",
-                                                                                     "SwiftEmitModule")):
-                    compiled += 1
+                elif k == "taskStarted":
+                    rule = str(j.get("ruleInfo", ""))
+                    started[j.get("id")] = (time.time(), rule.split(" ")[0],
+                                            (j.get("executionDescription") or rule)[:100])
+                    if rule.startswith(("SwiftCompile", "CompileC", "SwiftEmitModule")):
+                        compiled += 1
+                    marks.setdefault("first_task", time.time() - t0)
+                elif k == "taskComplete" and j.get("id") in started:
+                    t1, kind, what = started.pop(j["id"])
+                    dt = time.time() - t1
+                    c = by_kind.setdefault(kind, [0, 0.0])
+                    c[0] += 1
+                    c[1] += dt
+                    slowest.append((dt, what))
+                elif k in ("planningOperationStarted", "planningOperationCompleted", "buildStarted"):
+                    marks.setdefault(k, time.time() - t0)
                 elif k == "buildCompleted":
                     result = j.get("result")
             if result is not None:
                 break
         diags.sort(key=lambda d: d["severity"] != "error")
+        slowest.sort(reverse=True)
+        timing = {"planning_seconds": round(marks.get("planningOperationCompleted", 0) -
+                                            marks.get("planningOperationStarted", 0), 2),
+                  "first_task_at": round(marks.get("first_task", 0), 2),
+                  "task_seconds_by_kind": {k: [n, round(sec, 2)] for k, (n, sec) in
+                                           sorted(by_kind.items(), key=lambda kv: -kv[1][1])[:12]},
+                  "slowest_tasks": [[what, round(dt, 2)] for dt, what in slowest[:10]]}
         return {"result": result, "seconds": time.time() - t0, "diagnostics": diags, "description": desc,
-                "compiled": compiled}
+                "compiled": compiled, "timing": timing}
 
 
 def shq(s):
@@ -582,7 +603,7 @@ def session_build(adapter, ctx, name, conf, args, files=None):
            "seconds": round(time.time() - t0, 2), "build_seconds": round(out.get("seconds", 0), 2),
            "diagnostics": out.get("diagnostics", []), "derived_data": dd, "configuration": name, "driver": "session",
            "pif_exported": exported, "reused_description": out.get("reused_description", False),
-           "compile_tasks": out.get("compiled", 0), "result": out["result"]}
+           "compile_tasks": out.get("compiled", 0), "result": out["result"], "timing": out.get("timing")}
     if out.get("message"):
         res["diagnostics"].insert(0, {"file": None, "line": 0, "column": 0, "severity": "error",
                                       "message": "swbuild: " + out["message"]})

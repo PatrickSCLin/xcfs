@@ -1,0 +1,67 @@
+{
+  "name": "Ice Cubes (arm64 only)",
+  "description": "https://github.com/Dimillian/IceCubesApp, a SwiftUI Mastodon client: an .xcodeproj, 13 local Swift packages and remote packages, built for the iOS Simulator. Plain worktrees are set up as the project's README says and built with xcodebuild into the default DerivedData, as an agent would; xcfs is measured twice: slots driven by xcodebuild, and slots driven by the persistent build session. Swift packages are resolved by each side on its own (Xcode's global package cache is shared by both). This variant builds one architecture (ARCHS=arm64) on every side \u2014 what an agent needs for an Apple-silicon simulator \u2014 repeats the edit loop twice to show run-to-run noise, and also times `xcfs check` of the edited file.",
+  "agents": 3,
+  "plain": {
+    "create": [
+      "git worktree add -q -b {branch} {dest}",
+      "cd {dest} && cp IceCubesApp.xcconfig.template IceCubesApp.xcconfig && sed -i '' 's/^DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM =/' IceCubesApp.xcconfig"
+    ],
+    "build": "xcodebuild build -project IceCubesApp.xcodeproj -scheme IceCubesApp -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
+    "remove": "git worktree remove --force {dest} && git branch -D {branch}"
+  },
+  "xcfs": {
+    "config": {
+      "version": 1,
+      "carry": [
+        "IceCubesApp.xcconfig"
+      ],
+      "toolchains": [
+        {
+          "adapter": "xcode",
+          "project": "IceCubesApp.xcodeproj",
+          "scheme": "IceCubesApp",
+          "configurations": {
+            "sim-debug": {
+              "configuration": "Debug",
+              "destination": "generic/platform=iOS Simulator"
+            }
+          },
+          "buildSettings": {
+            "CODE_SIGNING_ALLOWED": "NO",
+            "ARCHS": "arm64"
+          }
+        }
+      ]
+    },
+    "variants": {
+      "xcodebuild": {
+        "driver": "xcodebuild"
+      },
+      "session": {
+        "driver": "session"
+      }
+    },
+    "measureCheck": true
+  },
+  "edits": [
+    {
+      "name": "edit a function body in a leaf package (Timeline)",
+      "file": "Packages/Timeline/Sources/Timeline/TimelineContentFilter.swift",
+      "find": "public func snapshot() -> Snapshot {\n    Snapshot(",
+      "replace": "public func snapshot() -> Snapshot {\n    _ = {n}\n    return Snapshot("
+    },
+    {
+      "name": "edit a function body in a package 12 others depend on (Models)",
+      "file": "Packages/Models/Sources/Models/Account.swift",
+      "find": "    hasher.combine(id)\n",
+      "replace": "    hasher.combine(id)\n    _ = {n}\n"
+    },
+    {
+      "name": "add a public declaration to that package",
+      "file": "Packages/Models/Sources/Models/Account.swift",
+      "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { {n} }\n"
+    }
+  ],
+  "editRepeats": 2
+}

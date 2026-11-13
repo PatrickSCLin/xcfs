@@ -141,7 +141,7 @@ def revert_edits(root):
         subprocess.run(["git", "-C", root, "checkout", "--", e["file"]], capture_output=True)
 
 
-def edit_loop(root, build, label):
+def edit_loop(root, build, label, check=None):
     """No-op build, then each edit in turn (cumulative, as a session of work would be). Every run and every side
     writes different text: both sides may share a build cache, and an edit the other side already built would be a
     cache hit instead of a build."""
@@ -150,8 +150,18 @@ def edit_loop(root, build, label):
     t, code, _ = build("no-op")
     rows.append({"step": "no-op build", "seconds": t, "ok": code == 0})
     say("  %s no-op: %ss" % (label, t))
-    for i, e in enumerate(PROFILE.get("edits", []), 1):
+    reps = int(PROFILE.get("editRepeats", 1))
+    edits = [(e, "" if r == 0 else " (repeat %d)" % (r + 1)) for r in range(reps) for e in PROFILE.get("edits", [])]
+    for i, (e, suffix) in enumerate(edits, 1):
+        e = dict(e, name=e["name"] + suffix)
+        if suffix and e is not None and i > 1 and edits[i - 2][1] != suffix:
+            revert_edits(root)  # a repeat starts again from a clean tree
+            build("revert")
         apply_edit(root, e, base + i)
+        if check:  # the fast path an agent has for "does my change compile": only the edited file
+            tc, ccode, _ = check(os.path.join(root, e["file"]))
+            rows.append({"step": e["name"] + " — xcfs check of the file", "seconds": tc, "ok": ccode == 0})
+            say("  %s check %s: %ss" % (label, e["name"], tc))
         t, code, _ = build(e["name"])
         rows.append({"step": e["name"], "seconds": t, "ok": code == 0})
         say("  %s %s: %ss%s" % (label, e["name"], t, "" if code == 0 else " (FAILED)"))
@@ -287,7 +297,9 @@ def run_xcfs(variant, overrides):
         res["checkouts"].append(row)
         say("xcfs[%s] %d: checkout %.1fs, first build %.1fs" % (variant, i, t1, t2))
     res["edit_loop"] = edit_loop(wts[0], lambda name: xcfs("build", wts[0], log_name="xcfs-%s-edit-loop" % variant)[:3],
-                                "xcfs[%s]" % variant)
+                                "xcfs[%s]" % variant,
+                                check=(lambda f: xcfs("check", f, log_name="xcfs-%s-edit-loop" % variant)[:3])
+                                if PROFILE["xcfs"].get("measureCheck") else None)
     for i, wt in enumerate(wts, 1):
         t, code, d, out = xcfs("release", wt, "--no-warm", "--prune-branch", log_name="xcfs-%d-release" % i)
         time.sleep(3)

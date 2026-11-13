@@ -614,7 +614,18 @@ def t35_xcode_diagnostics_are_parsed():
     d = parse_diagnostics(lines)
     assert [(x["severity"], x["line"]) for x in d] == [("error", 12), ("error", 0), ("warning", 3)], d
     assert d[0]["file"] == f and d[0]["column"] == 5 and d[1]["file"] is None
-    from xcfs.adapters.xcode import first_json_object
+    from xcfs.adapters.xcode import XcodeAdapter, first_json_object
+    from xcfs.adapter import Context
+    os.environ["XCFS_DD_ROOT"] = SB + "/dd-mc"
+    ad = XcodeAdapter()
+    ctx = Context("worktree", SB, SB, {}, {"adapter": "xcode", "buildSettings": {"A": "1"}}, SB + "/b")
+    bs = ad.build_settings(ctx, {"buildSettings": {"B": "2"}})
+    assert bs["A"] == "1" and bs["B"] == "2" and bs["MODULE_CACHE_DIR"] == SB + "/dd-mc/ModuleCache.noindex", bs
+    assert os.path.isfile(bs["CLANG_MODULES_BUILD_SESSION_FILE"]), "clang needs the build-session file to exist"
+    assert bs["COMPILATION_CACHE_CAS_PATH"] == SB + "/dd-mc/CompilationCache.noindex" and bs["SDK_STAT_CACHE_DIR"] == SB + "/dd-mc", bs
+    ctx.entry["sharedXcodeCaches"] = False
+    assert "MODULE_CACHE_DIR" not in ad.build_settings(ctx, {}), "sharedXcodeCaches: false was ignored"
+    del os.environ["XCFS_DD_ROOT"]
     out = 'Resolve Package Graph\n{ broken log line\nFetching {x}\n{"project": {"schemes": ["App"]}}\ntrailing'
     assert first_json_object(out) == {"project": {"schemes": ["App"]}}, first_json_object(out)
 

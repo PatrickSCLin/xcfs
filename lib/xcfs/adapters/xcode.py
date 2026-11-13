@@ -6,7 +6,7 @@ from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say
 
 ENTRY_KEYS = {"adapter", "root", "workspace", "project", "package", "scheme", "target", "configurations", "default",
               "warm", "simulator", "packagesDir", "xcodebuildArgs", "buildSettings", "driver", "prepare",
-              "reexportWhenChanged", "pinDerivedData"}
+              "reexportWhenChanged", "pinDerivedData", "sharedXcodeCaches"}
 CONFIG_KEYS = {"configuration", "destination", "testDestination", "buildSettings"}
 TRASH = ".xcfs-trash"
 PCM_DIR = "Build/Intermediates.noindex/SwiftExplicitPrecompiledModules"
@@ -198,7 +198,7 @@ class XcodeAdapter(Adapter):
         if ctx.entry.get("packagesDir"):
             cmd += ["-clonedSourcePackagesDirPath", os.path.join(ctx.toolchain_root, ctx.entry["packagesDir"])]
         cmd += list(ctx.entry.get("xcodebuildArgs", [])) + list(extra)
-        settings = dict(ctx.entry.get("buildSettings", {}), **conf.get("buildSettings", {}))
+        settings = self.build_settings(ctx, conf)
         cmd += ["%s=%s" % kv for kv in sorted(settings.items())]
         log = os.path.join(ctx.build_dir, "logs", "%s-%s-%s.log" % (time.strftime("%Y%m%d-%H%M%S"), action, conf_name))
         self.prune_logs(os.path.dirname(log))
@@ -208,6 +208,27 @@ class XcodeAdapter(Adapter):
         return {"ok": code == 0, "timeout": code is None, "seconds": round(secs, 2), "log": log,
                 "diagnostics": parse_diagnostics(lines), "derived_data": dd, "configuration": conf_name,
                 "driver": "xcodebuild", "_lines": lines}
+
+    def build_settings(self, ctx, conf):
+        """The config's build settings, plus the caches Xcode shares between all projects when DerivedData is in its
+        default place: the module cache (with its build-session file), the compilation cache and the SDK stat cache.
+        Given a DerivedData location of its own, a build would otherwise start fresh copies of them inside it.
+        Measured on a large app, an edit that rebuilds the modules downstream of a package took 51-55 s that way
+        and 44-46 s with the shared caches, the same as a build into the default DerivedData."""
+        settings = {}
+        if ctx.entry.get("sharedXcodeCaches", True):
+            root = dd_root()
+            mc = os.path.join(root, "ModuleCache.noindex")
+            session_file = os.path.join(mc, "Session.modulevalidation")
+            if not os.path.exists(session_file):  # clang needs it; Xcode maintains it once it exists
+                os.makedirs(mc, exist_ok=True)
+                open(session_file, "a").close()
+            settings.update(MODULE_CACHE_DIR=mc, CLANG_MODULES_BUILD_SESSION_FILE=session_file,
+                            COMPILATION_CACHE_CAS_PATH=os.path.join(root, "CompilationCache.noindex"),
+                            SDK_STAT_CACHE_DIR=root)
+        settings.update(ctx.entry.get("buildSettings", {}))
+        settings.update(conf.get("buildSettings", {}))
+        return settings
 
     def prune_logs(self, d, keep=20):
         try:

@@ -28,7 +28,8 @@ finish() {
 trap finish EXIT
 # xcfs must never leave folders in the global DerivedData: every build it runs has its own.
 GLOBAL_DD=~/Library/Developer/Xcode/DerivedData
-dd_before=$(ls "${GLOBAL_DD}" 2>/dev/null | sort)
+# Xcode's own shared caches are allowed: every default build uses them too
+dd_before=$( (ls "${GLOBAL_DD}" 2>/dev/null; printf '%s\n' ModuleCache.noindex CompilationCache.noindex SDKStatCaches.noindex) | sort -u)
 step() { printf '\n== %s\n' "$*"; }
 fail() { echo "sample_e2e: $*" >&2; exit 1; }
 json() { python3 -c 'import json, sys; print(json.loads(sys.argv[1])[sys.argv[2]])' "$1" "$2"; }
