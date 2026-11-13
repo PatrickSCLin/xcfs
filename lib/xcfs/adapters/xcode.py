@@ -32,7 +32,7 @@ def parse_diagnostics(lines, limit_warnings=100):
         line = line.rstrip("\n")
         m = DIAG.match(line)
         if m:
-            d = {"file": m.group("file"), "line": int(m.group("line")), "column": int(m.group("col") or 0),
+            d = {"file": phys(m.group("file")), "line": int(m.group("line")), "column": int(m.group("col") or 0),
                  "severity": m.group("sev"), "message": m.group("msg").strip()}
         else:
             m = BARE.match(line.strip())

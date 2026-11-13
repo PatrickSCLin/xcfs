@@ -600,6 +600,19 @@ def t34_dependency_snapshot_by_lock_files():
         assert xcfs("rm", w["worktree"], "--apply")["_code"] == 0
 
 
+@test
+def t35_xcode_diagnostics_are_parsed():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode import parse_diagnostics
+    f = SB + "/a b/File.swift"
+    lines = [f + ":12:5: error: cannot find 'x' in scope\n", f + ":12:5: error: cannot find 'x' in scope\n",
+             f + ":3:1: warning: unused\n", f + ":12:5: note: did you mean 'y'?\n", "error: Signing requires a team\n",
+             "    error: indented continuation is not a diagnostic\n", "ld: warning: ignored\n", "** BUILD FAILED **\n"]
+    d = parse_diagnostics(lines)
+    assert [(x["severity"], x["line"]) for x in d] == [("error", 12), ("error", 0), ("warning", 3)], d
+    assert d[0]["file"] == f and d[0]["column"] == 5 and d[1]["file"] is None
+
+
 
 def main():
     bad = [r for r in results if not r[1]]

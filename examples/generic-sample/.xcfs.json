@@ -1,4 +1,16 @@
 {
   "version": 1,
-  "seed": ["Pods", "GenApp.xcodeproj", "GenApp.xcworkspace"]
+  "seed": ["Pods", "GenApp.xcodeproj", "GenApp.xcworkspace"],
+  "seedKey": ["Podfile.lock", "project.yml"],
+  "toolchains": [
+    {
+      "adapter": "xcode",
+      "workspace": "GenApp.xcworkspace",
+      "scheme": "GenApp",
+      "configurations": {
+        "sim-debug": { "configuration": "Debug", "destination": "generic/platform=iOS Simulator" }
+      },
+      "buildSettings": { "CODE_SIGNING_ALLOWED": "NO" }
+    }
+  ]
 }

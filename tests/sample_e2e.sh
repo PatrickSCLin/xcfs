@@ -5,7 +5,7 @@
 #   tests/sample_e2e.sh [--keep]
 #
 # Copies the sample into a throw-away git repository whose path contains a space, then walks the agent flow:
-#   xcfs new (session set)  ->  xcodebuild inside the worktree  ->  checks  ->  xcfs reap --session --prune-branch
+#   xcfs new (session set) -> xcfs build / check / test / run -> checks -> xcfs reap --session --prune-branch
 # Needs Xcode with an iOS Simulator SDK, xcodegen and CocoaPods on PATH. Uses its own xcfs state directory.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -16,7 +16,8 @@ for t in xcodebuild xcodegen pod git python3; do
 done
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/xcfs-e2e.XXXXXX"); work=$(cd "${work}" && pwd -P)
-export XCFS_STATE="${work}/state" XCFS_DD_ROOT="${work}/dd" XDG_CONFIG_HOME="${work}/config" XCFS_SESSION="e2e-session"
+export XCFS_STATE="${work}/state" XCFS_DD_ROOT="${work}/dd" XDG_CONFIG_HOME="${work}/config" XCFS_SESSION="e2e-session" \
+  XCFS_CACHE="${work}/cache" XCFS_POOL_ROOT="${work}/pool"
 unset CLAUDE_CODE_SESSION_ID
 mkdir -p "${XCFS_DD_ROOT}"
 finish() {
@@ -49,18 +50,34 @@ wt=$(json "${out}" worktree)
 echo "worktree: ${wt}  ($(json "${out}" seconds)s, seeded: $(json "${out}" seeded))"
 [ -d "${wt}/Pods" ] && [ -d "${wt}/GenApp.xcworkspace" ] || fail "seed directories missing in the worktree"
 
-step "build inside the worktree"
-build() {
-  xcodebuild -workspace "${wt}/GenApp.xcworkspace" -scheme GenApp -destination 'generic/platform=iOS Simulator' \
-    -derivedDataPath "${wt}/DerivedData" CODE_SIGNING_ALLOWED=NO build -quiet >"${work}/build.log" 2>&1 \
-    || { tail -30 "${work}/build.log"; fail "xcodebuild failed in the worktree"; }
-}
-t=$(now); build; echo "cold build: $(secs "${t}")s"
-t=$(now); build; echo "no-op build: $(secs "${t}")s"
-xcodebuild -workspace "${wt}/GenApp.xcworkspace" -scheme GenApp -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "${wt}/DerivedData" CODE_SIGNING_ALLOWED=NO build-for-testing -quiet >"${work}/test-build.log" 2>&1 \
-  || { tail -30 "${work}/test-build.log"; fail "the unit-test target did not build"; }
-echo "unit-test target builds"
+step "xcfs build: cold, then no-op"
+out=$("${XCFS}" build "${wt}" --json) || fail "xcfs build failed: ${out}"
+echo "cold build: $(json "${out}" seconds)s"
+out=$("${XCFS}" build "${wt}" --json) || fail "no-op build failed: ${out}"
+echo "no-op build: $(json "${out}" seconds)s; output in $(json "${out}" derived_data)"
+case "$(json "${out}" derived_data)" in "${wt}"/*) fail "build output landed inside the worktree";; esac
+
+step "xcfs check reports an error in the file it was asked about"
+echo 'enum Broken { static func f() -> Int { return "x" } }' >> "${wt}/App/Other.swift"
+set +e; out=$("${XCFS}" check "${wt}/App/Other.swift" --json); code=$?; set -e
+[ "${code}" = 8 ] || fail "check of a broken file exited ${code}: ${out}"
+python3 - "${out}" "${wt}/App/Other.swift" <<'EOF2'
+import json, sys
+d = json.loads(sys.argv[1])
+assert d["diagnostics"] and d["diagnostics"][0]["file"] == sys.argv[2] and d["diagnostics"][0]["line"] == 2, d["diagnostics"]
+print("exit 8, error at %s:%d" % (d["diagnostics"][0]["file"].rsplit("/", 1)[-1], d["diagnostics"][0]["line"]))
+EOF2
+git -C "${wt}" checkout -q -- App/Other.swift
+"${XCFS}" check "${wt}/App/Other.swift" --json >/dev/null || fail "check after the fix failed"
+
+step "xcfs test on the worktree's own simulator"
+out=$("${XCFS}" test "${wt}" --json) || fail "xcfs test failed: ${out}"
+echo "tests=$(json "${out}" tests) failures=$(json "${out}" failures) in $(json "${out}" seconds)s"
+
+step "xcfs run: install and launch"
+out=$("${XCFS}" run "${wt}" --json) || fail "xcfs run failed: ${out}"
+sim=$(json "${out}" simulator)
+echo "launched $(json "${out}" bundle_id) as pid $(json "${out}" pid) on ${sim}"
 
 step "the worktree is clean and self-contained"
 [ -z "$(git -C "${wt}" status --porcelain)" ] || { git -C "${wt}" status --short; fail "git status is not clean after a build"; }
@@ -85,4 +102,6 @@ out=$(cd "${wt}" && "${XCFS}" reap --apply --prune-branch --json)
 [ "$(git -C "${src}" worktree list | wc -l | tr -d ' ')" = 1 ] || fail "git still lists the worktree"
 ! git -C "${src}" show-ref --verify --quiet refs/heads/feature/x || fail "the branch xcfs created (no commits) was kept"
 [ "$("${XCFS}" ls --json)" = '{"worktrees": [], "ok": true}' ] || fail "the registry is not empty"
-echo "worktree, its DerivedData and its empty branch are gone; registry empty"
+sleep 2
+! xcrun simctl list devices | grep -q "${sim}" || fail "the worktree's simulator was not deleted"
+echo "worktree, its build output, its simulator and its empty branch are gone; registry empty"
