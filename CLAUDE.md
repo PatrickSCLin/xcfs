@@ -33,9 +33,11 @@ xcfs is an open-source tool. Everything tracked in this repository is public.
 
 ## Layout
 
-- `bin/xcfs` — the tool (v0.1): one Python 3 file, standard library only, must keep running on Python 3.9.
+- `bin/xcfs` — entry point; the code is in `lib/xcfs/` (Python 3, standard library only, must keep running on 3.9).
+  The core modules in `lib/xcfs/*.py` must not name a toolchain (test t28); toolchain code lives in
+  `lib/xcfs/adapters/`.
 - `tests/xcfs_test.py` — end-to-end tests in a throw-away sandbox; run with both `python3` and `/usr/bin/python3`.
-  `tests/sample_e2e.sh` — the sample project end to end (needs Xcode, xcodegen, CocoaPods).
+  `tests/sample_e2e.sh` — the sample project end to end: worktree, pool, session (needs Xcode, xcodegen, CocoaPods).
 - `examples/generic-sample/` — a small XcodeGen + CocoaPods workspace and its `.xcfs.json`; the fixture for real builds.
 - `docs/` — public design notes and agent usage, written in neutral terms (not copied from `plan/`).
 - `plan/` — private notes (ignored): design history, measurements, prototypes.

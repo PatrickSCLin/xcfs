@@ -1,8 +1,9 @@
 # xcfs design
 
-This document explains what `xcfs` is for, what has been measured, how the tool is meant to grow, and which edge cases
-it handles. What exists today (v0.1) is the worktree lifecycle described in the [README](../README.md); everything
-marked *planned* is design backed by measurements of hand-driven prototypes, not shipped code.
+This document explains what `xcfs` is for, what has been measured, how the tool is built, and which edge cases it
+handles. v0.2 implements the main line — worktrees, the pool, the build session behind its regression check — as
+described in the [README](../README.md). Numbers for the large app below were measured with hand-driven prototypes of
+the same mechanisms; numbers for the sample were measured with xcfs itself.
 
 ## Goal
 
@@ -19,9 +20,9 @@ No custom file system. Three things layered on git worktrees and APFS clones, wi
 
 - **Hygiene rules** that keep Xcode from doing needless work (build output never in a non-hidden directory inside a
   local package; one DerivedData per checkout and per driver).
-- **A pool of pre-built worktrees** at fixed paths (*planned*): build state is bound to absolute paths, so a slot never
+- **A pool of pre-built worktrees** at fixed paths: build state is bound to absolute paths, so a slot never
   moves; idle slots follow the integration branch in the background, and handing one out costs only the difference.
-- **A persistent build session** (*planned*): keep the build service alive, reuse the build description, and ask for
+- **A persistent build session**: keep the build service alive, reuse the build description, and ask for
   exactly the files that changed, instead of starting `xcodebuild` from zero each time.
 
 ### Measured on one large app
@@ -43,14 +44,27 @@ An `.xcodeproj` with local Swift packages, about 100 remote packages, binary dep
 
 Without a pool, a persistent session does not help the very first build of a brand-new path (72 s PIF export + 221 s
 cold build). The other way round, the pool does not need the persistent session: driven by `xcodebuild`, a handed-out
-slot's first build is estimated at 40–135 s (fixed overhead plus the edit; not measured separately yet).
+slot's first build is estimated at 40–135 s on the large app (fixed overhead plus the edit; measured on the sample
+only, where it is 1.2 s).
 
 Incremental results were checked against a clean cold build after 21 mixed edits: of 1.58 million symbols only three
 linker-synthesized names differed.
 
-The gain grows with the project. On a small CocoaPods workspace (the [sample](../examples/generic-sample)),
-`xcodebuild`'s fixed overhead is about one second, so the persistent session saves little absolute time there; what a
-small project gets from `xcfs` is mostly the hygiene and the reclaiming.
+The gain grows with the project. On the small CocoaPods workspace of the [sample](../examples/generic-sample),
+measured with xcfs:
+
+| situation | `xcodebuild` | session |
+|---|---|---|
+| cold build | 11–14 s | 9 s |
+| no-op | 1.2 s | 0.15 s |
+| edit one file | 2.5 s | 0.9 s |
+| check one file | (a full build) | 0.5 s |
+| new file in a synchronized folder | — | 1.6 s (PIF exported again) |
+| slot handed out, first build | 0.3 s + 1.2 s | — |
+| idle slot follows a moved baseline | 2.5 s | — |
+
+`xcodebuild`'s fixed overhead is about a second here, so what a small project gets is mostly the hygiene and the
+reclaiming; the time saved grows with the package graph.
 
 ### Directions measured and ruled out
 
@@ -68,15 +82,15 @@ small project gets from `xcfs` is mostly the hygiene and the reclaiming.
 ```
 xcfs (one executable)
 ├─ core — knows no toolchain and no project
-│   ├─ slot pool: create / warm / update / hand out / return / retire; throttling and queueing   (planned)
+│   ├─ slot pool: create / warm / update / hand out / return / retire; throttling and queueing
 │   ├─ source layer: git worktrees, a set of repositories switched together, baseline tracking
 │   ├─ dependency layer: APFS clonefile
 │   ├─ registry, background reclaiming, disk and memory budget
-│   ├─ shared resources: simulators and simulator clones, ports                                 (planned)
+│   ├─ per-checkout resources the adapters allocate (simulators today), freed with the checkout
 │   └─ config reading and validation
-├─ adapter interface — the only boundary between the core and a toolchain                       (planned)
+├─ adapter interface — the only boundary between the core and a toolchain (lib/xcfs/adapter.py)
 └─ adapters
-    ├─ xcode (built in, first): persistent session, PIF management, precompiled-module cleanup, simctl
+    ├─ xcode (built in): xcodebuild, persistent session, PIF management, precompiled-module cleanup, simulators
     └─ flutter / react-native / gradle … (later; may be written by others)
 ```
 
@@ -99,9 +113,9 @@ External adapters are separate executables (`xcfs-adapter-<name>` on `PATH`) spe
 can be written in any language and released on their own. A project can use several at once — Flutter and React Native
 apps contain an Xcode workspace and a Gradle project — so the config lists toolchains rather than picking one.
 
-The persistent session will drive the `swbuild` tool that ships inside Xcode. Apple positions it as a debugging tool
-with no stability promise, so it is used only after `xcfs doctor` has run the regression checks on the installed Xcode;
-otherwise the slot is driven by `xcodebuild` and the pool still works. Nothing from Xcode is redistributed.
+The persistent session drives the `swbuild` tool that ships inside Xcode. Apple positions it as a debugging tool
+with no stability promise, so it is used only after a regression check passed on the installed Xcode version;
+otherwise builds go through `xcodebuild` and the pool still works. Nothing from Xcode is redistributed.
 
 ## Layers a project declares
 
@@ -110,27 +124,17 @@ The tool contains no project-specific code, directory names or layering. A proje
 | layer | what the tool does | what the config decides |
 |---|---|---|
 | dependencies | clone into each worktree; blocks shared on disk | which directories (`.spm_cache`, `Pods`, `node_modules`, vendor SDKs) |
-| source | fixed-path slots, switching a set of repositories together, following a baseline | which repositories, where each lives, which baseline each follows *(planned)* |
-| build output | one DerivedData per slot and configuration, persistent session, PIF, reclaiming | container, scheme, configurations and destinations *(planned)* |
+| source | fixed-path slots, switching a set of repositories together, following a baseline | which repositories, where each lives, which baseline each follows |
+| build output | one DerivedData per checkout, configuration and driver, persistent session, PIF, reclaiming | container, scheme, configurations and destinations |
 | pre-built (optional) | swap selected packages for binaries before exporting the PIF | which packages, the project's own commands *(planned)* |
 
-Version 1 of the config has `seed`, `carry`, `afterSeed` and `pinDerivedData`. A sketch of the keys the later stages
-will add:
+The config keys are listed in the README. Toolchain-specific keys live in each `toolchains` entry, so the core never
+reads them; the only exception is the older top-level `pinDerivedData`, which the Xcode adapter claims.
 
-```json
-{
-  "version": 1,
-  "container": { "workspace": "GenApp.xcworkspace" },
-  "scheme": "GenApp",
-  "configurations": { "sim-debug": { "configuration": "Debug", "destination": "generic/platform=iOS Simulator" } },
-  "repos": [ { "path": ".", "baseline": { "branch": "main" } } ],
-  "seed": [ "Pods" ],
-  "reexportWhenChanged": [ "Podfile.lock", "project.yml" ],
-  "prepare": "xcodegen generate && pod install"
-}
-```
+Not implemented from the original design: a `variants` key (switching between trimmed variants of one project) and a
+`prebuilt` key (swapping packages for pre-built binaries); both belong to optional stages.
 
-## Slot lifecycle (planned)
+## Slot lifecycle
 
 | phase | what happens | measured | who waits |
 |---|---|---|---|
@@ -152,14 +156,12 @@ session has its own request files; after every switch of the source set, clear
 
 | stage | content | status |
 |---|---|---|
-| S0 skeleton | core and adapter interface, config format and reading | config reading done (v0.1); adapter interface not yet |
-| S1 hygiene | registry and reclaiming of every worktree; DerivedData outside package directories; `doctor` checks | registry, reclaiming, `doctor` done (v0.1); `xcfs build` not yet |
-| S2 pool | the lifecycle above, driven by `xcodebuild` | planned |
-| S3 persistent session | the Xcode adapter around `swbuild`: request generation, description reuse, `buildFiles`, PIF caching and patching, timeouts | planned; off by default, enabled only after the regression checks pass |
-| S3b / S4 / S5 | shared slots; compile-cache stack; pre-built first-party modules | optional |
-
-The first public release is meant to contain S0, S1 and S2 only: they depend on git, APFS and `xcodebuild`, not on a
-tool Apple does not promise to keep stable.
+| S0 skeleton | core and adapter interface, config format and reading | done (v0.2) |
+| S1 hygiene | registry and reclaiming of every checkout; build output outside source trees; `doctor` checks; `xcfs build / check / test / run` | done (v0.2) |
+| S2 pool | the lifecycle above, driven by `xcodebuild` | done (v0.2) |
+| S3 persistent session | the Xcode adapter around `swbuild`: PIF export and caching, request generation, description reuse, `buildFiles`, timeouts and restarts, regression check | done (v0.2), off unless the config asks for it |
+| S3 refinements | patching the PIF instead of exporting it again (matters for large package graphs, where an export takes 11–25 s); reserved empty files so that adding a file does not rebuild the build description | not done |
+| S3b / S4 / S5 | shared slots; compile-cache stack; pre-built first-party modules | optional, not done |
 
 ## Edge cases
 
@@ -175,29 +177,32 @@ Collected from two months of a worktree script in daily use, where every special
 | 5 | sizing everything on every operation | nothing is sized unless asked for (`ls --sizes`, `gc --foreign`) | done |
 | 6 | symlinks in paths | every path resolved to its physical form first | done, t13 |
 | 7 | absolute paths inside the seeded layer | rewritten as JSON values, on a path boundary, never as a regex | done, t02 |
-| 8 | where the dependency layer is seeded from | today: the source checkout as it is; planned: snapshots keyed by the lock file's hash | planned |
+| 8 | where the dependency layer is seeded from | snapshots keyed by the `seedKey` lock files; the source checkout when it matches; a warning when nothing matches | done, t34 |
 | 9 | clonefile across volumes | refused (exit 4), never a silent full copy | done, t06 |
 | 10 | failure half way through creating | rolled back; a killed run is cleaned by `gc --apply` | done, t05, t16 |
 | 11 | concurrent calls | registry under a file lock, atomic writes; git worktree operations serialized per repository | done, t17 |
-| 12 | an agent crashes holding a worktree | session id, `reap --older-than`, `adopt`; lease timeouts planned | partly, t14, t23–t25 |
+| 12 | an agent crashes holding a worktree or a slot | session id, `reap --older-than`, `adopt`; stale leases flagged, returned by `gc --apply` when clean | done, t14, t23–t25, t39 |
 | 13 | unsaved work git does not show | detached commits kept under `refs/xcfs/rescue/`; changed carried files block removal | done, t10, t11 |
 | 14 | where metadata lives | in the tool's state directory, never in the worktree or git config | done |
-| 15 | Xcode.app keeping DerivedData elsewhere | `pinDerivedData`; later, `xcfs build` chooses the location itself | done |
+| 15 | Xcode.app keeping DerivedData elsewhere | `xcfs build` chooses the location itself; `pinDerivedData` for Xcode.app | done |
 | 16 | project-specific workarounds | never in the tool: `afterSeed` commands in the project's config | done, t04, t05 |
 | 17 | config commands come from the repository | run only after `xcfs trust`, keyed by the commands' hash | done, t04 |
-| 18 | the Xcode version changed | record the toolchain per slot; mismatch means cold | planned |
-| 19 | backups and indexing | pool directories named `.noindex` and excluded from Time Machine | planned |
-| 20 | baseline update needs network | a failed fetch leaves the slot as is, marked behind | planned |
+| 18 | the Xcode version changed | toolchain version recorded per checkout and per warm-up; a change discards old output and makes a slot cold | done, t30, t42 |
+| 19 | backups and indexing | pool and build directories named `.noindex`; pools excluded from Time Machine | done, t36 |
+| 20 | baseline update needs network | a failed fetch leaves the slot as is, marked behind | done |
 | 21 | submodules, Git LFS | not tested | open |
 | 22 | spaces and non-ASCII in paths | the test sandbox path contains both | done |
-| 23 | disk full during warm-up or build | check free space first; a slot that failed half way is marked cold | planned |
+| 23 | disk full during warm-up or build | free space checked before a slot is created or warmed (exit 11); a failed warm-up leaves the slot cold or marked failed | done, t40 |
 
 ## Not verified
 
-- The pool's scheduling itself (background updates, throttling, concurrent warm-up): each phase was run by hand.
-- A pool driven by `xcodebuild`: hand-out times are estimates.
-- `swbuild` on Xcode versions other than 27.0.
+- The pool and the session on a large project: everything xcfs itself measured ran on the sample. The large-app
+  numbers come from prototypes of the same mechanisms.
+- `swbuild` on Xcode versions other than 27.0 (the regression check decides on each machine).
+- The Metal toolchain hand-over to the session (written from the prototype's recipe; the sample has no Metal).
+- Intel Macs (the filesystem check reads the 64-bit-inode `statfs` layout there; not run).
 - Signed device builds; running the same slot in Xcode.app at the same time (Xcode.app would build its own copy).
 - Large CocoaPods monoliths, app extensions, watchOS / macOS / visionOS destinations, Tuist or Bazel generated projects.
-- Any toolchain other than Xcode. The adapter interface has been checked against one implementation only and will
-  probably change when a second one appears.
+- Submodules and Git LFS (a nested repository that is a submodule is refused).
+- Any toolchain other than Xcode. The adapter protocol has been checked against the Xcode adapter and a toy external
+  adapter only, and will probably change when a second real one appears.

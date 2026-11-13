@@ -689,7 +689,8 @@ def t37_reap_returns_a_sessions_slots():
     st = {x["index"]: x["state"] for x in xcfs("pool", "status", repo, env=E)["slots"]}
     assert sorted(st.values()) == ["idle", "leased"] or sorted(st.values()) == ["cold", "leased"] or "warming" in st.values(), st
     sh("git", "-C", b["worktree"], "checkout", "--", ".")
-    assert xcfs("release", b["worktree"], "--no-warm", env=E)["_code"] == 0
+    r = xcfs("reap", "--all", "--apply", "--prune-branch", env=E)
+    assert r["released"] == 1 and "b" not in branches(repo), "reap --all did not return a clean slot: %s" % r
 
 
 @test

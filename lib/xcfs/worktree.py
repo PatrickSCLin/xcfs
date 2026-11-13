@@ -336,7 +336,7 @@ def cmd_reap(a):
         except Fail as e:
             say("  SKIP  %s  (%s)" % (wt, str(e)[:90]))
             done.append({"worktree": wt, "removed": False, "blocked": str(e)})
-    slots = pool.release_matching(sid, cutoff, a.flag("apply"), a.flag("prune-branch"))
+    slots = pool.release_matching(sid, cutoff, a.flag("apply"), a.flag("prune-branch"), a.flag("all"))
     if not mine and not slots:
         say("no matching worktrees" + (" from session %s" % sid[:8] if sid else ""))
     elif not a.flag("apply"):

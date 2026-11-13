@@ -6,22 +6,29 @@ Put something like this into the agent's instruction file (`CLAUDE.md`, `AGENTS.
 the paths:
 
 ```markdown
-## Worktrees
+## Checkouts and builds
 
-Work that needs its own checkout goes into a worktree made with xcfs, never with plain `git worktree add` or a copy:
+Work that needs its own checkout goes through xcfs, never through plain `git worktree add` or a copy:
 
-- Start: `xcfs new <repo> <branch> --json` and work in the `worktree` path it prints. The session id is taken from
+- Start: `xcfs checkout <repo> <branch> --json` and work in the `worktree` path it prints (a slot that is already
+  built). Without a pool, `xcfs new <repo> <branch> --json` makes a plain worktree. The session id is taken from
   `$XCFS_SESSION` (or `$CLAUDE_CODE_SESSION_ID`); pass `--session ID` if neither is set.
-- Check what is open: `xcfs ls --session <id> --status --json` (uncommitted files, unpushed commits).
-- Done with a task: commit, then `xcfs rm <worktree> --apply --prune-branch --json`.
-- Never delete a worktree or DerivedData with `rm -rf`. xcfs refuses when something would be lost; read the error and
-  commit or ask, do not work around it.
-- Build output (DerivedData, `build/`) never goes into a non-hidden directory inside a local Swift package.
+- Build with `xcfs build --json` from inside the checkout; check single files with `xcfs check <file>... --json`;
+  run tests with `xcfs test --json`; launch with `xcfs run --json`. Read `diagnostics` (file, line, column,
+  severity, message) instead of scraping logs. A passing `check` means "these files compile against the last build";
+  run `xcfs build` before saying everything compiles.
+- See what is open: `xcfs ls --session <id> --status --json` and `xcfs pool status --json`.
+- Done with a task: commit, then `xcfs release --prune-branch --json` (slot) or
+  `xcfs rm <worktree> --apply --prune-branch --json` (worktree).
+- Never delete a checkout, DerivedData or a build directory with `rm -rf`. xcfs refuses when something would be lost;
+  read the error and commit or ask, do not work around it.
+- Build output never goes into a non-hidden directory inside a local Swift package.
 ```
 
 ## Session-end hook
 
-When the session ends, remove every worktree it opened that holds no uncommitted work. The ones with uncommitted work
+When the session ends, remove every worktree it opened and return every slot it leased, as long as they hold no
+uncommitted work. The ones with uncommitted work
 are kept and listed under `left` in the result; the command still exits 0.
 
 For Claude Code, in `settings.json` (the hook receives the session id as JSON on stdin):
@@ -65,3 +72,7 @@ Every command accepts `--json` and then prints exactly one JSON object with `"ok
 | 5 | uncommitted work: commit it (or ask), then retry |
 | 6 | something is still running in the worktree: stop it, then retry |
 | 7 | carried ignored files changed: ask before passing `--discard-ignored` |
+| 8 | the build, check or tests failed: fix what `diagnostics` (or `failed`, for tests) lists |
+| 9 | the build timed out: retry once; if it happens again, report it |
+| 10 | every slot is taken: retry with `--wait 600`, or fall back to `xcfs new` |
+| 11 | not enough disk space for a slot: report it; do not delete anything to make room |

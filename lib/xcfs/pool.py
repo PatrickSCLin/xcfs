@@ -399,14 +399,14 @@ def release(slot, row, settings, prune_branch=False, discard_ignored=False, rewa
     return {"slot": slot, "released": True, "action": action, "rescue_refs": refs, "branches_deleted": deleted}
 
 
-def release_matching(sid, cutoff, apply, prune_branch):
-    """Slots leased by a session (or leased before cutoff): what `reap` does to slots."""
+def release_matching(sid, cutoff, apply, prune_branch, everything=False):
+    """Slots leased by a session, leased before cutoff, or (everything) all leased slots: what `reap` does to slots."""
     settings = state.settings()
     with state.registry(write=False) as reg:
         mine = [(p, dict(s)) for p, s in reg["slots"].items() if s["state"] == "leased" and s.get("lease")
                 and (not sid or s["lease"].get("session") == sid)
                 and (cutoff is None or iso_epoch(s["lease"].get("active")) <= cutoff)
-                and (sid or cutoff is not None)]
+                and (sid or cutoff is not None or everything)]
     done = []
     for slot, row in sorted(mine):
         if not apply:

@@ -17,13 +17,15 @@ worktree, so a worktree builds without running `xcodegen` or `pod install` again
 ```
 cp -R examples/generic-sample ~/src/sample && cd ~/src/sample
 git init -q -b main && xcodegen generate && pod install && git add -A && git commit -qm init
-xcfs new . feature/x
-xcodebuild -workspace ../sample-wt-feature-x/GenApp.xcworkspace -scheme GenApp \
-  -destination 'generic/platform=iOS Simulator' -derivedDataPath ../sample-wt-feature-x/DerivedData \
-  CODE_SIGNING_ALLOWED=NO build
-xcfs rm ../sample-wt-feature-x --apply --prune-branch
+xcfs checkout . feature/x            # creates a slot on first use; prints its path
+cd "$(xcfs pool status . --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["slots"][0]["worktree"])')"
+xcfs build && xcfs test && xcfs run
+xcfs release --prune-branch
 ```
 
-[tests/sample_e2e.sh](../../tests/sample_e2e.sh) does the same in a throw-away directory and checks the result: the
-worktree builds, `git status` stays clean, nothing in it points back into the source checkout, and `xcfs reap` removes
-it with its DerivedData and its empty branch.
+Set `"driver": "session"` in `.xcfs.json` (or `XCFS_DRIVER=session`) to build through the persistent session.
+
+[tests/sample_e2e.sh](../../tests/sample_e2e.sh) does all of this in a throw-away directory and checks the results:
+a worktree that builds, tests and runs on its own simulator and stays clean; a pool slot that is handed out warm and
+follows its baseline; session builds, single-file checks and a new file in the synchronized folder; and that
+everything — checkouts, build output, simulators, sessions, branches — is gone afterwards.
