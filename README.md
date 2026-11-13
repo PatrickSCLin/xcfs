@@ -313,10 +313,11 @@ simulator.
 first build, disk, resident memory, an edit loop, and what removal leaves behind. A profile (`bench/profiles/`) says
 how the project is set up, built and edited; the harness knows no project.
 
-On Telegram-iOS (Bazel, 12 submodules, three checkouts, a shared warm Bazel cache): an agent waited 59 s for a new
-plain worktree and 8 s for an xcfs slot (≈200 s vs ≈9 s when the cache missed a few long actions); removing the plain
-worktrees left 11.7–24.3 GB of Bazel output bases and three Bazel servers behind, retiring the pool left nothing;
-incremental builds were the same on both sides. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
+Measured on three public apps with three parallel checkouts each: an agent waited 75–92 s for a plain worktree of an
+Xcode app (Ice Cubes, Wikipedia iOS) and 2–16 s for an xcfs slot; the build session took a no-op from 5.9 to 0.9 s on
+Ice Cubes, and `xcfs check` confirmed an edit compiles in 1.2–3.6 s where a build took 15–50 s; removing plain
+worktrees left 1.5–4 GB of DerivedData each, retiring the pool left nothing. Builds that recompile many modules take
+the same time on every side, and on a Bazel app (Telegram-iOS) incremental builds are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
 
 ## Design
 

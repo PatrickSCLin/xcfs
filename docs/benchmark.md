@@ -1,16 +1,143 @@
-# Benchmark: parallel checkouts of Telegram-iOS
+# Benchmarks: parallel checkouts of open-source iOS apps
 
-What does it cost to give three agents their own checkout of a large iOS app, the plain way and through xcfs?
+What does it cost to give three agents their own checkout of a real iOS app — the plain way (`git worktree` plus the
+project's own setup and build) and through xcfs (a pool of slots)? Every project below is public, pinned to a commit,
+and measured with [bench/bench.py](../bench/bench.py) and a profile in [bench/profiles](../bench/profiles), so the runs
+can be repeated.
 
-- **Project:** [Telegram-iOS](https://github.com/TelegramMessenger/Telegram-iOS) at `24638bc6` — built with Bazel
-  through its own `build-system/Make/Make.py`, 12 git submodules, ≈8,200 build actions for the simulator app
-  (`debug_sim_arm64`).
-- **Machine:** MacBook Pro, Apple M1 Max, 10 cores, 64 GB, macOS 27.2, Xcode 27.2 (the project asks for 27.1;
-  `--overrideXcodeVersion`), Bazel 9.2.0.
-- **Harness:** [bench/bench.py](../bench/bench.py) with [bench/profiles/telegram-ios.json](../bench/profiles/telegram-ios.json),
-  three checkouts per side, one run per side and scenario. Single runs: treat differences under ~10 % as noise.
+**Machine:** MacBook Pro, Apple M1 Max, 10 cores, 64 GB, macOS 27.2, Xcode 27.2. Edit loops were run twice where
+shown; the repeats agree within ~1 s, so differences of a few seconds between sides are real.
 
-## Method
+## Overview
+
+For the two Xcode projects the main numbers build **one architecture** (`ARCHS=arm64`), which is what an agent needs
+for an Apple-silicon simulator; xcfs is measured twice — slots driven by `xcodebuild` (the pool alone), and slots
+driven by the persistent build session. Each cell reads plain → xcfs (xcodebuild) → xcfs (session).
+
+| project | an agent waits for a new checkout | no-op build | edit a function body in a widely used package | add a public declaration to it | the same, checked with `xcfs check` (session) | left behind after removal |
+|---|---|---|---|---|---|---|
+| [Ice Cubes](#ice-cubes) | 75.1 → 6.4 → **1.9 s** | 5.9 → 5.2 → **0.9 s** | 8.3 → 8.5 → **3.7 s** | 30.2 → 30.7 → 24.7 s | **1.2–1.9 s** | 4.4 GB → **0** |
+| [Wikipedia iOS](#wikipedia-ios) | 92.0 → 16.3 → **12.4 s** | 16.0 → 15.6 → 11.6 s | 18.0 → 18.6 → 14.2 s | 45.8 → 52.4 → 46.4 s | **2.5–3.6 s** | 8.4 GB → **0** |
+| [Telegram-iOS](#telegram-ios) (Bazel) | 59.3 → **8.2 s** (≈200 → 9 s on an incomplete cache) | 7.3 → 6.9 s | 12.1 → 12.2 s | 536.6 → 526.5 s | — | 11.7–24.3 GB + 3 Bazel servers → **0** |
+
+What the projects show:
+
+- **The pool removes the wait for a new checkout**: 7–40× on every project (to 2–16 s). The build happens in a
+  background warm-up that no agent waits for; the warm-up costs about what the plain builds cost.
+- **The build session removes the fixed cost of a build**, ≈5 s on Ice Cubes and ≈4 s on Wikipedia, so a no-op or
+  a small edit gets 1.3–7× faster. It cannot make the compiler's work smaller: when an edit recompiles many modules,
+  the time is the compilation, on every side.
+- **`xcfs check` is the fast path for "does my change compile"**: it compiles only the edited file against the last
+  build — 1.2–3.6 s for a file in a package where a build takes 15–50 s (17–18 s for a file in Wikipedia's app
+  target, which carries the project's script phases). It does not rebuild what depends on the file; run `xcfs build` before
+  concluding that everything compiles.
+- **Plain removal always leaks**: 1.5–4 GB of global DerivedData per Xcode worktree, 0.7–11 GB of Bazel output base
+  and a resident Bazel server per Telegram worktree. Retiring the xcfs pool left nothing.
+- **Building one architecture is the largest single saving**, for everyone: `xcodebuild` with a generic simulator
+  destination builds arm64 and x86_64. On Ice Cubes, adding a public declaration took 54 s for two architectures and
+  30 s for one; a no-op is unaffected.
+- **For Bazel, incremental builds are Bazel's**: the same on both sides; xcfs helps with the wait and with cleanup.
+
+## Where the time goes
+
+The question behind these runs: why do the larger projects gain less? Measured answers:
+
+| | finding |
+|---|---|
+| fixed cost per build | `xcodebuild` spends ≈4 s before the first task on Wikipedia (package graph, target graph, build description); on Ice Cubes a no-op takes 5.9 s with `xcodebuild` and 0.9 s with the session. The session starts work at once (planning 0 s, first task at 0.14 s on Wikipedia). That fixed cost is all the session can remove. |
+| Wikipedia's no-op is still 11.6 s with the session | the project's own work on every build: its "Update Localizations" script compiles a command-line tool from source into a temporary directory each time (8.6 s), four app extensions are validated (2.6 s) and re-copied (2.5 s). No build driver can skip a project's scripts. |
+| adding a public declaration | the declaration changes the package's interface, so every module that imports it recompiles: on Wikipedia 78 Swift compile tasks, ≈140 s of compiler time on 10 cores, partly serialized along the module chain — ≈45 s of wall time whatever drives it. Fewer architectures halve it; `xcfs check` avoids it until the full build is needed. |
+| xcfs (xcodebuild) slower than plain on that Wikipedia edit (≈52 s vs ≈46 s) | not caused by xcfs's process handling: the same `xcodebuild` command run by hand in the slot takes the same time, and the same edit built into the default DerivedData in the same slot takes 45 s. It follows the choice of a DerivedData location of its own; sharing Xcode's module, compilation and SDK stat caches (now the default) did not remove it in a fresh pool. Not explained yet; the session driver does not show it (44.9–47.9 s). Ice Cubes shows no such gap. |
+| Telegram: one process left per slot after release | the slot's Bazel server, kept on purpose: the next lease's first build is 9 s instead of 20 s, at 1.5–3.4 GB of memory per idle slot until Bazel's 3-hour idle timeout (`"stopServerOnRelease": true` stops it on release). |
+| Telegram: 526 s for one public declaration | Bazel's Swift rules compile whole modules: a changed interface recompiles every dependent module completely. Outside xcfs's reach. |
+
+## Ice Cubes
+
+[Ice Cubes](https://github.com/Dimillian/IceCubesApp) at `98098b9`: a SwiftUI Mastodon client — an `.xcodeproj`, 13
+local Swift packages and remote packages; simulator build. Profiles:
+[icecubes-arm64.json](../bench/profiles/icecubes-arm64.json) (one architecture) and
+[icecubes.json](../bench/profiles/icecubes.json) (generic destination, two architectures).
+
+- **Plain:** `git worktree add`, then the README's setup (copy `IceCubesApp.xcconfig.template` to the git-ignored
+  `IceCubesApp.xcconfig`), then `xcodebuild` into the default DerivedData, as an agent would.
+- **xcfs:** the config file is carried into every slot (`"carry": ["IceCubesApp.xcconfig"]`).
+- Edits: a function body in `Timeline` (nothing else depends on it); a function body in `Models` (12 packages depend on
+  it); a public declaration added to `Models`. Each edit loop ran twice; both runs are shown.
+
+One architecture:
+
+| | plain worktrees | xcfs, xcodebuild | xcfs, session |
+|---|---|---|---|
+| **an agent waits for a new checkout** (mean of 3) | **75.1 s** | **6.4 s** | **1.9 s** |
+| background warm-up of 3 slots | — | 190.9 s | 206.1 s |
+| disk for 3 built checkouts | 4.6 GB | 5.0 GB | 5.0 GB |
+| left behind after removal | 4.4 GB of global DerivedData | nothing | nothing |
+| no-op build | 5.9 s | 5.2 s | 0.9 s |
+| function body, leaf package | 7.9 / 7.5 s | 8.2 / 8.0 s | 3.1 / 3.1 s |
+| function body, `Models` | 8.4 / 8.2 s | 8.5 / 8.5 s | 3.7 / 3.8 s |
+| public declaration added to `Models` | 30.0 / 30.3 s | 30.7 / 30.6 s | 24.6 / 24.8 s |
+| `xcfs check` of the edited file, per edit above | — | (a full build) | 2.5 / 1.5, 1.2 / 1.4, 1.7 / 1.9 s |
+
+Two architectures (generic destination; the session side was rerun after it was made to build both architectures
+like `xcodebuild` — the first session run built one and is not shown):
+
+| | plain worktrees | xcfs, xcodebuild | xcfs, session |
+|---|---|---|---|
+| an agent waits for a new checkout | 108.6 s | 6.7 s | 2.4 s |
+| no-op build | 6.2 s | 5.5 s | 0.9 s |
+| function body, leaf package / `Models` | 10.0 / 10.3 s | 10.5 / 10.6 s | 5.9 / 6.0 s |
+| public declaration added to `Models` | 54.3 s | 54.9 s | 50.3 s |
+| left behind after removal | 9.2 GB | nothing | nothing |
+
+## Wikipedia iOS
+
+[Wikipedia iOS](https://github.com/wikimedia/wikipedia-ios) at `0919f3e`: an `.xcodeproj` with Swift and Objective-C,
+app extensions, local Swift packages (`WMFData`, `WMFComponents`, …) and remote packages; simulator build. Profiles:
+[wikipedia-ios-arm64.json](../bench/profiles/wikipedia-ios-arm64.json) and
+[wikipedia-ios.json](../bench/profiles/wikipedia-ios.json).
+
+- **Plain:** `git worktree add`, then the repository's `scripts/setup_bundle_id ci` (writes the git-ignored signing
+  configuration, as its CI does), then `xcodebuild` into the default DerivedData.
+- **xcfs:** the generated configuration is carried into every slot
+  (`"carry": ["Configurations/OpenSourceDebug.xcconfig"]`).
+- Edits: a function body in the app target; a function body in `WMFData` (≈300 files import it); a public declaration
+  added to `WMFData`.
+
+One architecture:
+
+| | plain worktrees | xcfs, xcodebuild | xcfs, session |
+|---|---|---|---|
+| **an agent waits for a new checkout** (mean of 3) | **92.0 s** | **16.3 s** | **12.4 s** |
+| background warm-up of 3 slots | — | 285.7 s | 282.4 s |
+| disk for 3 built checkouts | 8.3 GB | 9.0 GB | 8.7 GB |
+| left behind after removal | 8.4 GB of global DerivedData | nothing | nothing |
+| no-op build | 16.0 s | 15.6 s | 11.6 s |
+| function body, app target | 22.9 / 22.9 s | 24.0 / 23.4 s | 18.8 / 18.7 s |
+| function body, `WMFData` | 18.1 / 17.9 s | 18.4 / 18.8 s | 14.3 / 14.1 s |
+| public declaration added to `WMFData` | 45.2 / 46.4 s | 53.3 / 51.4 s | 47.9 / 44.9 s |
+| `xcfs check` of the edited file, per edit above | — | (a full build) | 18.0 / 16.9, 2.5 / 2.5, 3.2 / 3.6 s |
+
+A check of a file in the app target takes 17–18 s: the app target is the module the project's script phases belong
+to. Checks in a package take 2.5–3.6 s.
+
+Two architectures (generic destination; session side rerun as above):
+
+| | plain worktrees | xcfs, xcodebuild | xcfs, session |
+|---|---|---|---|
+| an agent waits for a new checkout | 126.8 s | 16.8 s | 12.9 s |
+| no-op build | 15.9 s | 15.7 s | 11.8 s |
+| function body, app target / `WMFData` | 30.5 / 19.3 s | 31.6 / 20.9 s | 27.7 / 16.7 s |
+| public declaration added to `WMFData` | 75.9 s | 90.8 s | 84.4 s |
+| left behind after removal | 12.4 GB | nothing | nothing |
+
+## Telegram-iOS
+
+[Telegram-iOS](https://github.com/TelegramMessenger/Telegram-iOS) at `24638bc6` — built with Bazel through its own
+`build-system/Make/Make.py`, 12 git submodules, ≈8,200 build actions for the simulator app (`debug_sim_arm64`);
+Bazel 9.2.0, `--overrideXcodeVersion` (the project asks for Xcode 27.1). Profile:
+[bench/profiles/telegram-ios.json](../bench/profiles/telegram-ios.json).
+
+### Method
 
 Both sides use the same build command and share one Bazel disk cache (`--cacheDir`), as the project's README
 recommends; the cache was filled by building the source checkout first. So this measures what parallel checkouts cost
@@ -29,13 +156,13 @@ adds `--//Telegram:disableProvisioningProfiles` (the simulator needs none) throu
 [bench/helpers/bazel-extra-args](../bench/helpers/bazel-extra-args), because `Make.py` forwards no extra Bazel flags; and
 Xcode's Metal toolchain had to be installed (`xcodebuild -downloadComponent MetalToolchain`).
 
-## Results
+### Results
 
 The two runs differ in one thing: in the first, the shared cache lacked 15 long-running actions (the source
 checkout's build had not stored them), so every new checkout ran them itself — a 139 s critical path. The second run,
 an hour later, found them cached. A cache in real use sits somewhere between the two.
 
-### Run 2 — the shared cache has everything
+#### Run 2 — the shared cache has everything
 
 | | plain worktrees | xcfs |
 |---|---|---|
@@ -52,7 +179,7 @@ an hour later, found them cached. A cache in real use sits somewhere between the
 | function body, module 48 others import | 12.1 s | 12.2 s |
 | public declaration added to that module | 536.6 s | 526.5 s |
 
-### Run 1 — the shared cache misses a few long actions
+#### Run 1 — the shared cache misses a few long actions
 
 | | plain worktrees | xcfs |
 |---|---|---|
@@ -67,7 +194,7 @@ could not empty Bazel's read-only directories. Both were fixed (adapters now nam
 make directories writable first) and run 2 measured the fixed version. Run 1's edit loop is not shown: both sides
 wrote the same edit text, so the second side's builds were cache hits.
 
-## What this shows
+### What this shows
 
 - **The wait for a new checkout is where xcfs pays off: 59 s → 8 s with a complete cache, ≈200 s → 9 s without one.**
   The work moves to a background warm-up that no agent waits for. Without a pool, every agent pays the submodule
@@ -81,11 +208,57 @@ wrote the same edit text, so the second side's builds were cache hits.
 - **Disk is about equal with a shared cache.** With Bazel's remote and disk caches, an output base only holds what is
   materialized; xcfs's disk savings come from bounding the number of checkouts (slots are reused) and from removing
   what plain removal leaves behind, not from a smaller checkout.
+- **The kept server is worth it:** a no-op build of the source checkout took 20 s right after the server started
+  (re-analysis of 1,381 packages) and 9 s with the server alive (3.4 GB resident).
 - **Memory:** each checkout's Bazel server holds 2–4 GB while it lives. Plain worktrees keep theirs until Bazel's idle
   timeout (3 h) even after the worktree is gone; xcfs keeps a slot's server between leases (so the next lease does not
   re-analyze) and stops it when the slot is retired, or on release with `"stopServerOnRelease": true`.
 
+
+## Firefox for iOS (not measured)
+
+[Firefox for iOS](https://github.com/mozilla-mobile/firefox-ios) would be the best-known candidate, but its
+`bootstrap.sh` must run first: it downloads and runs a script from another Mozilla repository, runs `npm install` and
+`npm run build`, and copies git hooks. The benchmark's automation declined to run third-party code on its own; without
+the bootstrap the build stops at the "Nimbus Feature Manifest Generator Script" phase (`firefox-ios/bin/nimbus-fml.sh:
+No such file or directory`). To measure it, run `sh ./bootstrap.sh` yourself in the clone, then give xcfs the generated
+dependency layer — git-ignored outputs the bootstrap leaves in the source checkout — through `"seed"` (for example
+`node_modules`, `firefox-ios/bin`) so that every slot gets them by clone instead of running the bootstrap again.
+
+## What the projects needed from xcfs
+
+Each of these was found by running a project above, fixed in general terms (no project is named in xcfs), and covered
+by a test or by the sample end-to-end run:
+
+| found on | problem | change |
+|---|---|---|
+| Telegram-iOS | git submodules: a worktree has none until they are fetched again from the network | submodules come along in every worktree and slot, cloned from the source checkout's copies, and follow every switch; a commit that exists only in a checkout's submodule blocks its removal |
+| Telegram-iOS | Bazel keeps each checkout's build state and a resident server outside the checkout | a built-in Bazel adapter owns the output base (`<user root>/<md5 of the workspace path>`), removes it with the checkout and stops the server |
+| Telegram-iOS | returning a slot was refused: the slot's own Bazel server (kept on purpose between leases) counted as "in use" | adapters name a checkout's own helper processes (`ownProcesses`), which never count as other users |
+| Telegram-iOS | a background delete could not empty Bazel's read-only directories | deletes make directories writable first |
+| Ice Cubes | `xcodebuild` leaves `ibtoold` (Interface Builder's helper) running with its working directory inside the slot, which blocked the return | the Xcode adapter treats Xcode's own helper daemons in a checkout as its own and stops them on release |
+| Ice Cubes | the session's PIF export resolved packages into a global DerivedData folder no checkout owned | the export (and scheme listing) writes into the checkout's own build directory; the sample run now fails if any folder appears in the global DerivedData |
+| Ice Cubes | `xcodebuild -list -json` output carries log lines with braces before the JSON | the first complete JSON object is found instead |
+| Ice Cubes | the session built one architecture where `xcodebuild` builds two for a generic destination, which made it look faster than it was | the session builds what `xcodebuild` builds; the sample run compares the two builds' slices |
+| Wikipedia | why builds take what they take was invisible | session results carry a timing breakdown (planning, task time by kind, slowest tasks) |
+| Ice Cubes, Wikipedia | each project needs a git-ignored configuration file in every checkout | no change: the existing `carry` key copies it from the source checkout |
+
 ## Reproduce
+
+```
+# an Xcode project, e.g. Ice Cubes (icecubes-arm64.json for one architecture)
+git clone --depth 1 https://github.com/Dimillian/IceCubesApp.git && cd IceCubesApp && git checkout 98098b9
+cp IceCubesApp.xcconfig.template IceCubesApp.xcconfig    # and empty DEVELOPMENT_TEAM for a simulator build
+cd .. && python3 <xcfs>/bench/bench.py <xcfs>/bench/profiles/icecubes.json --source IceCubesApp --agents 3
+
+# Wikipedia iOS: clone, `scripts/setup_bundle_id ci`, then the same with bench/profiles/wikipedia-ios.json
+```
+
+The harness writes a report like the tables above and a JSON file with every measurement into its work directory.
+Plain worktrees build into the default global DerivedData, as an agent would; the harness removes what they leave
+behind after measuring it.
+
+Telegram-iOS:
 
 ```
 git clone --recursive -j8 --depth 1 --shallow-submodules https://github.com/TelegramMessenger/Telegram-iOS.git
