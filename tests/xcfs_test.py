@@ -13,7 +13,8 @@ SB = os.path.realpath(tempfile.mkdtemp(prefix="xcfs-test 空格 "))
 LINK = SB + "-link"  # a symlink to the sandbox, for the physical-path test
 PY = sys.argv[sys.argv.index("--python") + 1] if "--python" in sys.argv else sys.executable
 ONLY = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
-ENV = dict(os.environ, XCFS_STATE=SB + "/state", XCFS_DD_ROOT=SB + "/dd", XDG_CONFIG_HOME=SB + "/config")
+ENV = dict(os.environ, XCFS_STATE=SB + "/state", XCFS_DD_ROOT=SB + "/dd", XDG_CONFIG_HOME=SB + "/config",
+           XCFS_CACHE=SB + "/cache", XCFS_POOL_ROOT=SB + "/pool")
 for k in ("CLAUDE_CODE_SESSION_ID", "XCFS_SESSION"):  # the caller's own session must not leak into the tests
     ENV.pop(k, None)
 L28 = "abcdefghijklmnopqrstuvwxyzab"
@@ -455,6 +456,149 @@ def t27_help_and_version_answer_without_side_effects():
         r = subprocess.run([PY, XCFS, *args], capture_output=True, text=True, env=ENV)
         assert r.returncode == 0 and r.stdout.startswith("xcfs"), (args, r.returncode, r.stdout[:80], r.stderr[:200])
     assert reg() == before, "help changed the registry"
+
+TOY = r"""#!/usr/bin/env python3
+import json, os, sys
+req = json.load(sys.stdin); op = req["op"]; ctx = req.get("context") or {}; args = req.get("args") or {}
+def out(**kw): print(json.dumps(kw)); sys.exit(0)
+if op == "detect":
+    out(entry={"adapter": "toy"} if os.path.exists(os.path.join(args["root"], "toy.txt")) else None)
+if op == "version":
+    out(version=os.environ.get("TOY_VERSION", "1"))
+if op in ("build", "warm"):
+    src = open(os.path.join(ctx["toolchainRoot"], "toy.txt")).read()
+    os.makedirs(ctx["buildDir"], exist_ok=True)
+    marker = os.path.join(ctx["buildDir"], "out.txt"); had = os.path.exists(marker)
+    open(marker, "w").write(src)
+    res = dict(ctx["resources"]); res["count"] = res.get("count", 0) + 1
+    if "broken" in src:
+        out(ok=False, seconds=0.01, resources=res, diagnostics=[{"file": os.path.join(ctx["toolchainRoot"], "toy.txt"),
+            "line": 1, "column": 1, "severity": "error", "message": "broken"}])
+    out(ok=True, seconds=0.01, diagnostics=[], resources=res, count=res["count"], had_previous=had, build_dir=ctx["buildDir"])
+out(unsupported=True)
+"""
+
+
+def toy_env():
+    os.makedirs(SB + "/bin", exist_ok=True)
+    open(SB + "/bin/xcfs-adapter-toy", "w").write(TOY); os.chmod(SB + "/bin/xcfs-adapter-toy", 0o755)
+    return dict(ENV, PATH=SB + "/bin:" + os.environ["PATH"])
+
+
+@test
+def t28_core_names_no_toolchain():
+    lib = os.path.join(os.path.dirname(HERE), "lib", "xcfs")
+    import re
+    bad = []
+    for n in sorted(os.listdir(lib)):
+        if n.endswith(".py"):
+            for i, l in enumerate(open(os.path.join(lib, n)), 1):
+                if re.search(r"xcodebuild|swbuild|simctl|DerivedData|xcodeproj|xcworkspace", l):
+                    bad.append("%s:%d" % (n, i))
+    assert not bad, "toolchain names in the core: %s" % bad
+
+
+@test
+def t29_config_is_validated():
+    repo = mkrepo("r29", cfg={"seed": ["deps"], "sede": ["x"]})
+    r = xcfs("new", repo, "b"); assert r["_code"] == 2 and "sede" in r["error"], r
+    json.dump({"version": 1, "repos": [{"path": "../outside"}]}, open(repo + "/.xcfs.json", "w"))
+    assert xcfs("new", repo, "b")["_code"] == 2
+    json.dump({"version": 1, "toolchains": [{"adapter": "no-such-thing"}]}, open(repo + "/.xcfs.json", "w"))
+    r = xcfs("new", repo, "b"); assert r["_code"] == 2 and "no-such-thing" in r["error"], r
+    json.dump({"version": 1, "toolchains": [{"adapter": "xcode", "configurations": {"d": {"configuraton": "Debug"}}}]},
+              open(repo + "/.xcfs.json", "w"))
+    r = xcfs("new", repo, "b"); assert r["_code"] == 2 and "configuraton" in r["error"], r
+    assert "b" not in branches(repo)
+
+
+@test
+def t30_external_adapter_protocol():
+    E = toy_env(); repo = mkrepo("r30", cfg={"toolchains": [{"adapter": "toy"}]})
+    open(repo + "/toy.txt", "w").write("fine\n"); sh("git", "-C", repo, "add", "-A"); commit(repo, "toy")
+    wt = xcfs("new", repo, "b", env=E)["worktree"]
+    r = xcfs("build", wt, env=E); assert r["_code"] == 0 and r["toolchain"] == "toy" and r["count"] == 1, r
+    assert not r["build_dir"].startswith(wt) and os.path.isfile(r["build_dir"] + "/out.txt"), "output inside the tree"
+    assert sh("git", "-C", wt, "status", "--porcelain") == ""
+    r = xcfs("build", wt, env=E); assert r["count"] == 2 and r["had_previous"], "resources were not kept: %s" % r
+    r = xcfs("build", wt, env=dict(E, TOY_VERSION="2"))
+    assert r["_code"] == 0 and not r["had_previous"] and any("changed" in w for w in r.get("warnings", [])), \
+        "a toolchain change did not start cold: %s" % r
+    open(wt + "/toy.txt", "w").write("broken\n")
+    r = xcfs("build", wt, env=E); assert r["_code"] == 8 and r["diagnostics"][0]["file"] == wt + "/toy.txt", r
+    assert xcfs("test", wt, env=E)["_code"] == 2, "an unsupported operation must be a usage error"
+    sh("git", "-C", wt, "checkout", "--", "toy.txt")
+    build_dir = os.path.dirname(r["build_dir"]) if "build_dir" in r else None
+    d = xcfs("rm", wt, "--apply", env=E); assert d["_code"] == 0, d
+    assert not any(k == wt for k in json.load(open(SB + "/state/registry.json"))["builds"]), "build record kept"
+
+
+@test
+def t31_init_suggests_a_config():
+    repo = mkrepo("r31"); os.makedirs(repo + "/App.xcodeproj"); os.makedirs(repo + "/Pods/X")
+    open(repo + "/.gitignore", "a").write("Pods/\n")
+    r = xcfs("init", repo); c = r["config"]
+    assert c["toolchains"] == [{"adapter": "xcode", "project": "App.xcodeproj"}] and c["seed"] == ["Pods"], c
+    assert not os.path.exists(repo + "/.xcfs.json")
+    assert xcfs("init", repo, "--write")["_code"] == 0 and json.load(open(repo + "/.xcfs.json"))["seed"] == ["Pods"]
+    assert xcfs("init", repo, "--write")["_code"] == 1 and xcfs("init", repo, "--write", "--force")["_code"] == 0
+
+
+def nested_repo(repo, rel):
+    sub = os.path.join(repo, rel); os.makedirs(sub)
+    sh("git", "init", "-q", "-b", "main", sub); open(sub + "/lib.swift", "w").write("let x = 1\n")
+    sh("git", "-C", sub, "add", "-A"); sh("git", "-C", sub, "-c", "user.name=t", "-c", "user.email=t@t.invalid", "commit", "-q", "-m", "i")
+    open(repo + "/.gitignore", "a").write(rel.split("/")[0] + "/\n")
+    sh("git", "-C", repo, "add", "-A"); commit(repo, "ignore nested")
+    return os.path.realpath(sub)
+
+
+@test
+def t32_repository_set_moves_together():
+    repo = mkrepo("r32", cfg=dict(CFG, repos=[{"path": "mods/lib"}]))
+    sub = nested_repo(repo, "mods/lib"); sh("git", "-C", sub, "branch", "feat")
+    r = xcfs("new", repo, "feat"); wt = r["worktree"]
+    assert r["_code"] == 0 and r["repos"] == [".", "mods/lib"], r
+    assert sh("git", "-C", wt + "/mods/lib", "branch", "--show-current") == "feat"
+    assert len(worktrees(sub)) == 2 and sh("git", "-C", wt, "status", "--porcelain") == ""
+    open(wt + "/mods/lib/lib.swift", "a").write("// wip\n")
+    r = xcfs("rm", wt, "--apply"); assert r["_code"] == 5 and "mods/lib" in r["error"], r
+    sh("git", "-C", wt + "/mods/lib", "checkout", "--", ".")
+    r = xcfs("rm", wt, "--apply"); assert r["_code"] == 0 and wait_gone(wt), r
+    assert len(worktrees(sub)) == 1 and len(worktrees(repo)) == 1
+    other = xcfs("new", repo, "other")["worktree"]          # no such branch in the nested repo: detached at its baseline
+    assert sh("git", "-C", other + "/mods/lib", "branch", "--show-current") == ""
+    assert sh("git", "-C", other + "/mods/lib", "rev-parse", "HEAD") == sh("git", "-C", sub, "rev-parse", "main")
+    assert xcfs("rm", other, "--apply", "--prune-branch")["_code"] == 0
+
+
+@test
+def t33_every_config_command_needs_trust():
+    repo = mkrepo("r33", cfg=dict(CFG, prepare="true"))
+    assert xcfs("new", repo, "b")["_code"] == 3 and xcfs("checkout", repo, "b")["_code"] == 3
+    r = xcfs("trust", repo); assert r["commands"] == ["true"], r
+    w = xcfs("new", repo, "b"); assert w["_code"] == 0, w
+    xcfs("rm", w["worktree"], "--apply")
+
+
+@test
+def t34_dependency_snapshot_by_lock_files():
+    repo = mkrepo("r34", cfg={"seed": ["deps"], "seedKey": ["deps.lock"]})
+    open(repo + "/deps.lock", "w").write("v1\n"); sh("git", "-C", repo, "add", "-A"); commit(repo, "lock v1")
+    v1 = sh("git", "-C", repo, "rev-parse", "HEAD")
+    a = xcfs("new", repo, "a"); assert a["seed_origin"] == "source" and os.path.isdir(SB + "/cache/deps"), a
+    open(repo + "/deps/marker", "w").write("two"); open(repo + "/deps.lock", "w").write("v2\n")
+    sh("git", "-C", repo, "add", "deps.lock"); commit(repo, "lock v2")
+    b = xcfs("new", repo, "b", "--from", v1)
+    assert b["seed_origin"].startswith("snapshot") and not os.path.exists(b["worktree"] + "/deps/marker"), b
+    ws = json.load(open(b["worktree"] + "/deps/workspace-state.json"))["object"]["dependencies"][0]["path"]
+    assert ws == b["worktree"] + "/deps/checkouts/a", "paths from the snapshot were not rewritten: %s" % ws
+    shutil.rmtree(SB + "/cache/deps")
+    c = xcfs("new", repo, "c", "--from", v1)
+    assert c["_code"] == 0 and any("does not match" in w for w in c.get("warnings", [])), c
+    for w in (a, b, c):
+        assert xcfs("rm", w["worktree"], "--apply")["_code"] == 0
+
 
 
 def main():
