@@ -162,6 +162,13 @@ container); `target` (default: from the scheme); `configurations` (name → `con
 (`-clonedSourcePackagesDirPath`, relative); `xcodebuildArgs`; `reexportWhenChanged` (extra files that change the
 PIF); `driver` (`xcodebuild`, `session`, `auto`); `pinDerivedData`.
 
+Bazel toolchain keys: `build`, `test`, `run`, `warm` (shell commands run in the checkout; `--config` appends
+arguments), `env`, `outputUserRoot`, `stopServerOnRelease`. The adapter owns each checkout's Bazel output base — kept
+by Bazel outside the checkout, at `<output user root>/<md5 of the workspace path>`, with a resident server — and
+removes it, server stopped, with the checkout. A slot at a fixed path keeps its output base, and so its incremental
+state, from one lease to the next; returning a slot keeps its server (and the analysis cache in it) unless
+`stopServerOnRelease` is set — Bazel stops an idle server by itself after three hours.
+
 [examples/generic-sample](examples/generic-sample) is a small XcodeGen + CocoaPods workspace with a config.
 
 ### Machine settings and environment
@@ -203,6 +210,8 @@ seeded and the build done. Build state is bound to absolute paths, so a slot nev
   fetch with `--fetch`; a failed fetch keeps the slot as it is, marked behind — and builds them. One warm-up per
   project at a time, at a lower priority, and it waits while an agent's build runs in another slot.
 - A slot built with another toolchain version is treated as cold: its old output is discarded before the next build.
+- Git submodules come along in every worktree and slot, cloned from the source checkout's copies (no network, objects
+  hard-linked), and follow every switch. A submodule commit that exists only in a checkout blocks its removal.
 - Pool directories are named `.noindex` (no Spotlight) and excluded from Time Machine.
 
 ## Build session
@@ -278,15 +287,15 @@ on every build of a large app. `xcfs` itself never puts build output inside a so
 
 ## Adapters
 
-The core knows no toolchain (a test enforces it). Toolchains plug in through adapters: the built-in `xcode` adapter,
-or any executable named `xcfs-adapter-<name>` on `PATH` that answers JSON over stdin/stdout — the protocol is
+The core knows no toolchain (a test enforces it). Toolchains plug in through adapters: the built-in `xcode` and
+`bazel` adapters, or any executable named `xcfs-adapter-<name>` on `PATH` that answers JSON over stdin/stdout — the protocol is
 documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project lists the ones it uses under
 `toolchains`; a Flutter or React Native app could combine `xcode` with its own.
 
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 43 end-to-end tests, ~2.5 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 45 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```
@@ -296,6 +305,18 @@ characters, with their own state, cache, pool and DerivedData roots. They use a 
 Xcode, a fake `swbuild` for the session's failure modes, and mount a small disk image for the different-volume check.
 `sample_e2e.sh` needs Xcode with an iOS Simulator runtime, `xcodegen` and CocoaPods; it creates and deletes a
 simulator.
+
+## Benchmark
+
+`bench/bench.py <profile> --source <clone>` sets up N parallel checkouts of a real project twice — as plain
+`git worktree`s with the project's own setup, and as xcfs slots — and measures the time until an agent can build, the
+first build, disk, resident memory, an edit loop, and what removal leaves behind. A profile (`bench/profiles/`) says
+how the project is set up, built and edited; the harness knows no project.
+
+On Telegram-iOS (Bazel, 12 submodules, three checkouts, a shared warm Bazel cache): an agent waited 59 s for a new
+plain worktree and 8 s for an xcfs slot (≈200 s vs ≈9 s when the cache missed a few long actions); removing the plain
+worktrees left 11.7–24.3 GB of Bazel output bases and three Bazel servers behind, retiring the pool left nothing;
+incremental builds were the same on both sides. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
 
 ## Design
 

@@ -190,7 +190,7 @@ Collected from two months of a worktree script in daily use, where every special
 | 18 | the Xcode version changed | toolchain version recorded per checkout and per warm-up; a change discards old output and makes a slot cold | done, t30, t42 |
 | 19 | backups and indexing | pool and build directories named `.noindex`; pools excluded from Time Machine | done, t36 |
 | 20 | baseline update needs network | a failed fetch leaves the slot as is, marked behind | done |
-| 21 | submodules, Git LFS | not tested | open |
+| 21 | submodules, Git LFS | submodules cloned from the source checkout and kept in step on every switch; Git LFS not tested | submodules done, t44 |
 | 22 | spaces and non-ASCII in paths | the test sandbox path contains both | done |
 | 23 | disk full during warm-up or build | free space checked before a slot is created or warmed (exit 11); a failed warm-up leaves the slot cold or marked failed | done, t40 |
 
@@ -203,6 +203,6 @@ Collected from two months of a worktree script in daily use, where every special
 - Intel Macs (the filesystem check reads the 64-bit-inode `statfs` layout there; not run).
 - Signed device builds; running the same slot in Xcode.app at the same time (Xcode.app would build its own copy).
 - Large CocoaPods monoliths, app extensions, watchOS / macOS / visionOS destinations, Tuist or Bazel generated projects.
-- Submodules and Git LFS (a nested repository that is a submodule is refused).
+- Git LFS.
 - Any toolchain other than Xcode. The adapter protocol has been checked against the Xcode adapter and a toy external
   adapter only, and will probably change when a second real one appears.

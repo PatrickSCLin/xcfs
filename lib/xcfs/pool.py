@@ -370,7 +370,8 @@ def release(slot, row, settings, prune_branch=False, discard_ignored=False, rewa
     if row["state"] != "leased":
         raise Fail("slot %d is not leased (state %s)" % (row["index"], row["state"]), USAGE)
     worktree.check_removable(src, row, discard_ignored,
-                             release=lambda: builds.for_each_adapter(src, repo, cfg, "slot", "release", slot))
+                             release=lambda: builds.for_each_adapter(src, repo, cfg, "slot", "release", slot),
+                             skip_pids=builds.own_pids(src, repo, cfg, "slot", slot))
     repos = worktree.repos_of(row, src)
     refs = worktree.rescue(src, worktree.stray_commits(src, repos))
     for r in refs:

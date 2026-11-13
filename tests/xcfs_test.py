@@ -862,9 +862,10 @@ def t44_submodules_come_along_locally():
 
 
 FAKE_BAZEL = r"""OB="$XCFS_BAZEL_USER_ROOT/$(python3 -c 'import hashlib,os;print(hashlib.md5(os.getcwd().encode()).hexdigest())')"
-mkdir -p "$OB/server" "$OB/execroot"; echo "WORKSPACE: $(pwd -P)" > "$OB/README"; echo x > "$OB/execroot/out.o"
+mkdir -p "$OB/server" "$OB/execroot" "$OB/external/ro/sub"; echo "WORKSPACE: $(pwd -P)" > "$OB/README"; echo x > "$OB/execroot/out.o"
+echo x > "$OB/external/ro/sub/f"; chmod 555 "$OB/external/ro/sub" "$OB/external/ro"
 if [ ! -f "$OB/server/server.pid.txt" ] || ! kill -0 "$(cat "$OB/server/server.pid.txt")" 2>/dev/null; then
-  sleep 300 >/dev/null 2>&1 & echo $! > "$OB/server/server.pid.txt"
+  (cd "$PWD" && exec sleep 300) >/dev/null 2>&1 & echo $! > "$OB/server/server.pid.txt"
 fi
 [ -f FAIL ] && { echo "ERROR: $(pwd -P)/BUILD:3:1: broken target"; exit 1; }
 echo built"""
@@ -872,7 +873,7 @@ echo built"""
 
 @test
 def t45_bazel_output_base_belongs_to_its_checkout():
-    repo = mkrepo("r45", cfg=dict(CFG, toolchains=[{"adapter": "bazel", "build": FAKE_BAZEL}], pool={"slots": 1}))
+    repo = mkrepo("r45", cfg=dict(CFG, toolchains=[{"adapter": "bazel", "build": FAKE_BAZEL, "stopServerOnRelease": True}], pool={"slots": 1}))
     open(repo + "/MODULE.bazel", "w").write("module(name = 'x')\n"); git_commit(repo, "bazel")
     import hashlib
     ob_of = lambda p: SB + "/bazel-root/" + hashlib.md5(p.encode()).hexdigest()
@@ -891,6 +892,17 @@ def t45_bazel_output_base_belongs_to_its_checkout():
     assert wait_for(lambda: subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode != 0, 10), "server of a returned slot left running"
     assert os.path.isfile(ob_of(src) + "/execroot/out.o"), "a returned slot lost its build state"
     assert xcfs("pool", "resize", repo, "0")["_code"] == 0 and wait_gone(ob_of(src)), "a retired slot kept its output base"
+    # by default a returned slot keeps its server (its cwd is the slot): that must not block the return
+    d = json.load(open(repo + "/.xcfs.json")); d["toolchains"][0].pop("stopServerOnRelease"); json.dump(d, open(repo + "/.xcfs.json", "w"))
+    assert xcfs("pool", "resize", repo, "1")["_code"] == 0
+    c = xcfs("checkout", repo, "s2"); src = c["worktree"]
+    assert xcfs("build", src)["_code"] == 0
+    pid = int(open(ob_of(src) + "/server/server.pid.txt").read())
+    assert subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode == 0, "the server died before release"
+    r = xcfs("release", src, "--no-warm", "--prune-branch"); assert r["_code"] == 0, "the slot's own server blocked its return: %s" % r
+    assert subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode == 0, "the server was stopped on release"
+    r = xcfs("pool", "resize", repo, "0"); assert r["_code"] == 0 and r["retired"], r
+    assert wait_gone(ob_of(src)) and wait_for(lambda: subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode != 0, 10)
     os.makedirs(SB + "/bazel-root/" + "0" * 32); open(SB + "/bazel-root/" + "0" * 32 + "/README", "w").write("WORKSPACE: /no/such/place\n")
     r = xcfs("gc", "--foreign"); assert any("workspace is gone" in k for k, _ in r["foreign"]), r["foreign"]
 

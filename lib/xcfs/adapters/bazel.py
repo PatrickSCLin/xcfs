@@ -11,7 +11,7 @@ import getpass, glob, hashlib, os, re, signal, time
 from ..adapter import Adapter
 from ..util import Fail, USAGE, phys, run, run_streaming, under
 
-ENTRY_KEYS = {"adapter", "root", "build", "test", "run", "warm", "outputUserRoot", "env", "prepare"}
+ENTRY_KEYS = {"adapter", "root", "build", "test", "run", "warm", "outputUserRoot", "env", "prepare", "stopServerOnRelease"}
 ERR = re.compile(r"^(?:ERROR|error): (?P<file>/[^:\n]+?):(?P<line>\d+):(?P<col>\d+): (?P<msg>.*)$")
 
 
@@ -96,11 +96,8 @@ class BazelAdapter(Adapter):
     # ---------------------------------------------------------------- resources
     def stop_server(self, root, entry):
         """Stop the Bazel server of this checkout's output base (a JVM that otherwise stays resident)."""
-        ob = self.output_base(root, entry)
-        pidf = os.path.join(ob, "server", "server.pid.txt")
-        try:
-            pid = int(open(pidf).read().strip())
-        except (OSError, ValueError):
+        pid = self.server_pid(root, entry)
+        if not pid:
             return False
         try:
             os.kill(pid, signal.SIGTERM)
@@ -119,8 +116,22 @@ class BazelAdapter(Adapter):
             pass
         return True
 
+    def server_pid(self, root, entry):
+        try:
+            return int(open(os.path.join(self.output_base(root, entry), "server", "server.pid.txt")).read().strip())
+        except (OSError, ValueError):
+            return None
+
+    def own_processes(self, ctx):
+        pid = self.server_pid(ctx.toolchain_root, ctx.entry)
+        return [pid] if pid else []
+
     def release(self, ctx):
-        self.stop_server(ctx.toolchain_root, ctx.entry)
+        # The server holds the analysis cache: keeping it makes the next lease's first build incremental instead of
+        # a re-analysis (minutes on a large graph). Bazel stops an idle server on its own (--max_idle_secs, 3 h by
+        # default); "stopServerOnRelease" trades that speed for memory now. Removing the checkout always stops it.
+        if ctx.entry.get("stopServerOnRelease") or ctx.kind != "slot":
+            self.stop_server(ctx.toolchain_root, ctx.entry)
 
     def retire(self, ctx):
         self.stop_server(ctx.toolchain_root, ctx.entry)

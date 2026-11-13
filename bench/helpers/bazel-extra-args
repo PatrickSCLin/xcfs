@@ -1,0 +1,16 @@
+#!/bin/bash
+# Run the real Bazel ($XCFS_BENCH_BAZEL) with $XCFS_BENCH_BAZEL_ARGS added right after the "build" command, for
+# projects whose build script offers no other way to pass Bazel flags. Everything else passes through unchanged.
+set -euo pipefail
+args=()
+added=0
+for a in "$@"; do
+  args+=("$a")
+  if [ "$a" = build ] && [ "$added" = 0 ]; then
+    # shellcheck disable=SC2206
+    extra=(${XCFS_BENCH_BAZEL_ARGS:-})
+    args+=("${extra[@]}")
+    added=1
+  fi
+done
+exec "${XCFS_BENCH_BAZEL}" "${args[@]}"

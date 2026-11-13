@@ -137,6 +137,15 @@ def for_each_adapter(root, project, cfg, kind, method, slot=None):
         save(ctx, a)
 
 
+def own_pids(root, project, cfg, kind, slot=None):
+    """Processes the checkout's adapters keep for it (a build server between leases): never a reason to refuse."""
+    loc = {"kind": kind, "root": root, "project": project, "slot": slot, "session": ""}
+    pids = []
+    for a, ctx in contexts(loc, cfg):
+        pids += [str(p) for p in a.own_processes(ctx)]
+    return pids
+
+
 def after_seed(root, project, cfg, kind, slot=None):
     for_each_adapter(root, project, cfg, kind, "after_seed", slot)
 

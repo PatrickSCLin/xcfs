@@ -27,6 +27,8 @@ Operations and what they return:
     ownedCaches   args {root}                 -> {"paths": [...]}      (caches outside root that belong to root)
     foreignCaches args {owned, staleDays}     -> {"caches": [{"kind", "path", "owner"}]}
     cacheRoots    args {}                     -> {"paths": [...]}      (where those caches live)
+    ownProcesses  context                     -> {"pids": [...]}       (the checkout's own helpers, e.g. a build
+                                                                        server kept between leases: not "in use")
     doctor        args {root, entry}          -> {"checks": [{"ok": bool, "message": str}]}
 
 A build-like result is {"ok": bool, "seconds": float, "diagnostics": [{"file", "line", "column", "severity",
@@ -115,6 +117,9 @@ class Adapter:
         return []
 
     def cache_roots(self):
+        return []
+
+    def own_processes(self, ctx):
         return []
 
     def doctor(self, root, entry):
@@ -208,6 +213,9 @@ class ExternalAdapter(Adapter):
 
     def cache_roots(self):
         return (self._opt("cacheRoots", default={}) or {}).get("paths", [])
+
+    def own_processes(self, ctx):
+        return (self._opt("ownProcesses", ctx, default={}) or {}).get("pids", [])
 
     def doctor(self, root, entry):
         return (self._opt("doctor", root=root, entry=entry, default={}) or {}).get("checks", [])

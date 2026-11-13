@@ -184,9 +184,15 @@ def trash_and_delete(path, trash_dir):
         os.rename(path, dst)
     except OSError:  # another volume: no rename possible; delete in place, still in the background
         dst = path
-    subprocess.Popen(["/bin/rm", "-rf", dst], start_new_session=True, stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, cwd="/")
+    background_delete(dst)
     return dst
+
+
+def background_delete(path):
+    """rm -rf in the background, after making every directory writable: build tools leave read-only directories
+    (Bazel's external repositories, for one), and rm cannot empty those."""
+    subprocess.Popen(["/bin/sh", "-c", 'chmod -R u+w "$1" 2>/dev/null; exec /bin/rm -rf "$1"', "sh", path],
+                     start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd="/")
 
 
 def run_streaming(cmd, cwd, env, log_path, timeout, on_line=None):

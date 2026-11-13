@@ -39,7 +39,6 @@ ENV = dict(os.environ, XCFS_STATE=WORK + "/xcfs-state", XCFS_CACHE=WORK + "/xcfs
            XCFS_POOL_ROOT=WORK + "/pool", XDG_CONFIG_HOME=WORK + "/xcfs-config", XCFS_SESSION="bench")
 for k in ("CLAUDE_CODE_SESSION_ID",):
     ENV.pop(k, None)
-ENV.update({k: os.path.expanduser(str(v)) for k, v in PROFILE.get("env", {}).items()})
 # A cache every checkout shares (a build tool's disk cache, say): the profile's commands find it in $XCFS_BENCH_CACHE.
 ENV["XCFS_BENCH_CACHE"] = os.path.realpath(arg("--cache", os.path.join(WORK, "shared-cache")))
 RESULTS = {"profile": PROFILE["name"], "agents": N, "started": STAMP, "machine": {}, "plain": {}, "xcfs": {}}
@@ -52,6 +51,7 @@ def say(*a):
 def fmt(s, **kw):
     kw.setdefault("repo", SOURCE)
     kw.setdefault("work", WORK)
+    kw.setdefault("bench", HERE)
     for k, v in kw.items():
         s = s.replace("{%s}" % k, str(v))
     return s
@@ -136,13 +136,16 @@ def revert_edits(root):
 
 
 def edit_loop(root, build, label):
-    """No-op build, then each edit in turn (cumulative, as a session of work would be)."""
+    """No-op build, then each edit in turn (cumulative, as a session of work would be). Every run and every side
+    writes different text: both sides may share a build cache, and an edit the other side already built would be a
+    cache hit instead of a build."""
     rows = []
+    base = int(time.time() * 1000) % 10 ** 9 * 10
     t, code, _ = build("no-op")
     rows.append({"step": "no-op build", "seconds": t, "ok": code == 0})
     say("  %s no-op: %ss" % (label, t))
     for i, e in enumerate(PROFILE.get("edits", []), 1):
-        apply_edit(root, e, i)
+        apply_edit(root, e, base + i)
         t, code, _ = build(e["name"])
         rows.append({"step": e["name"], "seconds": t, "ok": code == 0})
         say("  %s %s: %ss%s" % (label, e["name"], t, "" if code == 0 else " (FAILED)"))
@@ -220,6 +223,8 @@ def run_plain():
     for i, dest in enumerate(dests, 1):
         f0 = free_kb()
         t, code, _ = shell(fmt(P["remove"], dest=dest, branch="xcfs-bench/plain-%d" % i), SOURCE, "plain-%d-remove" % i)
+        if code != 0:
+            say("plain %d: REMOVE FAILED (see logs)" % i)
         time.sleep(3)
         left = owned_caches(dest)
         pids, rss = processes_for(dest)
@@ -231,6 +236,7 @@ def run_plain():
     for i, dest in enumerate(dests, 1):
         stop_processes(dest)
         for c in owned_caches(dest):
+            subprocess.run(["chmod", "-R", "u+w", c], capture_output=True)  # build tools leave read-only dirs
             shutil.rmtree(c, ignore_errors=True)
         subprocess.run(["git", "-C", SOURCE, "branch", "-D", "xcfs-bench/plain-%d" % i], capture_output=True)
 
@@ -271,13 +277,18 @@ def run_xcfs():
         pids, rss = processes_for(wt)
         res["release"].append({"agent": i, "seconds": t, "ok": code == 0, "processes_left": len(pids),
                                "rss_left_kb": rss, "error": out.get("error")})
-        say("xcfs %d: released in %.1fs; %d process(es) left" % (i, t, len(pids)))
+        say("xcfs %d: released in %.1fs; %d process(es) left%s" % (i, t, len(pids), "" if code == 0 else
+                                                                   " -- RELEASE FAILED: %s" % out.get("error")))
     f0 = free_kb()
     t, code, _, out = xcfs("pool", "resize", SOURCE, "0", log_name="xcfs-retire")
+    if out.get("retire_on_release"):
+        say("xcfs: NOT retired (still leased): %s" % out["retire_on_release"])
     time.sleep(10)
     left = [c for wt in wts for c in owned_caches(wt)]
+    procs = [processes_for(wt) for wt in wts]
     res["retire"] = {"seconds": t, "ok": code == 0, "reclaimed_kb_after_10s": free_kb() - f0, "caches_left": len(left),
-                     "caches_left_kb": du_kb(*left)}
+                     "caches_left_kb": du_kb(*left), "processes_left": sum(len(p) for p, _ in procs),
+                     "rss_left_kb": sum(r for _, r in procs)}
     say("xcfs: retired the pool in %.1fs; caches left %d" % (t, len(left)))
 
 
@@ -314,9 +325,10 @@ def report():
                   N, gb(p_disk), gb(x_disk)),
               "| resident memory of their processes after building | %s | %s |" % (
                   gb(sum(r["rss_kb"] for r in pc)), gb(sum(r["rss_kb"] for r in xc))),
-              "| left behind after removing them | %s, %d process(es) | %s, %d process(es) |" % (
+              "| left behind after removing them (plain: `git worktree remove`/`rm`; xcfs: retiring the pool) "
+              "| %s, %d process(es) | %s, %d process(es) |" % (
                   gb(p_left), sum(r["processes_left"] for r in p.get("removal", [])), gb(x_left),
-                  sum(r["processes_left"] for r in x.get("release", []))),
+                  x.get("retire", {}).get("processes_left", 0)),
               ""]
     L += ["## Per checkout", "",
           "| | agent | ready to build | first build | disk (real, create + build) | checkout (du) | build output (du) | resident memory after build |",
@@ -347,8 +359,9 @@ def report():
             r["agent"], r["seconds"], r["processes_left"], gb(r["rss_left_kb"])))
     if x.get("retire"):
         r = x["retire"]
-        L.append("| xcfs pool resize 0 | all | %.1f s | %d cache(s), %s | - |" % (r["seconds"], r["caches_left"],
-                                                                                  gb(r["caches_left_kb"])))
+        L.append("| xcfs pool resize 0 | all | %.1f s | %d cache(s), %s | %d (%s) |" % (
+            r["seconds"], r["caches_left"], gb(r["caches_left_kb"]), r.get("processes_left", 0),
+            gb(r.get("rss_left_kb", 0))))
     text = "\n".join(L) + "\n"
     home = os.path.expanduser("~")
     for a, b in ((WORK, "<work>"), (SOURCE, "<source>"), (home, "~")):
@@ -357,6 +370,8 @@ def report():
 
 
 def main():
+    # Profile environment: {repo}, {work} and {bench} (this directory, for helpers) are filled in.
+    ENV.update({k: fmt(os.path.expanduser(str(v))) for k, v in PROFILE.get("env", {}).items()})
     RESULTS["machine"] = machine()
     say("benchmark %s: %d agents, work %s" % (PROFILE["name"], N, WORK))
     try:

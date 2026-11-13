@@ -3,7 +3,7 @@ import json, os, shutil, subprocess, time
 
 from . import builds, config, pool, seed, state, worktree
 from .adapter import adapters_for, all_cache_adapters, builtin_adapters
-from .util import ERROR, Fail, USAGE, du_kb, fs_type, human, phys, pid_alive, run, same_apfs_volume, say, \
+from .util import ERROR, Fail, USAGE, background_delete, du_kb, fs_type, human, phys, pid_alive, run, same_apfs_volume, say, \
     trash_and_delete, under, users_of
 
 
@@ -51,7 +51,7 @@ def cmd_gc(a):
             for n in os.listdir(t):  # a background delete that was interrupted (reboot, kill)
                 actions.append(("leftover trash", os.path.join(t, n)))
                 if apply:
-                    subprocess.Popen(["/bin/rm", "-rf", os.path.join(t, n)], start_new_session=True, cwd="/")
+                    background_delete(os.path.join(t, n))
     foreign = []
     for ad in all_cache_adapters():
         foreign += [dict(c, adapter=ad.name) for c in ad.foreign_caches(owned, days)]

@@ -1,6 +1,6 @@
 {
   "name": "Telegram-iOS",
-  "description": "https://github.com/TelegramMessenger/Telegram-iOS, a large Bazel-built iOS app with 12 git submodules, built for the iOS Simulator (debug_sim_arm64) with the repository's fake code-signing data. Both sides share one Bazel disk cache ($XCFS_BENCH_CACHE), as the project's README recommends, and it is already filled by a build of the source checkout: this measures what parallel checkouts cost on top of a warm cache. Plain worktrees fetch their submodules the way `git clone --recursive` would; xcfs clones them from the source checkout.",
+  "description": "https://github.com/TelegramMessenger/Telegram-iOS, a large Bazel-built iOS app with 12 git submodules, built for the iOS Simulator (debug_sim_arm64). Both sides share one Bazel disk cache ($XCFS_BENCH_CACHE), as the project's README recommends, and it is already filled by a build of the source checkout: this measures what parallel checkouts cost on top of a warm cache. Plain worktrees fetch their submodules the way `git clone --recursive` would; xcfs clones them from the source checkout. The repository's fake provisioning profiles have expired, and Make.py passes no extra Bazel flags, so both sides build through bench/helpers/bazel-extra-args, which adds --//Telegram:disableProvisioningProfiles (simulator builds need no profiles). The Bazel binary is the one Make.py downloaded into the source checkout.",
   "agents": 3,
   "versionCommand": "python3 -c \"import json; v = json.load(open('versions.json')); print('bazel %s, project wants Xcode %s' % (v['bazel'].split(':')[0], v['xcode']))\"",
   "plain": {
@@ -8,7 +8,7 @@
       "git worktree add -q -b {branch} {dest}",
       "git -C {dest} submodule update --init --recursive --depth 1 -j 8"
     ],
-    "build": "python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir=\"$XCFS_BENCH_CACHE\" build --configurationPath=build-system/appstore-configuration.json --codesigningInformationPath=build-system/fake-codesigning --configuration=debug_sim_arm64 --buildNumber=1",
+    "build": "python3 build-system/Make/Make.py --bazel \"$XCFS_BENCH_BAZEL_WRAPPER\" --overrideXcodeVersion --cacheDir=\"$XCFS_BENCH_CACHE\" build --configurationPath=build-system/appstore-configuration.json --codesigningInformationPath=build-system/fake-codesigning --configuration=debug_sim_arm64 --buildNumber=1",
     "remove": "rm -rf {dest} && git worktree prune && git branch -D {branch}"
   },
   "xcfs": {
@@ -17,7 +17,7 @@
       "toolchains": [
         {
           "adapter": "bazel",
-          "build": "python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir=\"$XCFS_BENCH_CACHE\" build --configurationPath=build-system/appstore-configuration.json --codesigningInformationPath=build-system/fake-codesigning --configuration=debug_sim_arm64 --buildNumber=1"
+          "build": "python3 build-system/Make/Make.py --bazel \"$XCFS_BENCH_BAZEL_WRAPPER\" --overrideXcodeVersion --cacheDir=\"$XCFS_BENCH_CACHE\" build --configurationPath=build-system/appstore-configuration.json --codesigningInformationPath=build-system/fake-codesigning --configuration=debug_sim_arm64 --buildNumber=1"
         }
       ]
     }
@@ -40,5 +40,10 @@
       "file": "submodules/TextFormat/Sources/CountNicePercent.swift",
       "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { return {n} }\n"
     }
-  ]
+  ],
+  "env": {
+    "XCFS_BENCH_BAZEL": "{repo}/build-input/bazel-9.2.0-darwin-arm64",
+    "XCFS_BENCH_BAZEL_WRAPPER": "{bench}/helpers/bazel-extra-args",
+    "XCFS_BENCH_BAZEL_ARGS": "--//Telegram:disableProvisioningProfiles"
+  }
 }
