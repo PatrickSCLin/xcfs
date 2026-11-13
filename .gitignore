@@ -7,3 +7,5 @@ CLAUDE.local.md
 __pycache__/
 *.pyc
 .xcfs-trash/
+# Built by scripts/build-single-file.sh
+/dist/

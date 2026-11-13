@@ -55,7 +55,9 @@ ln -s ~/src/xcfs/bin/xcfs ~/.local/bin/xcfs     # any directory on PATH
 xcfs --version
 ```
 
-`bin/xcfs` finds its code in `../lib` (or `../libexec`). A Homebrew tap is planned.
+`bin/xcfs` finds its code in `../lib` (or `../libexec`). To install one file instead (a dotfiles manager, a package
+manager), build it: `scripts/build-single-file.sh` writes `dist/xcfs`, the whole tool as a Python zip application.
+A Homebrew tap is planned.
 
 ## Commands
 
