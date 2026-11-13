@@ -193,6 +193,12 @@ out=$("${XCFS}" build "${swt}" --json) || fail "a new file in a synchronized fol
 report "${out}" "new file in a synchronized folder"
 [ "$(json "${out}" pif_exported)" = True ] || fail "the PIF was not re-exported for a new file"
 rm "${swt}/Synced/Fresh.swift"
+# The session must build what xcodebuild builds: a generic destination means every supported architecture.
+sw_archs=$(lipo -archs "$(json "${out}" derived_data)/Build/Products/Debug-iphonesimulator/GenApp.app/GenApp")
+xc_out=$(XCFS_DRIVER=xcodebuild "${XCFS}" build "${swt}" --json) || fail "xcodebuild build for comparison failed"
+xc_archs=$(lipo -archs "$(json "${xc_out}" derived_data)/Build/Products/Debug-iphonesimulator/GenApp.app/GenApp")
+[ "${xc_archs}" = "${sw_archs}" ] || fail "session built ${sw_archs}, xcodebuild built ${xc_archs}"
+echo "same architectures as xcodebuild: ${sw_archs}"
 out=$("${XCFS}" rm "${swt}" --apply --prune-branch --json) || fail "rm with a running session failed: ${out}"
 sleep 1
 ! pgrep -f "xcode_session.*$(basename "${swt}")" >/dev/null || fail "the session outlived its worktree"

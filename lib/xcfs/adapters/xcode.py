@@ -385,7 +385,36 @@ class XcodeAdapter(Adapter):
     def boot(self, udid):
         run("xcrun", "simctl", "bootstatus", udid, "-b", timeout=600)
 
+    def xcode_helpers(self, root):
+        """Xcode's own helper daemons (ibtoold, for one) that a build leaves running with their cwd inside the
+        checkout. They belong to the checkout's builds, not to anyone working in it."""
+        app = developer_dir()
+        app = app[:app.index(".app/") + 4] if ".app/" in app else app
+        if not app:
+            return []
+        out, pid = [], None
+        try:
+            lines = run("lsof", "-a", "-d", "cwd", "-Fpn", check=False, timeout=10, cwd="/").stdout.splitlines()
+        except subprocess.TimeoutExpired:
+            return []
+        for l in lines:
+            if l.startswith("p"):
+                pid = l[1:]
+            elif l.startswith("n") and pid and under(l[1:], root):
+                exe = run("ps", "-o", "comm=", "-p", pid, check=False, cwd="/").stdout.strip()
+                if exe.startswith(app + "/"):
+                    out.append(int(pid))
+        return out
+
+    def own_processes(self, ctx):
+        return self.xcode_helpers(ctx.root)
+
     def release(self, ctx):
+        for pid in self.xcode_helpers(ctx.root):
+            try:
+                os.kill(pid, 15)
+            except OSError:
+                pass
         if ctx.resources.get("simulator"):
             run("xcrun", "simctl", "shutdown", ctx.resources["simulator"], check=False, timeout=120)
         from . import xcode_session

@@ -251,8 +251,10 @@ def run_destination(dest):
         arch = "arm64"
     else:
         raise Fail("the session cannot build for destination %r yet; use the xcodebuild driver" % dest, USAGE)
+    # Like xcodebuild: a generic destination builds every supported architecture, a concrete one only its own.
     return {"platform": plat, "sdk": sdk, "sdkVariant": None, "targetArchitecture": arch,
-            "supportedArchitectures": ["arm64", "x86_64"], "disableOnlyActiveArch": False, "hostTargetedPlatform": None}
+            "supportedArchitectures": ["arm64", "x86_64"], "disableOnlyActiveArch": d.startswith("generic/"),
+            "hostTargetedPlatform": None}
 
 
 def metal_toolchain(ctx):

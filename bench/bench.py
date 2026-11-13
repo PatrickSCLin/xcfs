@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR] [--phases plain,xcfs] [--xcfs PATH]
+"""bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR] [--phases plain,xcfs]
+           [--xcfs PATH] [--reuse-from RESULTS.json]   (sides not in --phases are taken from that earlier run)
 
 Compare N parallel checkouts made the plain way (git worktree + the project's own setup and build) with the same N
 checkouts made through xcfs (a pool of slots). The benchmark knows no project: the profile says how to create, build
@@ -404,6 +405,15 @@ def report():
 
 
 def main():
+    if arg("--plain-from") or arg("--reuse-from"):
+        # Reuse the sides of an earlier run of the same profile that this run does not measure again.
+        prev = json.load(open(arg("--plain-from") or arg("--reuse-from")))
+        if "plain" not in PHASES:
+            RESULTS["plain"] = prev["plain"]
+        for name, r in (prev.get("xcfs") or {}).items():
+            if "xcfs" not in PHASES and "xcfs:" + name not in PHASES:
+                RESULTS["xcfs"][name] = r
+        RESULTS["reused_from"] = prev.get("started")
     # Profile environment: {repo}, {work} and {bench} (this directory, for helpers) are filled in.
     ENV.update({k: fmt(os.path.expanduser(str(v))) for k, v in PROFILE.get("env", {}).items()})
     RESULTS["machine"] = machine()
