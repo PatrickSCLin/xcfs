@@ -1,0 +1,9 @@
+# Private working notes (design history, measurements, prototypes). Never committed.
+/plan/
+# Machine-local instructions for coding agents; may name private things.
+CLAUDE.local.md
+
+.DS_Store
+__pycache__/
+*.pyc
+.xcfs-trash/
