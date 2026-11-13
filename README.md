@@ -299,3 +299,7 @@ simulator.
 
 [docs/design.md](docs/design.md): the measurements behind the approach, the architecture and adapter interface, the
 slot lifecycle, the edge cases and how each is handled, and what is not verified.
+
+## License
+
+MIT; see [LICENSE](LICENSE).
