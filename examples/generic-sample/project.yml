@@ -1,0 +1,25 @@
+name: GenApp
+options: { bundleIdPrefix: com.example, deploymentTarget: { iOS: "17.0" } }
+targets:
+  GenApp:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - path: Synced
+        type: syncedFolder
+    settings:
+      base:
+        SWIFT_OBJC_BRIDGING_HEADER: App/App-Bridging-Header.h
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.9"
+    preBuildScripts:
+      - name: Stamp
+        script: 'echo "stamp $(date +%s)" > "${DERIVED_FILE_DIR}/stamp.txt"'
+        outputFiles: ["$(DERIVED_FILE_DIR)/stamp.txt"]
+  GenAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [AppTests]
+    dependencies: [{ target: GenApp }]
+    settings: { base: { GENERATE_INFOPLIST_FILE: YES, SWIFT_VERSION: "5.9" } }

@@ -1,0 +1,9 @@
+platform :ios, '17.0'
+install! 'cocoapods', :warn_for_unused_master_specs_repo => false
+target 'GenApp' do
+  use_frameworks! :linkage => :static
+  pod 'LocalPod', :path => 'LocalPod'
+  target 'GenAppTests' do
+    inherit! :search_paths
+  end
+end
