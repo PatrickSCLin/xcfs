@@ -153,7 +153,9 @@ def export_pif(adapter, ctx, scheme):
         raise Fail("PIF export failed (%d): %s" % (r.returncode, "\n".join(errs)[:600] or (r.stderr or r.stdout)[-400:]))
     os.replace(tmp, path)
     for old in sorted((f for f in glob.glob(os.path.join(d, "*.json")) if "-skip-" not in f), key=os.path.getmtime)[:-3]:
-        for f in [old] + glob.glob(old[:-len(".json")] + "-skip-*"):
+        stem = old[:-len(".json")]
+        for f in [old] + glob.glob(stem + "-skip-*") + [x for x in (stem + ".autoskip", stem + ".scheme")
+                                                         if os.path.exists(x)]:
             os.remove(f)
     say("  exported PIF in %.1fs" % (time.time() - t0))
     return path, True
@@ -385,9 +387,15 @@ def metal_toolchain(ctx):
     return None, None
 
 
-def make_request(adapter, ctx, pif, conf, dd, files=None):
+def make_request(adapter, ctx, pif, conf, dd, files=None, scheme_cache=None):
     scheme = adapter.scheme(ctx)
-    names, implicit = ([ctx.entry["target"]], True) if ctx.entry.get("target") else scheme_info(adapter, ctx, scheme)
+    if ctx.entry.get("target"):
+        names, implicit = [ctx.entry["target"]], True
+    else:   # the PIF's key covers the scheme files, so its name keys the answer
+        cached = read_json(scheme_cache, None) if scheme_cache else None
+        names, implicit = cached if cached else scheme_info(adapter, ctx, scheme)
+        if scheme_cache and not cached:
+            write_json(scheme_cache, [names, implicit])
     if files:
         ft = file_targets(pif)
         # One target per file: a package exports a static and a dynamic variant of each target, and asking for both
@@ -690,11 +698,18 @@ def session_build(adapter, ctx, name, conf, args, files=None):
     t0 = time.time()
     scheme = adapter.scheme(ctx)
     pif_path, exported = export_pif(adapter, ctx, scheme)
-    skip, skip_why = scripts_to_skip(load_pif(pif_path), ctx.entry.get("skipScripts", "auto"))
+    setting = ctx.entry.get("skipScripts", "auto")
+    if isinstance(setting, list):
+        skip, skip_why = setting, "configured"
+    else:   # decided once per PIF (its name is a hash of what it depends on)
+        cached = read_json(pif_path[:-len(".json")] + ".autoskip", None)
+        skip, skip_why = cached if cached else scripts_to_skip(load_pif(pif_path), setting)
+        if not cached:
+            write_json(pif_path[:-len(".json")] + ".autoskip", [skip, skip_why])
     pif_path, skipped = patch_pif(pif_path, skip)
     pif = load_pif(pif_path)
     dd = adapter.derived_data(ctx, name, "swbuild")
-    req, target, ext = make_request(adapter, ctx, pif, conf, dd, files)
+    req, target, ext = make_request(adapter, ctx, pif, conf, dd, files, scheme_cache=pif_path[:-len(".json")] + ".scheme")
     kind = "files" if files else "build"
     rdir = os.path.join(session_dir(ctx), "requests")
     os.makedirs(rdir, exist_ok=True)

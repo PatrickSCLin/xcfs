@@ -26,8 +26,20 @@ def selected_swift():
     """The selected Xcode's Swift, as `swiftc --version` names it: "Apple Swift version 6.4.2 (swiftlang-...)"."""
     global _swift
     if _swift is None:
-        r = run("xcrun", "swiftc", "--version", check=False)
-        _swift = swift_release(r.stdout + r.stderr) if r.returncode == 0 else ""
+        from .xcode import XcodeAdapter, developer_dir
+        key = "%s|%s" % (developer_dir(), XcodeAdapter().version())   # remembered per Xcode: xcrun costs ~0.1 s
+        path = os.path.join(state.cache_dir(), "swift-driver", "selected-swift.json")
+        known = read_json(path, {}) or {}
+        if os.environ.get("TOOLCHAINS") or key not in known:
+            r = run("xcrun", "swiftc", "--version", check=False)
+            _swift = swift_release(r.stdout + r.stderr) if r.returncode == 0 else ""
+            if _swift and not os.environ.get("TOOLCHAINS"):
+                known[key] = _swift
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w") as f:
+                    json.dump(known, f)
+        else:
+            _swift = known[key]
     return _swift
 
 
