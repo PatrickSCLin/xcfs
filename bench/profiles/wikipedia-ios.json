@@ -60,5 +60,43 @@
       "file": "WMFData/Sources/WMFData/Utility/WMFURLUtils.swift",
       "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { return {n} }\n"
     }
+  ],
+  "oracle": [
+    {
+      "name": "an @objc property is added to a Swift class Objective-C uses (generated header)",
+      "file": "WMF Framework/MediaWikiApiErrors.swift",
+      "find": "    @objc public let code: String\n",
+      "replace": "    @objc public let code: String\n    @objc public let xcfsOracle{n}: Int = {n}\n"
+    },
+    {
+      "name": "a property is added to an Objective-C class Swift uses (module of headers, ObjC layout)",
+      "file": "WMF Framework/WMFLegacyFetcher.h",
+      "find": "@property (nonatomic, strong, readonly) WMFFetcher *fetcher;\n",
+      "replace": "@property (nonatomic, strong, readonly) WMFFetcher *fetcher;\n@property (nonatomic, readonly) NSInteger xcfsOracle{n};\n"
+    },
+    {
+      "name": "an @objc property Objective-C reads gets another Objective-C name (it breaks)",
+      "file": "WMF Framework/MediaWikiApiErrors.swift",
+      "find": "    @objc public let messageHtml",
+      "replace": "    @objc(xcfsOracle{n}MessageHtml) public let messageHtml",
+      "breaks": true
+    },
+    {
+      "name": "edit a function body in the app target",
+      "file": "Wikipedia/Code/ArticlePlace.swift",
+      "find": "        return hash",
+      "replace": "        _ = {n}\n        return hash"
+    },
+    {
+      "name": "edit a function body in a package ~300 files import (WMFData)",
+      "file": "WMFData/Sources/WMFData/Utility/WMFURLUtils.swift",
+      "find": "        (url as NSURL).wmf_languageVariantCode = languageVariantCode\n",
+      "replace": "        (url as NSURL).wmf_languageVariantCode = languageVariantCode\n        _ = {n}\n"
+    },
+    {
+      "name": "add a public declaration to that package",
+      "file": "WMFData/Sources/WMFData/Utility/WMFURLUtils.swift",
+      "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { return {n} }\n"
+    }
   ]
 }

@@ -60,5 +60,63 @@
       "file": "Packages/Models/Sources/Models/Account.swift",
       "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { {n} }\n"
     }
+  ],
+  "oracle": [
+    {
+      "name": "a stored property is added to an @Observable class 15 files use (macro expansion, class layout)",
+      "file": "Packages/Env/Sources/Env/QuickLook.swift",
+      "find": "  public var mediaAttachments: [MediaAttachment] = []\n",
+      "replace": "  public var mediaAttachments: [MediaAttachment] = []\n  public var xcfsOracle{n}: Int = 0\n"
+    },
+    {
+      "name": "a parameter of that class's method gains a default value",
+      "file": "Packages/Env/Sources/Env/QuickLook.swift",
+      "find": "mediaAttachments: [MediaAttachment]\n  )",
+      "replace": "mediaAttachments: [MediaAttachment] = []\n  )"
+    },
+    {
+      "name": "a public method's argument label changes (its callers break)",
+      "file": "Packages/Env/Sources/Env/QuickLook.swift",
+      "find": "public func prepareFor(\n    selectedMediaAttachment:",
+      "replace": "public func prepareFor(\n    selected{n} selectedMediaAttachment:",
+      "breaks": true
+    },
+    {
+      "name": "an observed property's setter becomes private (a binding to it breaks)",
+      "file": "Packages/Env/Sources/Env/QuickLook.swift",
+      "find": "  public var selectedMediaAttachment",
+      "replace": "  public private(set) var selectedMediaAttachment",
+      "breaks": true
+    },
+    {
+      "name": "a private stored property is added to a struct other packages pass by value (layout)",
+      "file": "Packages/Models/Sources/Models/MediaAttachement.swift",
+      "find": "  public let id: String\n  public let type: String\n",
+      "replace": "  public let id: String\n  public let type: String\n  private var xcfsOracle{n}: Int8 = 0\n"
+    },
+    {
+      "name": "an enum other packages switch over gains a case (they break)",
+      "file": "Packages/Models/Sources/Models/Status.swift",
+      "find": "  case direct\n}",
+      "replace": "  case direct\n  case xcfsOracle{n}\n}",
+      "breaks": true
+    },
+    {
+      "name": "edit a function body in a leaf package (Timeline)",
+      "file": "Packages/Timeline/Sources/Timeline/TimelineContentFilter.swift",
+      "find": "public func snapshot() -> Snapshot {\n    Snapshot(",
+      "replace": "public func snapshot() -> Snapshot {\n    _ = {n}\n    return Snapshot("
+    },
+    {
+      "name": "edit a function body in a package 12 others depend on (Models)",
+      "file": "Packages/Models/Sources/Models/Account.swift",
+      "find": "    hasher.combine(id)\n",
+      "replace": "    hasher.combine(id)\n    _ = {n}\n"
+    },
+    {
+      "name": "add a public declaration to that package",
+      "file": "Packages/Models/Sources/Models/Account.swift",
+      "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { {n} }\n"
+    }
   ]
 }
