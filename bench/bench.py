@@ -343,7 +343,11 @@ def run_round_plain():
     t, code, _ = shell(fmt(P["build"], dest=dest), dest, "round-plain")
     steps.append(("first build", t))
     base = int(time.time() * 1000) % 10 ** 9 * 10
+    seen = set()
     for i, e in enumerate(round_edits(), 1):
+        if e["name"] in seen:  # the same edit again (5 edits from a shorter list): start that file afresh
+            subprocess.run(["git", "-C", dest, "checkout", "--", e["file"]], capture_output=True)
+        seen.add(e["name"])
         apply_edit(dest, e, base + i)
         t, code, _ = shell(fmt(P["build"], dest=dest), dest, "round-plain")
         steps.append(("edit %d + build" % i, t))
@@ -379,13 +383,20 @@ def run_round_xcfs(variant, overrides):
     if code != 0:
         raise SystemExit("round warm-up failed: %s" % out.get("error"))
     steps, t0, f0 = [], time.time(), free_kb()
-    t, code, _, out = xcfs("checkout", SOURCE, "xcfs-bench/round-%s" % variant, log_name="round-xcfs-%s" % variant)
+    t, code, _, out = xcfs("checkout", SOURCE, "xcfs-bench/round-" + re.sub(r"[^A-Za-z0-9._-]+", "-", variant),
+                           log_name="round-xcfs-%s" % variant)
+    if code != 0:
+        raise SystemExit("round checkout failed: %s" % out.get("error"))
     wt = out["worktree"]
     steps.append(("checkout", t))
     t, code, _, out = xcfs("build", wt, log_name="round-xcfs-%s" % variant)
     steps.append(("first build", t))
     base = int(time.time() * 1000) % 10 ** 9 * 10
+    seen = set()
     for i, e in enumerate(round_edits(), 1):
+        if e["name"] in seen:
+            subprocess.run(["git", "-C", wt, "checkout", "--", e["file"]], capture_output=True)
+        seen.add(e["name"])
         apply_edit(wt, e, base + i)
         t, code, _, out = xcfs("check", os.path.join(wt, e["file"]), log_name="round-xcfs-%s" % variant)
         steps.append(("edit %d + check" % i, t))

@@ -14,11 +14,11 @@ For the two Xcode projects the main numbers build **one architecture** (`ARCHS=a
 for an Apple-silicon simulator; xcfs is measured twice — slots driven by `xcodebuild` (the pool alone), and slots
 driven by the persistent build session. Each cell reads plain → xcfs (xcodebuild) → xcfs (session).
 
-| project | an agent waits for a new checkout | no-op build | edit a function body in a widely used package | add a public declaration to it | the same, checked with `xcfs check` (session) | left behind after removal |
-|---|---|---|---|---|---|---|
-| [Ice Cubes](#ice-cubes) | 75.1 → 6.4 → **1.9 s** | 5.9 → 5.2 → **0.9 s** | 8.3 → 8.5 → **3.7 s** | 30.2 → 30.7 → 24.7 s | **1.2–1.9 s** | 4.4 GB → **0** |
-| [Wikipedia iOS](#wikipedia-ios) | 92.0 → 16.3 → **12.4 s** | 16.0 → 15.6 → 11.6 s | 18.0 → 18.6 → 14.2 s | 45.8 → 52.4 → 46.4 s | **2.5–3.6 s** | 8.4 GB → **0** |
-| [Telegram-iOS](#telegram-ios) (Bazel) | 59.3 → **8.2 s** (≈200 → 9 s on an incomplete cache) | 7.3 → 6.9 s | 12.1 → 12.2 s | 536.6 → 526.5 s | — | 11.7–24.3 GB + 3 Bazel servers → **0** |
+| project | one agent's round of work (5 edits) | an agent waits for a new checkout | no-op build | edit a function body in a widely used package | add a public declaration to it | the same, checked with `xcfs check` (session) | left behind after removal |
+|---|---|---|---|---|---|---|---|
+| [Ice Cubes](#ice-cubes) | 142.7 → **37.4 s** | 75.1 → 6.4 → **1.9 s** | 5.9 → 5.2 → **0.9 s** | 8.3 → 8.5 → **3.7 s** | 30.2 → 30.7 → 24.7 s | **1.2–1.9 s** | 4.4 GB → **0** |
+| [Wikipedia iOS](#wikipedia-ios) | 254.4 → 130.4 → **92.9 s** (`skipScripts`) | 92.0 → 16.3 → **12.4 s** | 16.0 → 15.6 → 11.6 s | 18.0 → 18.6 → 14.2 s | 45.8 → 52.4 → 46.4 s | **2.5–3.6 s** | 8.4 GB → **0** |
+| [Telegram-iOS](#telegram-ios) (Bazel) | — | 59.3 → **8.2 s** (≈200 → 9 s on an incomplete cache) | 7.3 → 6.9 s | 12.1 → 12.2 s | 536.6 → 526.5 s | — | 11.7–24.3 GB + 3 Bazel servers → **0** |
 
 What the projects show:
 
@@ -38,18 +38,42 @@ What the projects show:
   30 s for one; a no-op is unaffected.
 - **For Bazel, incremental builds are Bazel's**: the same on both sides; xcfs helps with the wait and with cleanup.
 
+## One agent's round of work
+
+The measure that matters most to an agent: get a checkout, build, make five edits — each followed by "does it
+compile?" — build once more, hand the checkout back. Plain: worktree + project setup, a first build, every edit
+verified by a build (`xcodebuild` cannot compile one file), removal. xcfs: checkout of a slot warmed beforehand, a
+first build, every edit verified with `xcfs check`, one final build, release. One architecture; edits cycle through the
+profile's three (a function body in a leaf, a function body in a widely used package, a public declaration in it).
+
+| project | plain worktrees | xcfs (session) | xcfs (session + `skipScripts`) |
+|---|---|---|---|
+| Ice Cubes | 142.7 s, 1.5 GB left behind | **37.4 s** (3.8×), nothing left | — |
+| Wikipedia iOS | 254.4 s, 2.8 GB left behind | 130.4 s (2.0×), nothing left | **92.9 s** (2.7×), nothing left |
+
+Step by step (Wikipedia, xcfs session + `skipScripts`): checkout 0.3 s, first build 3.4 s, checks 8.6 / 2.6 / 2.9 /
+34.7 / 3.0 s, final build 36.1 s, release 1.2 s. The 34.7 s check is the one after a public declaration was added to
+`WMFData`: `xcfs check` compiles only the edited file, so the downstream work of an interface change is paid by the next
+check of a file that depends on it — once, not on every check.
+
 ## Where the time goes
 
-The question behind these runs: why do the larger projects gain less? Measured answers:
+Why larger projects gain less, and what was tried — each row measured before and after, repeated:
 
 | | finding |
 |---|---|
-| fixed cost per build | `xcodebuild` spends ≈4 s before the first task on Wikipedia (package graph, target graph, build description); on Ice Cubes a no-op takes 5.9 s with `xcodebuild` and 0.9 s with the session. The session starts work at once (planning 0 s, first task at 0.14 s on Wikipedia). That fixed cost is all the session can remove. |
-| Wikipedia's no-op is still 11.6 s with the session | the project's own work on every build: its "Update Localizations" script compiles a command-line tool from source into a temporary directory each time (8.6 s), four app extensions are validated (2.6 s) and re-copied (2.5 s). No build driver can skip a project's scripts. |
-| adding a public declaration | the declaration changes the package's interface, so every module that imports it recompiles: on Wikipedia 78 Swift compile tasks, ≈140 s of compiler time on 10 cores, partly serialized along the module chain — ≈45 s of wall time whatever drives it. Fewer architectures halve it; `xcfs check` avoids it until the full build is needed. |
-| xcfs (xcodebuild) slower than plain on that Wikipedia edit (≈52 s vs ≈46 s) | not caused by xcfs's process handling: the same `xcodebuild` command run by hand in the slot takes the same time, and the same edit built into the default DerivedData in the same slot takes 45 s. It follows the choice of a DerivedData location of its own; sharing Xcode's module, compilation and SDK stat caches (now the default) did not remove it in a fresh pool. Not explained yet; the session driver does not show it (44.9–47.9 s). Ice Cubes shows no such gap. |
+| fixed cost per build | `xcodebuild` spends ≈4 s before the first task on Wikipedia (package graph, target graph, build description); on Ice Cubes a no-op takes 5.9 s with `xcodebuild` and 0.9 s with the session. The session starts work at once (planning 0 s, first task at 0.14 s on Wikipedia). |
+| a project's own scripts | Wikipedia's "Update Localizations" phase compiles a command-line tool from source on every build (8.6 s) and rewrites localization files, so copies, validations and some compilation follow. With `"skipScripts": ["Update Localizations", "SwiftLint"]` (session driver; xcfs removes them from a copy of the PIF) on fresh checkouts, 3 repeats each: **no-op 12 → 1 s, a function body in the app target 19.3 → 8.4 s, in `WMFData` 14.1 → 4.0 s, a public declaration 46.5 → 34–37 s.** The project is not changed. |
+| a public declaration recompiles everything downstream | asked the Swift driver why (`-driver-show-incremental`): `WMFData.swiftmodule` carries no per-declaration fingerprints (8,638 "Fingerprint missing" remarks), so the driver cannot tell what changed and invalidates all 1,115 importing files. `-enable-incremental-imports`, merge-module mode (`-no-emit-module-separately`) and implicit modules did not add the fingerprints; `-enable-experimental-cross-module-incremental-build` no longer exists in this driver. Not a physical limit, but not reachable with build settings on Xcode 27.2 — the build system would have to emit that information. `xcfs check` sidesteps it until the next full build. |
+| build settings for agents | on fresh checkouts with `skipScripts`, adding implicit modules, no index store and no debug dylib saved ≈3 % (public declaration 35.7 → 34.5 s; other edits within 0.3 s). An earlier sweep on one reused checkout had suggested 12–25 %; that came from artifacts the previous variants left behind. No preset is shipped. |
+| sharing compilation results between slots | Xcode's compilation cache (`COMPILATION_CACHE_ENABLE_CACHING`), also with `SWIFT_/CLANG_ENABLE_PREFIX_MAPPING` and `SWIFT_/CLANG_ENABLE_PROJECT_PREFIX_MAPPING`: warming slots 2 and 3 of Ice Cubes took 62–63 s instead of 65 s. Cache keys still contain each slot's own output paths; cross-slot hits would need the build service changes the design notes list for the optional cache stage. |
+| xcfs (xcodebuild) slower than plain on Wikipedia's public declaration (≈52 s vs ≈46 s) | the same `xcodebuild` command run by hand in the slot takes the same time, and the same edit built into the default DerivedData in the same slot takes 45 s. It follows the choice of a DerivedData location of its own; sharing Xcode's module, compilation and SDK stat caches (now the default) did not remove it in a fresh pool. Not explained yet; the session driver does not show it. |
 | Telegram: one process left per slot after release | the slot's Bazel server, kept on purpose: the next lease's first build is 9 s instead of 20 s, at 1.5–3.4 GB of memory per idle slot until Bazel's 3-hour idle timeout (`"stopServerOnRelease": true` stops it on release). |
 | Telegram: 526 s for one public declaration | Bazel's Swift rules compile whole modules: a changed interface recompiles every dependent module completely. Outside xcfs's reach. |
+
+A bug found on the way: the build session reused a build description whenever the PIF was unchanged, so a change of
+build settings, configuration or destination was ignored until the project itself changed. Reuse is now keyed on the
+whole request; earlier benchmark runs were unaffected (each used fresh slots with fixed settings).
 
 ## Ice Cubes
 
@@ -241,11 +265,15 @@ by a test or by the sample end-to-end run:
 | Ice Cubes | `xcodebuild -list -json` output carries log lines with braces before the JSON | the first complete JSON object is found instead |
 | Ice Cubes | the session built one architecture where `xcodebuild` builds two for a generic destination, which made it look faster than it was | the session builds what `xcodebuild` builds; the sample run compares the two builds' slices |
 | Wikipedia | why builds take what they take was invisible | session results carry a timing breakdown (planning, task time by kind, slowest tasks) |
+| Wikipedia | a project script that runs on every build dominated every build an agent ran | `"skipScripts"`: the session driver leaves named script phases out of a copy of the PIF |
+| Wikipedia (settings sweep) | the session reused a build description across changed build settings | reuse is keyed on the whole request |
 | Ice Cubes, Wikipedia | each project needs a git-ignored configuration file in every checkout | no change: the existing `carry` key copies it from the source checkout |
 
 ## Reproduce
 
 ```
+# one agent's round of work: bench.py <profile> --source <clone> --phases round   (profiles *-round.json)
+# what build settings cost on one checkout: bench/knobs.py <profile> --source <clone> [--only knob,…]
 # an Xcode project, e.g. Ice Cubes (icecubes-arm64.json for one architecture)
 git clone --depth 1 https://github.com/Dimillian/IceCubesApp.git && cd IceCubesApp && git checkout 98098b9
 cp IceCubesApp.xcconfig.template IceCubesApp.xcconfig    # and empty DEVELOPMENT_TEAM for a simulator build

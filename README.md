@@ -160,7 +160,10 @@ container); `target` (default: from the scheme); `configurations` (name → `con
 `testDestination`, `buildSettings`); `default`; `warm` (configurations a slot keeps built; default the first);
 `simulator` (base device name or UDID; default the newest iPhone); `buildSettings`; `packagesDir`
 (`-clonedSourcePackagesDirPath`, relative); `xcodebuildArgs`; `reexportWhenChanged` (extra files that change the
-PIF); `driver` (`xcodebuild`, `session`, `auto`); `pinDerivedData`.
+PIF); `driver` (`xcodebuild`, `session`, `auto`); `pinDerivedData`; `sharedXcodeCaches` (default true: builds use the
+module, compilation and SDK stat caches Xcode shares between projects); `skipScripts` (session driver only: names of
+the project's script phases an agent's builds leave out — a linter, a localization sync; xcfs removes them from a copy
+of the project description, the project itself is untouched).
 
 Bazel toolchain keys: `build`, `test`, `run`, `warm` (shell commands run in the checkout; `--config` appends
 arguments), `env`, `outputUserRoot`, `stopServerOnRelease`. The adapter owns each checkout's Bazel output base — kept
@@ -313,11 +316,11 @@ simulator.
 first build, disk, resident memory, an edit loop, and what removal leaves behind. A profile (`bench/profiles/`) says
 how the project is set up, built and edited; the harness knows no project.
 
-Measured on three public apps with three parallel checkouts each: an agent waited 75–92 s for a plain worktree of an
-Xcode app (Ice Cubes, Wikipedia iOS) and 2–16 s for an xcfs slot; the build session took a no-op from 5.9 to 0.9 s on
-Ice Cubes, and `xcfs check` confirmed an edit compiles in 1.2–3.6 s where a build took 15–50 s; removing plain
-worktrees left 1.5–4 GB of DerivedData each, retiring the pool left nothing. Builds that recompile many modules take
-the same time on every side, and on a Bazel app (Telegram-iOS) incremental builds are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
+Measured on three public apps. One agent's round of work (a checkout, a build, five edits each checked, a final build,
+cleanup) took 142.7 s with a plain worktree and 37.4 s with xcfs on Ice Cubes, and 254.4 s vs 92.9 s on Wikipedia iOS
+(with `skipScripts` leaving out the project's localization sync); plain worktrees left 1.5–2.8 GB behind each, xcfs
+nothing. An agent waited 75–92 s for a plain worktree of these apps and 2–16 s for a slot. Builds that recompile many
+modules take the same time on every side, and on a Bazel app (Telegram-iOS) incremental builds are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
 
 ## Design
 
