@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR] [--phases plain,xcfs]
+"""bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR] [--phases plain,xcfs,round,round-xcfs]
            [--xcfs PATH] [--reuse-from RESULTS.json]   (sides not in --phases are taken from that earlier run)
 
 Compare N parallel checkouts made the plain way (git worktree + the project's own setup and build) with the same N
@@ -495,6 +495,9 @@ def report():
               "warmed beforehand, first build, the same edits each verified by `xcfs check`, one final build, release."
               % len(round_edits()), "", "| side | total | steps | left behind |", "|---|---|---|---|"]
         for side, r in RESULTS["round"].items():
+            if "failed" in r:
+                L.append("| %s | failed | %s | |" % (side, r["failed"][:200]))
+                continue
             L.append("| %s | **%.1f s** | %s | %s |" % (side, r["total_seconds"], ", ".join(
                 "%s %.1f s" % (n, t) for n, t in r["steps"]), gb(r["left_kb"])))
         L.append("")
@@ -557,10 +560,15 @@ def main():
         for name, overrides in VARIANTS.items():
             if "xcfs" in PHASES or "xcfs:" + name in PHASES:
                 run_xcfs(name, overrides)
-        if "round" in PHASES:
-            run_round_plain()
+        if "round" in PHASES or "round-xcfs" in PHASES:
+            if "round" in PHASES:
+                run_round_plain()
             for name, overrides in VARIANTS.items():
-                run_round_xcfs(name, overrides)
+                try:
+                    run_round_xcfs(name, overrides)
+                except SystemExit as e:   # a failed variant is a result too; the others still run
+                    RESULTS["round"]["xcfs (%s)" % name] = {"failed": str(e)}
+                    say("round[xcfs %s]: FAILED: %s" % (name, e))
     finally:
         base = os.path.join(WORK, "results-%s-%s" % (re.sub(r"\W+", "-", PROFILE["name"]).lower(), STAMP))
         data = json.dumps(RESULTS, indent=1)

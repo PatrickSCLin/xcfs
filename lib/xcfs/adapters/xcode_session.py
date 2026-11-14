@@ -44,6 +44,26 @@ def socket_path(ctx):
     return os.path.join(d, short_hash(ctx.build_dir, 16) + ".sock")
 
 
+def check_id():
+    """Identifies the code the regression check exercises: a record made by another version of it is not trusted."""
+    import pkgutil
+    data = b"".join(pkgutil.get_data(__package__, f) or b"" for f in ("xcode_session.py", "xcode.py"))
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+def regression_current(rec):
+    """A recorded check still applies: made by this code, and if it failed, less than a day ago."""
+    if not rec or rec.get("check") != check_id():
+        return False
+    if rec.get("ok"):
+        return True
+    try:
+        made = time.mktime(time.strptime(rec.get("at", ""), "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
+    except ValueError:
+        return False
+    return time.time() - made < 24 * 3600
+
+
 def regression_file():
     from ..state import state_dir
     return os.path.join(state_dir(), "session-regression.json")
@@ -58,8 +78,9 @@ def choose_driver(adapter, ctx):
         warn("no swbuild in this Xcode: building with xcodebuild")
         return "xcodebuild"
     rec = (read_json(regression_file(), {}) or {}).get(adapter.version())
-    if rec is None:
-        say("  first session build on %s: running the session regression check once" % adapter.version())
+    if not regression_current(rec):
+        say("  %s session build on %s: running the session regression check once"
+            % ("first" if rec is None else "an updated xcfs or a failed check: another", adapter.version()))
         rec = regression(adapter)
     if rec and rec.get("ok"):
         return "session"
@@ -803,6 +824,7 @@ def regression(adapter):
         except Exception:
             pass
         shutil.rmtree(base, ignore_errors=True)
+    rec["check"] = check_id()
     data = read_json(regression_file(), {}) or {}
     data[adapter.version()] = rec
     write_json(regression_file(), data)
@@ -818,9 +840,10 @@ def doctor(adapter, root, entry, run_check=False):
     rec = (read_json(regression_file(), {}) or {}).get(adapter.version())
     if run_check or os.environ.get("XCFS_SESSION_CHECK"):
         rec = regression(adapter)
-    if rec is None:
-        checks.append({"ok": True, "message": "session regression check not run on %s (run `xcfs doctor "
-                                              "--session-check`)" % adapter.version()})
+    if not regression_current(rec):
+        checks.append({"ok": True, "message": "session regression check %s on %s (the next build runs it, or "
+                                              "`xcfs doctor --session-check`)" % (
+            "not run" if rec is None else "out of date", adapter.version())})
     else:
         steps = ", ".join("%s %.1fs" % (s["step"], s["seconds"]) for s in rec.get("steps", []))
         checks.append({"ok": rec["ok"], "message": "session regression check on %s: %s%s" % (

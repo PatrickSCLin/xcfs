@@ -1045,6 +1045,20 @@ def t49_compile_tasks_count_with_either_swift_driver():
         assert not is_compile_rule(r), r
 
 
+@test
+def t50_session_check_is_redone_for_new_code_or_after_a_failure():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode_session import regression_current, check_id
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    old = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 2 * 86400))
+    assert not regression_current(None)
+    assert regression_current({"ok": True, "at": old, "check": check_id()}), "a passed check stays valid"
+    assert not regression_current({"ok": True, "at": now, "check": "older-code"}), "another xcfs: check again"
+    assert not regression_current({"ok": True, "at": now}), "a record from before checks were identified"
+    assert regression_current({"ok": False, "at": now, "check": check_id()}), "a fresh failure is trusted"
+    assert not regression_current({"ok": False, "at": old, "check": check_id()}), "a failure is retried after a day"
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))
