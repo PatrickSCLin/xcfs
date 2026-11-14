@@ -110,11 +110,18 @@ def pif_key(adapter, ctx, scheme):
     root = ctx.toolchain_root
     h = hashlib.sha256()
     h.update(("%s\n%s\n%s\n" % (adapter.version(), scheme, json.dumps(adapter.container_args(ctx)[0]))).encode())
+    # Build settings files that git ignores (a carried local xcconfig, CocoaPods' generated ones) count too: the build
+    # service reads them when it plans, and a reused build description would keep their old values. Listed while the
+    # other listing runs.
+    lister = subprocess.Popen(["git", "-C", root, "ls-files", "-oi", "--exclude-standard", "-z", "--", "*.xcconfig"],
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     files = run("git", "-C", root, "ls-files", "-co", "--exclude-standard", "-z", check=False).stdout.split("\0")
+    ignored = lister.communicate()[0].split("\0")
     files = sorted(f for f in files if f)
     h.update("\0".join(files).encode())
     extra = set(ctx.entry.get("reexportWhenChanged", []))
-    keyed = [os.path.join(root, f) for f in files if KEY_FILES.search(f) or f in extra] + walk_files(root)
+    keyed = [os.path.join(root, f) for f in files if KEY_FILES.search(f) or f in extra] + walk_files(root) + \
+        [os.path.join(root, f) for f in ignored if f]
     for f in sorted(set(keyed)):
         try:
             with open(f, "rb") as fh:

@@ -1150,6 +1150,38 @@ def t54_driver_selftest_edits_are_consistent():
     assert len(st.EDITS) >= 12, "the self-test covers at least the cases listed in its docstring"
 
 
+@test
+def t55_ignored_xcconfig_changes_reexport_the_pif():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode_session import pif_key
+    r = SB + "/pifkey"
+    os.makedirs(r + "/App")
+    sh("git", "init", "-q", r)
+    open(r + "/.gitignore", "w").write("Local.xcconfig\nPods/\n")
+    open(r + "/App/A.swift", "w").write("let a = 1\n")
+    open(r + "/Local.xcconfig", "w").write("OTHER_SWIFT_FLAGS = $(inherited)\n")
+    os.makedirs(r + "/Pods/Target Support Files/Pods-App")
+    pods = r + "/Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"
+    open(pods, "w").write("OTHER_LDFLAGS = -ObjC\n")
+
+    class Adapter:
+        def version(self): return "Xcode test"
+        def container_args(self, ctx): return (["-project", "App.xcodeproj"], None)
+
+    class Ctx:
+        toolchain_root, entry = r, {}
+    key = lambda: pif_key(Adapter(), Ctx(), "App")
+    k0 = key()
+    assert key() == k0, "the key is stable"
+    open(r + "/App/A.swift", "w").write("let a = 2\n")
+    assert key() == k0, "a source edit does not re-export the PIF"
+    open(r + "/Local.xcconfig", "w").write("OTHER_SWIFT_FLAGS = $(inherited) -DLOCAL\n")
+    k1 = key()
+    assert k1 != k0, "a git-ignored xcconfig is read by the build service when it plans: its change must count"
+    open(pods, "w").write("OTHER_LDFLAGS = -ObjC -lz\n")
+    assert key() != k1, "so must a change to a generated (ignored) CocoaPods xcconfig"
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))
