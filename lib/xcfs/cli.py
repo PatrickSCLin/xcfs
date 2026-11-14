@@ -28,6 +28,11 @@ Building (in a worktree, a slot, or any checkout; output never inside the source
   xcfs test [path] [--config NAME] [--only TARGET/CLASS[/METHOD]]...
   xcfs run [path] [--config NAME]                               build, install on the checkout's simulator, launch
 
+Agent tools
+  xcfs hook worktree-create | worktree-remove                    for a tool's worktree hooks (Claude Code's
+                                                                WorktreeCreate/WorktreeRemove): JSON on stdin; create
+                                                                prints the path of a built slot or a new worktree
+
 Maintenance
   xcfs gc [--apply] [--foreign] [--stale-days N]                reclaim what xcfs owns; --foreign also looks at caches
                                                                 it did not create (a toolchain's global caches)
@@ -49,7 +54,7 @@ Exit codes: 0 ok · 1 error · 2 usage · 3 config not trusted · 4 not one APFS
 """
 import json, os, sys
 
-from . import VERSION, builds, config, maint, pool, state, worktree
+from . import VERSION, builds, config, hooks, maint, pool, state, worktree
 from .util import Fail, OUT, USAGE, phys, say
 
 
@@ -197,7 +202,7 @@ def cmd_pool(a):
 
 COMMANDS = {"new": worktree.cmd_new, "rm": worktree.cmd_rm, "reap": worktree.cmd_reap, "adopt": worktree.cmd_adopt,
             "ls": worktree.cmd_ls, "gc": maint.cmd_gc, "doctor": maint.cmd_doctor, "init": maint.cmd_init,
-            "trust": maint.cmd_trust, "build": cmd_build, "check": cmd_check, "test": cmd_test, "run": cmd_run,
+            "trust": maint.cmd_trust, "hook": hooks.cmd_hook, "build": cmd_build, "check": cmd_check, "test": cmd_test, "run": cmd_run,
             "checkout": cmd_checkout, "release": cmd_release, "pool": cmd_pool}
 
 

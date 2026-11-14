@@ -1237,6 +1237,38 @@ def t56_driver_release_tags_are_pinned_to_their_commits():
     assert 5 in sd.FAILURES
 
 
+@test
+def t57_agent_tool_worktree_hooks():
+    E = toy_env(); repo = toy_repo("r57", slots=1)
+
+    def hook(sub, data, env=E):
+        r = subprocess.run([PY, XCFS, "hook", sub], input=json.dumps(data), capture_output=True, text=True, env=env)
+        return r.returncode, r.stdout, r.stderr
+    # no pool warmed: a new worktree on worktree-<name>, handed to the session; stdout is the path alone
+    code, out, err = hook("worktree-create", {"name": "feat-a", "cwd": repo + "/deps", "session_id": "S57"})
+    path = out.strip()
+    assert code == 0 and out.count("\n") == 1 and os.path.isdir(path), (code, out, err)
+    assert reg()[path]["branch"] == "worktree-feat-a" and reg()[path].get("session") == "S57", reg().get(path)
+    # unsaved work: removal refuses, the tool keeps the worktree
+    open(path + "/toy.txt", "a").write("wip\n")
+    code, out, err = hook("worktree-remove", {"worktree_path": path})
+    assert code != 0 and os.path.isdir(path) and out == "", (code, out, err)
+    sh("git", "-C", path, "checkout", "--", ".")
+    code, out, err = hook("worktree-remove", {"worktree_path": path})
+    assert code == 0 and not os.path.exists(path) and "worktree-feat-a" not in branches(repo), (code, err)
+    # a warm slot at the baseline is leased instead, and returned on removal
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0
+    code, out, err = hook("worktree-create", {"name": "feat-b", "cwd": repo, "session_id": "S57"})
+    path = out.strip()
+    assert code == 0 and any(r["src"] == path for r in slot_rows(repo).values()), (code, out, err, slot_rows(repo))
+    code, out, err = hook("worktree-remove", {"worktree_path": path})
+    assert code == 0 and [r["state"] for r in slot_rows(repo).values()] != ["leased"], (code, err, slot_rows(repo))
+    assert "worktree-feat-b" not in branches(repo)
+    # outside a repository: a clear failure, nothing on stdout
+    code, out, err = hook("worktree-create", {"name": "x", "cwd": SB})
+    assert code != 0 and out == "" and "not in a git repository" in err, (code, out, err)
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

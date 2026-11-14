@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "WorktreeCreate": [
+      { "hooks": [ { "type": "command", "command": "xcfs hook worktree-create" } ] }
+    ],
+    "WorktreeRemove": [
+      { "hooks": [ { "type": "command", "command": "xcfs hook worktree-remove" } ] }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.session_id // empty' | { read -r sid; [ -n \"$sid\" ] && command -v xcfs >/dev/null && mkdir -p \"$HOME/.local/state/xcfs\" && xcfs reap --session \"$sid\" --apply --prune-branch --json > \"$HOME/.local/state/xcfs/last-reap.json\" 2>&1; true; }"
+          }
+        ]
+      }
+    ]
+  }
+}
