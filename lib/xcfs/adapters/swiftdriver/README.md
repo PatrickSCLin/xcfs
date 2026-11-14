@@ -42,8 +42,11 @@ type; a function whose return type changes inside the same module.
 Measured on Wikipedia iOS (fresh checkouts, three runs each, see `docs/benchmark.md`): adding a public function to a
 package that ~300 app files import took 33–36 s with the stock driver and 15 s with this one; edits that do not
 change an interface cost the same, and so does the first build of a checkout. On Ice Cubes the same edit took
-25.3–25.6 s and 6.0–6.2 s. A whole agent round (checkout, build, five edits each checked, final build) went from
-38.0 to 16.4 s on Ice Cubes and from 90.4 to 42.4 s on Wikipedia.
+25.3–25.6 s and 6.0–6.2 s. A whole agent round (checkout, build, five edits each checked, final build) with xcfs's
+defaults, with and without this driver: 39.1 → 17.1 s on Ice Cubes, 132.3 → 82.0 s on Wikipedia, and on four apps
+xcfs was not developed on 73.9 → 33.2 s, 93.5 → 57.4 s, 109.6 → 101.2 s and 159.9 → 98.9 s (`docs/benchmark.md`,
+zero-configuration table). Whether it should move upstream, and how it compares with Xcode's compilation cache:
+`docs/incremental-swift.md`.
 
 ## Use
 
@@ -60,8 +63,8 @@ ones undone afterwards. After every step the oracle builds both modules from not
 file must be byte-for-byte what the incremental build left, and each module must build or fail the same way (Swift's
 output is reproducible, so any difference is a missed recompile; injecting one — a stale object — is caught). One
 more check makes sure the driver narrows rebuilds at all: a new function nobody uses recompiles no file of B. The
-stock driver passes the oracle but fails that check. About 30 seconds. Only a driver that passed is used. About 1.5 minutes; builds use
-Xcode's own driver meanwhile.
+stock driver passes the oracle but fails that check. The self-test takes about 30 seconds, the whole build about 1.5
+minutes; builds use Xcode's own driver meanwhile, and only a driver that passed is used.
 
 Each Xcode gets its own install, `~/Library/Caches/xcfs/swift-driver/<swift>-<swift build>-<hash of the Xcode's
 path>/` (or under `$XCFS_CACHE`), because the driver uses that Xcode's frontend and links its `lib/` and `share/`.
@@ -71,10 +74,12 @@ own), and `xcfs doctor` reports the state.
 
 Overrides, in the toolchain entry of the config: `"swiftDriver": "native"` never uses it; `"api-digests"` warns on
 every build that cannot use it. `XCFS_SWIFT_DRIVER=native|auto|api-digests` overrides the config. To build by hand:
-`build.sh <install dir> <tag> <patch> <Package.resolved> <driver version>` (see its header).
+`build.sh <install dir> <tag> <patch> <Package.resolved> <driver version> [<commit>]` (see its header).
 
 Patches by release line (`KITS` in `../swift_driver.py`): 6.4 — `api-digests-swift-6.4.2.patch` with
-`Package-swift-6.4.resolved`. The `swift-6.4.0`, `6.4.1` and `6.4.2-RELEASE` tags are the same swift-driver commit.
+`Package-swift-6.4.resolved`. The `swift-6.4.0`, `6.4.1` and `6.4.2-RELEASE` tags are the same swift-driver commit,
+and they are pinned to it: a tag that points elsewhere is not built. Another release of the line is built from its
+tag and self-tested; the commit built is recorded in `toolchain.json`.
 
 ## Costs and limits
 

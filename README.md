@@ -343,6 +343,8 @@ still take the compiler's time, and on a Bazel app (Telegram-iOS) incremental bu
 slot lifecycle, the edge cases and how each is handled, and what is not verified.
 [docs/build-systems.md](docs/build-systems.md): what Bazel, Buck2, Gradle, Tuist, Nx and compiler caches do, which of
 those problems the measured apps have, what each is worth in seconds, and why xcfs is not rewritten in a faster language.
+[docs/incremental-swift.md](docs/incremental-swift.md): the experimental Swift driver's patch — what upstream would need
+(a filter hook in the driver, or finer fingerprints in the frontend) — and how it compares with Xcode's compilation cache.
 
 ## License
 
