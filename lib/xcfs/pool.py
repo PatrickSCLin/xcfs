@@ -222,11 +222,11 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
             results.append({"slot": slot, "index": row["index"], "ok": True, "seconds": 0, "already_warm": True})
             say("  slot %d is already warm at its baseline" % row["index"])
         todo = [(p, s) for p, s in todo if (p, s) not in current]
-        for slot, _ in todo:
+        def warm_one(slot):
             with state.registry() as reg:
                 row = reg["slots"].get(slot)
                 if not row or row["state"] not in ("idle", "cold"):
-                    continue  # leased or retired meanwhile
+                    return  # leased or retired meanwhile
                 prev = row["state"]
                 row.update(state="warming", pid=os.getpid())
                 row = dict(row)
@@ -274,9 +274,29 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
                 if isinstance(e, Fail):
                     results.append({"slot": slot, "index": row["index"], "ok": False, "error": str(e)})
                     say("  slot %d: %s" % (row["index"], e))
-                    continue
+                    return
                 raise
+
+        # Several slots at a time when memory allows: a fresh pool is ready in about the time one cold build takes
+        # when they run side by side, instead of one cold build per slot in turn.
+        jobs = int(settings.get("warmJobs") or 0) or max(1, memory_gb() // 16)
+        jobs = max(1, min(jobs, len(todo)))
+        if jobs == 1:
+            for slot, _ in todo:
+                warm_one(slot)
+        else:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
+                for f in [ex.submit(warm_one, slot) for slot, _ in todo]:
+                    f.result()
     return results
+
+
+def memory_gb():
+    try:
+        return int(run("sysctl", "-n", "hw.memsize", check=False).stdout.strip() or 0) // 2 ** 30
+    except (OSError, ValueError):
+        return 0
 
 
 def warm_in_background(repo, slot=None):

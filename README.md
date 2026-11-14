@@ -201,6 +201,7 @@ state, from one lease to the next; returning a slot keeps its server (and the an
 | `leaseHours` | 24 | a leased slot idle this long is flagged; `gc --apply` returns it if clean |
 | `warmOnRelease` | true | rebuild a returned slot at the baseline in the background |
 | `buildTimeout` | 3600 | seconds before a build is killed (exit 9) |
+| `warmJobs` | 0 | slots one warm-up builds side by side; 0 means one per 16 GB of memory (a 64 GB machine warms 3 at a time) |
 
 | variable | |
 |---|---|
@@ -314,7 +315,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 60 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 63 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

@@ -468,6 +468,10 @@ if op == "detect":
 if op == "version":
     out(version=os.environ.get("TOY_VERSION", "1"))
 if op in ("build", "warm"):
+    if os.environ.get("TOY_SLEEP"):   # a build that takes a while, with its start and end in TOY_LOG
+        import time
+        t0 = time.time(); time.sleep(float(os.environ["TOY_SLEEP"]))
+        open(os.environ["TOY_LOG"], "a").write("%f %f\n" % (t0, time.time()))
     src = open(os.path.join(ctx["toolchainRoot"], "toy.txt")).read()
     os.makedirs(ctx["buildDir"], exist_ok=True)
     marker = os.path.join(ctx["buildDir"], "out.txt"); had = os.path.exists(marker)
@@ -1458,6 +1462,32 @@ def t62_gc_reclaims_only_simulators_xcfs_made():
         reg = json.load(open(reg_path))
         reg["builds"].pop(SB, None); reg["builds"].pop(SB + "/gone", None)
         json.dump(reg, open(reg_path, "w"))
+
+
+@test
+def t63_a_fresh_pool_warms_its_slots_side_by_side():
+    E = toy_env(); repo = toy_repo("r63", slots=3)
+    cfgdir = os.path.join(E.get("XDG_CONFIG_HOME", ENV.get("XDG_CONFIG_HOME", SB + "/config")), "xcfs")
+    os.makedirs(cfgdir, exist_ok=True)
+    settings = os.path.join(cfgdir, "settings.json")
+    saved = open(settings).read() if os.path.exists(settings) else None
+    try:
+        for jobs, log in ((3, SB + "/t63-par.log"), (1, SB + "/t63-seq.log")):
+            json.dump(dict(json.loads(saved) if saved else {}, warmJobs=jobs), open(settings, "w"))
+            if jobs == 1:
+                assert xcfs("pool", "resize", repo, "0", env=E)["_code"] == 0
+                for p in list(slot_rows(repo)):
+                    wait_gone(p)
+            r = xcfs("pool", "warm", repo, "--slots", "3", env=dict(E, TOY_SLEEP="1.5", TOY_LOG=log))
+            assert r["_code"] == 0 and len(r["slots"]) == 3 and all(x["ok"] for x in r["slots"]), r
+            spans = sorted(tuple(map(float, l.split())) for l in open(log))
+            overlap = any(spans[i + 1][0] < spans[i][1] for i in range(len(spans) - 1))
+            assert len(spans) == 3 and overlap == (jobs > 1), "warmJobs=%d: builds %s" % (jobs, spans)
+    finally:
+        if saved is None:
+            os.remove(settings)
+        else:
+            open(settings, "w").write(saved)
 
 
 def main():

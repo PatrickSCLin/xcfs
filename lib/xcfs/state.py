@@ -25,6 +25,7 @@ DEFAULT_SETTINGS = {
     "leaseHours": 24,         # a leased slot idle this long is listed as stale; `gc --apply` returns it if clean
     "warmOnRelease": True,    # a released slot is brought back to its baseline and rebuilt in the background
     "buildTimeout": 3600,     # seconds; a build that runs longer is killed (exit 9)
+    "warmJobs": 0,            # slots one warm-up builds at the same time; 0: one per 16 GB of memory
 }
 
 
