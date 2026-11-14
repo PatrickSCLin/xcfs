@@ -87,7 +87,7 @@ in a configuration (or `XCFS_SWIFT_DRIVER=native`) turns it off; `xcfs doctor` s
 | **building** (in a worktree, a slot, or any checkout) | |
 | `xcfs build [path] [--config NAME] [--toolchain NAME] [--timeout S]` | Incremental build. |
 | `xcfs check <file>... [--config NAME]` | Compile-check these files (see [Build session](#build-session) for what a pass means). |
-| `xcfs test [path] [--config NAME] [--only TARGET/CLASS[/METHOD]]...` | Run tests on the checkout's own simulator. |
+| `xcfs test [path] [--config NAME] [--scheme NAME] [--only TARGET/CLASS[/METHOD]]...` | Run tests on the checkout's own simulator; `--scheme` names another scheme (a package's tests), built into the same DerivedData. |
 | `xcfs run [path] [--config NAME]` | Build, install on the checkout's simulator, launch. |
 | **agent tools** | |
 | `xcfs hook worktree-create \| worktree-remove` | For a tool's own worktree hooks (Claude Code's `WorktreeCreate`/`WorktreeRemove`): JSON on stdin; create prints the path of a built slot or a new xcfs worktree. See [docs/agents.md](docs/agents.md#worktrees-an-agent-tool-creates-by-itself). |
@@ -314,7 +314,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 57 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 58 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

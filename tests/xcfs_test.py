@@ -1269,6 +1269,26 @@ def t57_agent_tool_worktree_hooks():
     assert code != 0 and out == "" and "not in a git repository" in err, (code, out, err)
 
 
+@test
+def t58_test_takes_a_scheme_of_its_own():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapter import Context
+    from xcfs.adapters.xcode import XcodeAdapter
+    seen = []
+
+    class Recording(XcodeAdapter):
+        def xcodebuild(self, ctx, action, conf_name, conf, extra=(), destination=None, log_name=None, timeout=None):
+            seen.append((action, self.scheme(ctx), self.derived_data(ctx, conf_name), destination))
+            return {"ok": True, "_lines": ["Executed 3 tests, with 0 failures (0 unexpected)"]}
+    entry = {"adapter": "xcode", "project": "App.xcodeproj", "scheme": "App",
+             "configurations": {"sim": {"configuration": "Debug", "testDestination": "platform=iOS Simulator,name=X"}}}
+    ctx = Context("worktree", SB, SB, {}, entry, SB + "/b58")
+    r = Recording().test(ctx, {"scheme": "ModelsTests"})
+    assert r["tests"] == 3 and seen[0][:2] == ("test", "ModelsTests"), (r, seen)
+    Recording().test(Context("worktree", SB, SB, {}, entry, SB + "/b58"), {})
+    assert seen[1][1] == "App" and seen[0][2] == seen[1][2], "another scheme must build into the same DerivedData: %s" % seen
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

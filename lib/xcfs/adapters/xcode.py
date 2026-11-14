@@ -317,6 +317,8 @@ class XcodeAdapter(Adapter):
 
     def test(self, ctx, args):
         name, conf = self.conf(ctx.entry, args.get("config"))
+        if args.get("scheme"):   # a test scheme of its own (a package's tests, say), built into the same DerivedData
+            ctx.entry = dict(ctx.entry, scheme=args["scheme"])
         dest = conf.get("testDestination") or "id=" + self.simulator(ctx)
         bundle = os.path.join(ctx.build_dir, "results", "%s-%s.xcresult" % (time.strftime("%Y%m%d-%H%M%S"), name))
         extra = ["-resultBundlePath", bundle]

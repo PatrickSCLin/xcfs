@@ -25,7 +25,7 @@ Pool (slots at fixed paths, kept built at their baseline)
 Building (in a worktree, a slot, or any checkout; output never inside the source tree)
   xcfs build [path] [--config NAME] [--toolchain NAME] [--timeout SECONDS]
   xcfs check <file>... [--config NAME]                          compile-check these files
-  xcfs test [path] [--config NAME] [--only TARGET/CLASS[/METHOD]]...
+  xcfs test [path] [--config NAME] [--scheme NAME] [--only TARGET/CLASS[/METHOD]]...
   xcfs run [path] [--config NAME]                               build, install on the checkout's simulator, launch
 
 Agent tools
@@ -59,7 +59,7 @@ from .util import Fail, OUT, USAGE, phys, say
 
 
 class Args:
-    VALUE = {"session", "from", "stale-days", "older-than", "config", "toolchain", "timeout", "only", "slot", "slots",
+    VALUE = {"session", "scheme", "from", "stale-days", "older-than", "config", "toolchain", "timeout", "only", "slot", "slots",
              "wait"}
     MULTI = {"only"}
     FLAGS = {"apply", "dry-run", "json", "discard-ignored", "foreign", "sizes", "status", "all", "prune-branch",
@@ -133,7 +133,8 @@ def cmd_check(a):
 
 
 def cmd_test(a):
-    return build_like("test", a, a.pos[0] if a.pos else ".", {"only": a.opt.get("only", [])})
+    return build_like("test", a, a.pos[0] if a.pos else ".", {"only": a.opt.get("only", []),
+                                                              "scheme": a.opt.get("scheme")})
 
 
 def cmd_run(a):
