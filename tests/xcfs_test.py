@@ -1370,6 +1370,36 @@ def t60_session_builds_the_tests_it_runs():
         xs.build_tests = saved
 
 
+@test
+def t61_a_slot_warm_up_boots_its_simulator_once():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapter import Context
+    from xcfs.adapters import xcode as xa
+    booted = []
+
+    class Fake(xa.XcodeAdapter):
+        def build(self, ctx, args): return {"ok": True, "seconds": 1.0, "diagnostics": []}
+        def simulator(self, ctx):
+            ctx.resources["simulator"] = "U1"
+            return "U1"
+        def boot(self, udid): booted.append(udid)
+    saved = xa.run
+    xa.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, "", "")   # the shutdown
+    try:
+        entry = {"adapter": "xcode", "configurations": {"sim": {"destination": "generic/platform=iOS Simulator"}}}
+        slot = Context("slot", SB, SB, {}, entry, SB + "/b61")
+        r = Fake().warm(slot, {})
+        assert r["ok"] and booted == ["U1"] and r["simulator_first_boot"] is not None, (r, booted)
+        assert Fake().warm(slot, {})["simulator_first_boot"] is None and booted == ["U1"], "booted a second time"
+        wt = Context("worktree", SB, SB, {}, entry, SB + "/b61w")
+        assert Fake().warm(wt, {})["simulator_first_boot"] is None, "only a slot's warm-up prepares a simulator"
+        mac = Context("slot", SB, SB, {}, {"adapter": "xcode", "configurations": {"m": {"destination": "platform=macOS"}}},
+                      SB + "/b61m")
+        assert Fake().warm(mac, {})["simulator_first_boot"] is None and booted == ["U1"]
+    finally:
+        xa.run = saved
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

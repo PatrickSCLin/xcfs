@@ -256,7 +256,7 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
                 if not r.get("ok"):
                     w["error"] = "; ".join(d.get("message", "") for d in r.get("diagnostics", [])[:3]) or "build failed"
                 results.append({"slot": slot, "index": row["index"], "ok": w["ok"], "seconds": w["seconds"],
-                                "error": w.get("error")})
+                                "error": w.get("error"), "simulator_first_boot": r.get("simulator_first_boot")})
                 say("  slot %d %s in %.1fs" % (row["index"], "warm" if w["ok"] else "FAILED: " + w.get("error", ""),
                                               w["seconds"]))
                 with state.registry() as reg:

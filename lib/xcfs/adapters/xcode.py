@@ -401,9 +401,32 @@ class XcodeAdapter(Adapter):
             results.append(r)
             if not r["ok"]:
                 break
+        sim = None
+        if all(r["ok"] for r in results) and ctx.kind == "slot":
+            sim = self.first_boot(ctx, names)
         return {"ok": all(r["ok"] for r in results), "seconds": round(total, 2),
                 "diagnostics": [d for r in results for d in r["diagnostics"] if d["severity"] == "error"][:50],
-                "timeout": any(r.get("timeout") for r in results), "configurations": names}
+                "timeout": any(r.get("timeout") for r in results), "configurations": names, "simulator_first_boot": sim}
+
+    def first_boot(self, ctx, names):
+        """A new simulator's first boot takes ~30 s (much more while other builds run); later boots take ~4 s. A slot's
+        own simulator is created and booted once during its warm-up, then shut down, so an agent's first test or run
+        in the slot does not pay for it. Returns the seconds it took, or None when there was nothing to do."""
+        dests = [self.conf(ctx.entry, n)[1].get("destination", "generic/platform=iOS Simulator") for n in names]
+        if not any("Simulator" in d for d in dests) or ctx.resources.get("simulator_booted") == ctx.resources.get(
+                "simulator", "-"):
+            return None
+        t0 = time.time()
+        try:
+            udid = self.simulator(ctx)
+            self.boot(udid)
+            run("xcrun", "simctl", "shutdown", udid, check=False, timeout=120)
+        except (Fail, OSError, subprocess.SubprocessError) as e:
+            warn("could not prepare the slot's simulator: %s" % str(e)[:200])
+            return None
+        ctx.resources["simulator_booted"] = udid
+        say("  booted the slot's simulator once in %.1fs" % (time.time() - t0))
+        return round(time.time() - t0, 1)
 
     # ---------------------------------------------------------------- switching
     def after_seed(self, ctx):

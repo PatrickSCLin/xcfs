@@ -122,7 +122,8 @@ python3 - "${out}" <<'EOF2'
 import json, sys
 s = json.loads(sys.argv[1])["slots"]
 assert len(s) == 1 and s[0]["ok"], s
-print("slot warmed in %.1fs" % s[0]["seconds"])
+assert s[0].get("simulator_first_boot") is not None, "the slot's simulator was not prepared: %s" % s
+print("slot warmed in %.1fs; its simulator created and booted once in %.1fs" % (s[0]["seconds"], s[0]["simulator_first_boot"]))
 EOF2
 
 step "pool: check out a branch, build it (the slot is already built at the baseline)"
