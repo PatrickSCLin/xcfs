@@ -1289,6 +1289,23 @@ def t58_test_takes_a_scheme_of_its_own():
     assert seen[1][1] == "App" and seen[0][2] == seen[1][2], "another scheme must build into the same DerivedData: %s" % seen
 
 
+@test
+def t59_warm_leaves_a_current_slot_alone():
+    E = toy_env(); repo = toy_repo("r59", slots=1)
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0
+    r = xcfs("pool", "warm", repo, env=E)
+    assert r["_code"] == 0 and r["slots"][0].get("already_warm"), "a slot warm at its baseline was warmed again: %s" % r
+    c = xcfs("checkout", repo, "w59", env=E)
+    assert c["_code"] == 0 and c["warm_at_baseline"], c
+    assert xcfs("release", c["worktree"], "--no-warm", "--prune-branch", env=E)["_code"] == 0
+    r = xcfs("pool", "warm", repo, env=E)
+    assert r["_code"] == 0 and not r["slots"][0].get("already_warm"), "a slot used since its warm-up must be warmed: %s" % r
+    r = xcfs("pool", "warm", repo, env=E)
+    assert r["slots"][0].get("already_warm"), r
+    r = xcfs("pool", "warm", repo, "--slot", slot_rows(repo) and list(slot_rows(repo))[0], env=E)
+    assert r["_code"] == 0 and not r["slots"][0].get("already_warm"), "asked for one slot, it is warmed: %s" % r
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

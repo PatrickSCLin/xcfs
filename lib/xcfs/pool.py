@@ -208,9 +208,20 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
             with state.registry() as reg:
                 slot = reserve(reg, repo, free_index(reg, repo))
             create_slot(repo, cfg, reg["slots"][slot]["index"], settings)
+        # A slot built at the current baselines and toolchains, not used since, is left as it is: warming it again
+        # would only take it away from an agent asking for one meanwhile (asked for one slot, it is warmed anyway).
+        fresh = {}
+        if slot_filter is None and not clean and not fetch:
+            fresh = {"revs": current_baselines(repo, cfg), "versions": current_versions(repo, cfg)}
         with state.registry(write=False) as reg:
             todo = [(p, s) for p, s in slots_of(reg, repo) if s["state"] in ("idle", "cold")
                     and (slot_filter is None or p == slot_filter)]
+            current = [(p, s) for p, s in todo if fresh and s["state"] == "idle" and not s.get("used_since_warm")
+                       and warm_matches(s.get("warm") or {}, fresh["revs"], fresh["versions"])]
+        for slot, row in current:
+            results.append({"slot": slot, "index": row["index"], "ok": True, "seconds": 0, "already_warm": True})
+            say("  slot %d is already warm at its baseline" % row["index"])
+        todo = [(p, s) for p, s in todo if (p, s) not in current]
         for slot, _ in todo:
             with state.registry() as reg:
                 row = reg["slots"].get(slot)
@@ -252,6 +263,7 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
                     if slot in reg["slots"]:
                         reg["slots"][slot].update(state="idle", warm=w, baseline_stale=stale, repos=row["repos"])
                         reg["slots"][slot].pop("pid", None)
+                        reg["slots"][slot].pop("used_since_warm", None)
             except BaseException as e:
                 with state.registry() as reg:
                     if slot in reg["slots"]:
@@ -388,7 +400,8 @@ def release(slot, row, settings, prune_branch=False, discard_ignored=False, rewa
     builds.for_each_adapter(src, repo, cfg, "slot", "release", slot)
     with state.registry() as reg:
         s = reg["slots"][slot]
-        s.update(state="idle" if (s.get("warm") or {}).get("ok") else "cold", lease=None, repos=repos)
+        s.update(state="idle" if (s.get("warm") or {}).get("ok") else "cold", lease=None, repos=repos,
+                 used_since_warm=True)
         excess = len(slots_of(reg, repo)) > target_slots(repo, cfg, reg, settings)
         s = dict(s)
     action = "released"
