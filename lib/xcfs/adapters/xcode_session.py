@@ -51,14 +51,14 @@ def regression_file():
 
 # ------------------------------------------------------------------ driver choice
 def choose_driver(adapter, ctx):
-    want = os.environ.get("XCFS_DRIVER") or ctx.entry.get("driver", "xcodebuild")
+    want = os.environ.get("XCFS_DRIVER") or ctx.entry.get("driver", "auto")
     if want == "xcodebuild":
         return "xcodebuild"
     if not swbuild_path():
         warn("no swbuild in this Xcode: building with xcodebuild")
         return "xcodebuild"
     rec = (read_json(regression_file(), {}) or {}).get(adapter.version())
-    if rec is None and want == "session":
+    if rec is None:
         say("  first session build on %s: running the session regression check once" % adapter.version())
         rec = regression(adapter)
     if rec and rec.get("ok"):
@@ -152,6 +152,51 @@ def package_schemes(pkg_dir, scheme):
         if c and c not in out:
             out.append(c)
     return out
+
+
+LINTERS = re.compile(r"(^|[\s/\"'])(swiftlint|swiftformat\b.*--lint\b|periphery\s+scan)")
+BENIGN_LINE = re.compile(r"^(export\s+\w+=.*|\w+=[^;&|<>]*|if\b.*|then|else|elif\b.*|fi|.*\bwhich\s+\S+.*|"
+                         r"command\s+-v\s+\S+.*|type\s+\S+.*|echo\b[^>]*|printf\b[^>]*|exit(\s+\d+)?|set\s+-\w+|"
+                         r"cd\s+\S+|\[\[?\s.*\]\]?(\s*;\s*then)?|test\s.*|true|:)\s*;?$")
+
+
+def lint_only(phase):
+    """True for a shell-script phase that only runs a linter: it declares no outputs, invokes a linter without a fix
+    or format mode, writes no file (`>` only to /dev/null), and every other line is plumbing (PATH, if/which, echo).
+    Such a phase cannot change what the build produces, so an agent's build can leave it out. Anything else is kept."""
+    if phase.get("type") != "com.apple.buildphase.shell-script":
+        return False
+    if phase.get("outputFilePaths") or phase.get("outputFileListPaths"):
+        return False
+    script = phase.get("scriptContents") or ""
+    lines = [l.strip() for l in script.replace("\\\n", " ").splitlines()]
+    lines = [l for l in lines if l and not l.startswith("#")]
+    if re.search(r"--fix\b|--autocorrect\b|\bautocorrect\b|--format\b", script):
+        return False
+    if re.search(r"(?<![0-9&])>\s*(?!/dev/null|&)", script):   # output into a file
+        return False
+    linted = False
+    for l in lines:
+        probe = re.sub(r"\$\((command\s+-v|which)\s+[^()]*\)", "X", l)   # `$(which swiftlint)` only looks
+        if BENIGN_LINE.match(probe) and not re.search(r"`|\$\(", probe):
+            continue
+        if LINTERS.search(l):
+            if re.search(r"[;&|`]|\$\(", re.sub(r"\|\|\s*(true|:|echo\b[^;&|]*)$", "", probe.split(" 2>")[0])):
+                return False   # a linter line that also runs something else
+            linted = True
+            continue
+        return False
+    return linted
+
+
+def scripts_to_skip(pif, setting):
+    """(names of shell-script phases to leave out, why). setting: "auto" or absent (lint-only phases), a list of
+    names (exactly those; [] keeps every phase)."""
+    if isinstance(setting, list):
+        return setting, "configured"
+    names = sorted({ph.get("name") for e in pif if e.get("type") == "target"
+                    for ph in e["contents"].get("buildPhases", []) if lint_only(ph)})
+    return names, "auto: linter-only phases"
 
 
 def patch_pif(pif_path, skip):
@@ -617,7 +662,8 @@ def session_build(adapter, ctx, name, conf, args, files=None):
     t0 = time.time()
     scheme = adapter.scheme(ctx)
     pif_path, exported = export_pif(adapter, ctx, scheme)
-    pif_path, skipped = patch_pif(pif_path, ctx.entry.get("skipScripts"))
+    skip, skip_why = scripts_to_skip(load_pif(pif_path), ctx.entry.get("skipScripts", "auto"))
+    pif_path, skipped = patch_pif(pif_path, skip)
     pif = load_pif(pif_path)
     dd = adapter.derived_data(ctx, name, "swbuild")
     req, target, ext = make_request(adapter, ctx, pif, conf, dd, files)
@@ -643,7 +689,7 @@ def session_build(adapter, ctx, name, conf, args, files=None):
            "diagnostics": out.get("diagnostics", []), "derived_data": dd, "configuration": name, "driver": "session",
            "pif_exported": exported, "reused_description": out.get("reused_description", False),
            "compile_tasks": out.get("compiled", 0), "result": out["result"], "timing": out.get("timing"),
-           "skipped_scripts": skipped}
+           "skipped_scripts": skipped, "skipped_scripts_reason": skip_why if skipped else None}
     if out.get("message"):
         res["diagnostics"].insert(0, {"file": None, "line": 0, "column": 0, "severity": "error",
                                       "message": "swbuild: " + out["message"]})

@@ -101,12 +101,12 @@ class XcodeAdapter(Adapter):
                 p += ["configurations.%s: unknown key %r" % (n, k) for k in c if k not in CONFIG_KEYS]
         if entry.get("default") and entry["default"] not in confs:
             p.append("default %r is not in configurations" % entry["default"])
-        if "skipScripts" in entry and not (isinstance(entry["skipScripts"], list) and
-                                           all(isinstance(x, str) for x in entry["skipScripts"])):
-            p.append("skipScripts must be a list of script phase names")
+        if "skipScripts" in entry and entry["skipScripts"] != "auto" and not (
+                isinstance(entry["skipScripts"], list) and all(isinstance(x, str) for x in entry["skipScripts"])):
+            p.append("skipScripts must be \"auto\" or a list of script phase names")
         if entry.get("swiftDriver", "auto") not in ("auto", "native", "api-digests"):
             p.append("swiftDriver must be \"auto\", \"native\" or \"api-digests\"")
-        if entry.get("driver", "xcodebuild") not in ("xcodebuild", "session", "auto"):
+        if entry.get("driver", "auto") not in ("xcodebuild", "session", "auto"):
             p.append("driver must be \"xcodebuild\", \"session\" or \"auto\"")
         return p
 
@@ -289,7 +289,7 @@ class XcodeAdapter(Adapter):
             if XcodeAdapter.swift_driver_decision:
                 r["swift_driver"] = XcodeAdapter.swift_driver_decision
             return r
-        if ctx.entry.get("skipScripts"):
+        if isinstance(ctx.entry.get("skipScripts"), list) and ctx.entry["skipScripts"]:
             from ..util import warn
             warn("skipScripts applies to the session driver only; this xcodebuild build runs every script phase")
         r = self.xcodebuild(ctx, "build", name, conf, timeout=args.get("timeout"))

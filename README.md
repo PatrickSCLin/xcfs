@@ -160,10 +160,12 @@ container); `target` (default: from the scheme); `configurations` (name → `con
 `testDestination`, `buildSettings`); `default`; `warm` (configurations a slot keeps built; default the first);
 `simulator` (base device name or UDID; default the newest iPhone); `buildSettings`; `packagesDir`
 (`-clonedSourcePackagesDirPath`, relative); `xcodebuildArgs`; `reexportWhenChanged` (extra files that change the
-PIF); `driver` (`xcodebuild`, `session`, `auto`); `pinDerivedData`; `sharedXcodeCaches` (default true: builds use the
-module, compilation and SDK stat caches Xcode shares between projects); `skipScripts` (session driver only: names of
-the project's script phases an agent's builds leave out — a linter, a localization sync; xcfs removes them from a copy
-of the project description, the project itself is untouched); `swiftDriver` (`auto` by default: on Swift 6.4.2, build with a patched Swift driver that recompiles only the files a
+PIF); `driver` (`auto` by default, `xcodebuild`, `session`); `pinDerivedData`; `sharedXcodeCaches` (default true: builds use the
+module, compilation and SDK stat caches Xcode shares between projects); `skipScripts` (session driver only; `auto` by default: shell-script phases that only run a linter — no declared
+outputs, `swiftlint` or `swiftformat --lint` without a fix mode, nothing written to a file, every other line plain
+shell plumbing — are left out, since they cannot change what is built; a list names exactly the phases to leave out,
+for instance a project's localization sync, and `[]` keeps them all; xcfs removes them from a copy of the project
+description, the project itself is untouched, and each build's JSON lists what it skipped and why); `swiftDriver` (`auto` by default: on Swift 6.4.2, build with a patched Swift driver that recompiles only the files a
 changed interface really affects, built in the background on first use — see [its notes](lib/xcfs/adapters/swiftdriver/README.md);
 `native` turns it off).
 
@@ -221,14 +223,15 @@ seeded and the build done. Build state is bound to absolute paths, so a slot nev
 
 ## Build session
 
-`xcfs build` runs `xcodebuild` by default. With `"driver": "session"` (or `"auto"`), the Xcode adapter keeps one
+By default (`"driver": "auto"`) `xcfs build` uses a build session when the installed Xcode passes the regression check
+below, and `xcodebuild` otherwise; `"driver": "xcodebuild"` or `"session"` forces one. In a session the Xcode adapter keeps one
 `swbuild` process — the build service client inside Xcode — alive per checkout, reuses the build description while
 the project definition is unchanged, and sends `buildFiles` requests for `xcfs check`. On a large app this is the
 difference between ≈35 s and ≈4 s for a no-op build.
 
 Apple positions `swbuild` as a debugging tool without a stability promise, so a session is used only after a
-regression check has passed on the installed Xcode version: `xcfs doctor --session-check` (or automatically on first
-use with `"driver": "session"`) builds a throw-away Swift package through it — cold, no-op, an edit, a compile error
+regression check has passed on the installed Xcode version: `xcfs doctor --session-check` (or automatically on the
+first build with `auto` or `session`) builds a throw-away Swift package through it — cold, no-op, an edit, a compile error
 and its location, `buildFiles`, recovery. If it fails, or `swbuild` is missing, builds go through `xcodebuild` and
 nothing else changes. Nothing from Xcode is redistributed.
 

@@ -15,7 +15,8 @@ PY = sys.argv[sys.argv.index("--python") + 1] if "--python" in sys.argv else sys
 ONLY = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
 ENV = dict(os.environ, XCFS_STATE=SB + "/state", XCFS_DD_ROOT=SB + "/dd", XDG_CONFIG_HOME=SB + "/config",
            XCFS_CACHE=SB + "/cache", XCFS_POOL_ROOT=SB + "/pool", XCFS_BAZEL_USER_ROOT=SB + "/bazel-root",
-           XCFS_SWIFT_DRIVER="native")  # the tests never build the experimental Swift driver
+           XCFS_SWIFT_DRIVER="native",  # the tests never build the experimental Swift driver
+           XCFS_DRIVER="xcodebuild")    # nor run the session regression check (sample_e2e.sh covers the session)
 for k in ("CLAUDE_CODE_SESSION_ID", "XCFS_SESSION"):  # the caller's own session must not leak into the tests
     ENV.pop(k, None)
 L28 = "abcdefghijklmnopqrstuvwxyzab"
@@ -999,6 +1000,29 @@ def t47_experimental_swift_driver_auto_only_when_built_for_this_swift():
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+
+@test
+def t48_lint_only_script_phases_are_skipped_by_default():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode_session import lint_only, scripts_to_skip
+    sh = lambda s, **k: dict({"type": "com.apple.buildphase.shell-script", "scriptContents": s}, **k)
+    lint = sh('export PATH="$PATH:/opt/homebrew/bin"\nif which swiftlint >/dev/null; then\n  swiftlint\nelse\n'
+              '  echo "warning: SwiftLint not installed"\nfi\n')
+    assert lint_only(lint) and lint_only(sh('"${PODS_ROOT}/SwiftLint/swiftlint"\n'))
+    assert lint_only(sh("swiftformat --lint .\n")) and lint_only(sh("swiftlint || true\n"))
+    for keep in ("swiftlint --fix\n", "swiftformat .\n", "swiftlint > lint.txt\n", "swiftlint\nsourcery\n",
+                 "./scripts/localize.sh\n", "X=$(make-something)\nswiftlint\n", ""):
+        assert not lint_only(sh(keep)), keep
+    assert not lint_only(dict(lint, outputFilePaths=["$(DERIVED_FILE_DIR)/x"])), "declared outputs: kept"
+    pif = [{"type": "target", "contents": {"buildPhases": [dict(lint, name="Lint"), sh("./gen.sh", name="Gen"),
+                                                           {"type": "com.apple.buildphase.sources"}]}}]
+    assert scripts_to_skip(pif, "auto") == (["Lint"], "auto: linter-only phases")
+    assert scripts_to_skip(pif, ["Gen"]) == (["Gen"], "configured"), "a configured list replaces the detection"
+    assert scripts_to_skip(pif, []) == ([], "configured"), "an empty list keeps every phase"
+    from xcfs.adapters.xcode import XcodeAdapter
+    assert XcodeAdapter().validate({"adapter": "xcode", "skipScripts": "auto"}) == []
+    assert XcodeAdapter().validate({"adapter": "xcode", "skipScripts": "all"})
 
 
 def main():

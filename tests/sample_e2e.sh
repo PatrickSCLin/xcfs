@@ -17,7 +17,8 @@ done
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/xcfs-e2e.XXXXXX"); work=$(cd "${work}" && pwd -P)
 export XCFS_STATE="${work}/state" XCFS_DD_ROOT="${work}/dd" XDG_CONFIG_HOME="${work}/config" XCFS_SESSION="e2e-session" \
-  XCFS_CACHE="${work}/cache" XCFS_POOL_ROOT="${work}/pool"
+  XCFS_CACHE="${work}/cache" XCFS_POOL_ROOT="${work}/pool" XCFS_DRIVER=xcodebuild \
+  XCFS_SWIFT_DRIVER=native   # the experimental Swift driver is not built in this sandbox
 unset CLAUDE_CODE_SESSION_ID
 mkdir -p "${XCFS_DD_ROOT}"
 finish() {
@@ -204,7 +205,7 @@ out=$("${XCFS}" rm "${swt}" --apply --prune-branch --json) || fail "rm with a ru
 sleep 1
 ! pgrep -f "xcode_session.*$(basename "${swt}")" >/dev/null || fail "the session outlived its worktree"
 echo "session stopped with its worktree"
-unset XCFS_DRIVER
+export XCFS_DRIVER=xcodebuild
 
 step "nothing in the global DerivedData (whole run)"
 dd_new=$(comm -13 <(echo "${dd_before}") <(ls "${GLOBAL_DD}" 2>/dev/null | sort))
