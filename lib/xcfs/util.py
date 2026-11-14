@@ -1,5 +1,5 @@
 """Helpers shared by every module: errors, output, processes, paths. Nothing here knows a toolchain or a project."""
-import calendar, ctypes, hashlib, json, os, re, shutil, signal, subprocess, sys, time
+import calendar, ctypes, hashlib, json, os, re, shutil, signal, subprocess, sys, time, threading
 
 # Exit codes. They are part of the interface: agents branch on them.
 OK, ERROR, USAGE, UNTRUSTED, VOLUME, DIRTY, IN_USE, IGNORED_CHANGED, BUILD_FAILED, TIMEOUT, POOL_FULL, NO_SPACE = range(12)
@@ -112,7 +112,7 @@ def read_json(path, default=None):
 def write_json(path, data):
     """Atomic: write a temporary file next to it, then rename."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = "%s.%d.tmp" % (path, os.getpid())
+    tmp = "%s.%d.%d.tmp" % (path, os.getpid(), threading.get_ident())   # threads of one process write too
     with open(tmp, "w") as f:
         json.dump(data, f, indent=1, ensure_ascii=False)
     os.replace(tmp, path)

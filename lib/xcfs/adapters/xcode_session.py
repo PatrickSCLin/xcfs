@@ -79,9 +79,13 @@ def choose_driver(adapter, ctx):
         return "xcodebuild"
     rec = (read_json(regression_file(), {}) or {}).get(adapter.version())
     if not regression_current(rec):
-        say("  %s session build on %s: running the session regression check once"
-            % ("first" if rec is None else "an updated xcfs or a failed check: another", adapter.version()))
-        rec = regression(adapter)
+        from ..state import named_lock
+        with named_lock("session-check", adapter.version()):   # once, however many builds start together
+            rec = (read_json(regression_file(), {}) or {}).get(adapter.version())
+            if not regression_current(rec):
+                say("  %s session build on %s: running the session regression check once"
+                    % ("first" if rec is None else "an updated xcfs or a failed check: another", adapter.version()))
+                rec = regression(adapter)
     if rec and rec.get("ok"):
         return "session"
     if want == "session":

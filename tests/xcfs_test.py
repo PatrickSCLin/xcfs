@@ -1490,6 +1490,52 @@ def t63_a_fresh_pool_warms_its_slots_side_by_side():
             open(settings, "w").write(saved)
 
 
+@test
+def t64_parallel_warm_ups_share_state_safely():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    import threading
+    from xcfs.util import write_json, read_json
+    target, errors = SB + "/t64/shared.json", []
+
+    def writer(i):
+        try:
+            for k in range(50):
+                write_json(target, {"writer": i, "k": k})
+        except Exception as e:   # noqa: BLE001
+            errors.append(e)
+    ts = [threading.Thread(target=writer, args=(i,)) for i in range(6)]
+    [t.start() for t in ts]; [t.join() for t in ts]
+    assert not errors and read_json(target)["k"] == 49, "threads of one process lost a write: %s" % errors[:2]
+    # three builds starting together run the session regression check once
+    from xcfs.adapters import xcode_session as xs
+    os.environ["XCFS_STATE"] = ENV["XCFS_STATE"]
+    runs = []
+
+    class A:
+        def version(self): return "Xcode t64"
+
+    def fake_regression(adapter):
+        runs.append(1); time.sleep(0.5)
+        rec = {"ok": True, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "check": xs.check_id()}
+        data = read_json(xs.regression_file(), {}) or {}
+        data[adapter.version()] = rec
+        write_json(xs.regression_file(), data)
+        return rec
+    saved = (xs.regression, xs.swbuild_path, os.environ.pop("XCFS_DRIVER", None))
+    xs.regression, xs.swbuild_path = fake_regression, (lambda: "/bin/true")
+    try:
+        class Ctx:
+            entry = {}
+        got = []
+        ts = [threading.Thread(target=lambda: got.append(xs.choose_driver(A(), Ctx()))) for _ in range(3)]
+        [t.start() for t in ts]; [t.join() for t in ts]
+        assert got == ["session"] * 3 and len(runs) == 1, "the check ran %d times for %s" % (len(runs), got)
+    finally:
+        xs.regression, xs.swbuild_path = saved[0], saved[1]
+        if saved[2] is not None:
+            os.environ["XCFS_DRIVER"] = saved[2]
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))
