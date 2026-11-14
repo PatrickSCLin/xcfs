@@ -30,7 +30,7 @@ CHECK = DRIVER == "session" and "--no-check" not in sys.argv
 XCFS = os.path.join(ROOT, "bin", "xcfs")
 STAMP = time.strftime("%Y%m%d-%H%M%S")
 os.makedirs(WORK, exist_ok=True)
-# The experimental Swift driver (toolchains/swift-driver) is built once per machine into the user's xcfs cache.
+# The experimental Swift driver (lib/xcfs/adapters/swiftdriver) is built once per machine into the user's xcfs cache.
 _driver = os.path.join(os.environ.get("XCFS_CACHE") or os.path.expanduser("~/Library/Caches/xcfs"), "swift-driver")
 if os.path.isdir(_driver) and not os.path.lexists(WORK + "/cache/swift-driver"):
     os.makedirs(WORK + "/cache", exist_ok=True)

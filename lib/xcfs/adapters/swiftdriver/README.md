@@ -1,7 +1,7 @@
 # Experimental: a Swift driver that rebuilds only what an API change touches
 
-**Status: experimental.** For Swift 6.4.2 (Xcode 27.2) only. Opt in per toolchain entry; with any other Xcode, or
-before it is built, xcfs builds with Xcode's own driver and says so.
+**Status: experimental, on by default where it applies.** For Swift 6.4.2 (Xcode 27.2) only; with any other Xcode,
+and until it is built, xcfs builds with Xcode's own driver and says so.
 
 ## The problem
 
@@ -47,23 +47,22 @@ change an interface cost the same, and so does the first build of a checkout. On
 
 ## Use
 
-```sh
-toolchains/swift-driver/build.sh          # clones swift-driver 6.4.2, applies the patch, builds (~1-2 min)
-```
+Nothing to configure. With the default `"swiftDriver": "auto"`, the first build on an Xcode whose Swift is 6.4.2
+starts building the driver in the background (it clones swift-driver at the release tag, applies the patch with the
+pinned dependencies and builds it with Xcode's SwiftPM: about 1-2 minutes; log in the install directory). Builds use
+Xcode's own driver until it is ready, then build with `SWIFT_USE_INTEGRATED_DRIVER=NO` and `SWIFT_EXEC` pointing at
+the installed wrapper. Before every build xcfs compares the selected Xcode's `swiftc --version` with the one the
+driver was built for: another build of the same Swift starts a rebuild, another Swift release means Xcode's own
+driver. A failed build is retried after a day. Each build's JSON says which driver it used (`swift_driver`), and
+`xcfs doctor` reports the state.
 
-then, in the toolchain entry of `.xcfs.json` (or your config):
-
-```json
-{"adapter": "xcode", "swiftDriver": "api-digests", ...}
-```
-
-xcfs then builds with `SWIFT_USE_INTEGRATED_DRIVER=NO` and `SWIFT_EXEC` pointing at the installed wrapper. Before
-every build it compares the selected Xcode's `swiftc --version` with the one the driver was built for; on any
-difference it uses Xcode's own driver and warns once. `xcfs doctor` reports the state.
+Overrides, in the toolchain entry of the config: `"swiftDriver": "native"` never uses it; `"api-digests"` warns on
+every build that cannot use it. `XCFS_SWIFT_DRIVER=native|auto|api-digests` overrides the config. To build it by
+hand: `lib/xcfs/adapters/swiftdriver/build.sh [--force]`.
 
 Everything lives in `~/Library/Caches/xcfs/swift-driver/6.4.2/` (or under `$XCFS_CACHE`): the driver, the wrapper,
 and `store/` with the digests (the newest 64 versions per module are kept) and the module cache used to extract them.
-Deleting the directory turns the feature off until it is built again.
+Deleting the directory makes the next build start over.
 
 ## Costs and limits
 
@@ -76,6 +75,11 @@ Deleting the directory turns the feature off until it is built again.
   a body changes, neither the stock driver nor this one recompiles the clients that use it (the module's dependency
   graph does not change).
 - A changed source file still recompiles; only the files that use it are spared.
+- **Maintenance**: the patch is tied to one swift-driver release. Each Xcode that ships a new Swift needs the patch
+  ported to that release's tag (the touched code — the incremental dependency graph's integrator, the first-wave and
+  second-wave scheduling, the emit-module job — changes between releases), its dependency pins refreshed, and the
+  correctness cases rerun; until then that Xcode builds with its own driver. The gain depends on modules: a target
+  that imports nothing changed gets nothing, and a single-target app only gets the within-module narrowing.
 
 ## Files
 

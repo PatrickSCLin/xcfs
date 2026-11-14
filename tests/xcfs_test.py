@@ -14,7 +14,8 @@ LINK = SB + "-link"  # a symlink to the sandbox, for the physical-path test
 PY = sys.argv[sys.argv.index("--python") + 1] if "--python" in sys.argv else sys.executable
 ONLY = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
 ENV = dict(os.environ, XCFS_STATE=SB + "/state", XCFS_DD_ROOT=SB + "/dd", XDG_CONFIG_HOME=SB + "/config",
-           XCFS_CACHE=SB + "/cache", XCFS_POOL_ROOT=SB + "/pool", XCFS_BAZEL_USER_ROOT=SB + "/bazel-root")
+           XCFS_CACHE=SB + "/cache", XCFS_POOL_ROOT=SB + "/pool", XCFS_BAZEL_USER_ROOT=SB + "/bazel-root",
+           XCFS_SWIFT_DRIVER="native")  # the tests never build the experimental Swift driver
 for k in ("CLAUDE_CODE_SESSION_ID", "XCFS_SESSION"):  # the caller's own session must not leak into the tests
     ENV.pop(k, None)
 L28 = "abcdefghijklmnopqrstuvwxyzab"
@@ -955,40 +956,49 @@ def t46_session_can_skip_named_script_phases():
 
 
 @test
-def t47_experimental_swift_driver_only_when_built_for_this_swift():
+def t47_experimental_swift_driver_auto_only_when_built_for_this_swift():
     sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
-    from xcfs.adapters.xcode import XcodeAdapter, PATCHED_DRIVER_SWIFT
+    from xcfs.adapters.xcode import XcodeAdapter
+    from xcfs.adapters import swift_driver as sd
     a = XcodeAdapter()
-    assert a.validate({"adapter": "xcode", "swiftDriver": "api-digests"}) == []
+    for v in ("auto", "native", "api-digests"):
+        assert a.validate({"adapter": "xcode", "swiftDriver": v}) == [], v
     assert a.validate({"adapter": "xcode", "swiftDriver": "fast"}), "an unknown swiftDriver value must be refused"
-    on = type("Ctx", (), {"entry": {"swiftDriver": "api-digests", "sharedXcodeCaches": False}})
-    off = type("Ctx", (), {"entry": {"sharedXcodeCaches": False}})
-    have = "Apple Swift version %s (swiftlang-x)" % PATCHED_DRIVER_SWIFT
-    saved = os.environ.get("XCFS_CACHE")
+    ctx = lambda **e: type("Ctx", (), {"entry": dict(e, sharedXcodeCaches=False)})
+    have = "Apple Swift version %s (swiftlang-x)" % sd.SWIFT
+    started = []
+    saved = (os.environ.get("XCFS_CACHE"), os.environ.pop("XCFS_SWIFT_DRIVER", None), sd.start_build)
     os.environ["XCFS_CACHE"] = SB + "/cache-driver"
+    sd.start_build = lambda force=False: started.append(force) or SB + "/build.log"
     try:
-        XcodeAdapter._swift_version, XcodeAdapter._warned_driver = have, False
-        assert "SWIFT_EXEC" not in a.build_settings(on, {}), "not built yet: Xcode's own driver"
-        root = SB + "/cache-driver/swift-driver/" + PATCHED_DRIVER_SWIFT
+        sd._swift = have
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}), "not built yet: Xcode's own driver"
+        assert started == [True], "auto mode starts building the driver for a matching Swift"
+        assert a.swift_driver_decision.startswith("native: building it"), a.swift_driver_decision
+        root = sd.root()
         os.makedirs(root + "/bin")
         wrapper = root + "/bin/swiftc"
         open(wrapper, "w").write("#!/bin/sh\n"); os.chmod(wrapper, 0o755)
         json.dump({"swiftVersion": "swift-driver version: 1.0 " + have}, open(root + "/toolchain.json", "w"))
-        s = a.build_settings(on, {"buildSettings": {"OTHER": "1"}})
+        s = a.build_settings(ctx(buildSettings={"OTHER": "1"}), {})
         assert s.get("SWIFT_EXEC") == wrapper and s.get("SWIFT_USE_INTEGRATED_DRIVER") == "NO" and s["OTHER"] == "1", s
-        assert "SWIFT_EXEC" not in a.build_settings(off, {}), "only when the entry asks for it"
-        XcodeAdapter._swift_version = have.replace("swiftlang-x", "swiftlang-y")      # same Swift, another build
-        assert "SWIFT_EXEC" not in a.build_settings(on, {}), "built for another Xcode: never used"
-        XcodeAdapter._swift_version = "Apple Swift version 9.9 (swiftlang-z)"
-        assert "SWIFT_EXEC" not in a.build_settings(on, {}), "another Swift release: never used"
-        assert "9.9" in a.patched_swift_driver()[1]
+        assert a.swift_driver_decision == "api-digests"
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(swiftDriver="native"), {}), "native turns it off"
+        os.environ["XCFS_SWIFT_DRIVER"] = "native"
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(swiftDriver="api-digests"), {}), "the environment overrides"
+        del os.environ["XCFS_SWIFT_DRIVER"]
+        sd._swift = have.replace("swiftlang-x", "swiftlang-y")       # same Swift, another build: rebuild, not use
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and len(started) == 2
+        sd._swift = "Apple Swift version 9.9 (swiftlang-z)"          # another release: never built, never used
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(swiftDriver="api-digests"), {}) and len(started) == 2
+        assert "9.9" in a.swift_driver_decision
     finally:
-        XcodeAdapter._swift_version = None
-        if saved is None:
-            os.environ.pop("XCFS_CACHE", None)
-        else:
-            os.environ["XCFS_CACHE"] = saved
-
+        sd._swift, sd.start_build = None, saved[2]
+        for k, v in (("XCFS_CACHE", saved[0]), ("XCFS_SWIFT_DRIVER", saved[1])):
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def main():

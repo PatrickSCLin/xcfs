@@ -92,7 +92,7 @@ XENV = {}  # the environment of the xcfs variant being measured
 
 
 def link_machine_toolchains(cache):
-    """The experimental Swift driver (toolchains/swift-driver) is built once per machine into the user's xcfs cache;
+    """The experimental Swift driver (lib/xcfs/adapters/swiftdriver) is built once per machine into the user's xcfs cache;
     a variant with a cache of its own sees it through a link."""
     real = os.path.join(os.environ.get("XCFS_CACHE") or os.path.expanduser("~/Library/Caches/xcfs"), "swift-driver")
     link = os.path.join(cache, "swift-driver")

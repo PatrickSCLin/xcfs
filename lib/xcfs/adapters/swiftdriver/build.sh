@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build the experimental swift-driver with per-name API digests and install it where xcfs looks for it.
 #
-#   toolchains/swift-driver/build.sh [--force]
+#   lib/xcfs/adapters/swiftdriver/build.sh [--force]   (xcfs runs it by itself when needed)
 #
 # The patch is made for one swift-driver release; the selected Xcode must ship that Swift version, or the script
 # stops. It clones swift-driver at the release tag, applies the patch, builds the driver with Xcode's SwiftPM and
@@ -46,7 +46,7 @@ fi
 
 cat > "$ROOT/bin/swiftc.new" <<EOF
 #!/bin/sh
-# SWIFT_EXEC for Xcode (written by xcfs toolchains/swift-driver/build.sh): the patched swift-driver, run against
+# SWIFT_EXEC for Xcode (written by xcfs swiftdriver/build.sh): the patched swift-driver, run against
 # the frontend of the Xcode it was built for.
 D=\$(cd "\$(dirname "\$0")" && pwd)
 export SWIFT_DRIVER_SWIFT_FRONTEND_EXEC="$FRONTEND"
