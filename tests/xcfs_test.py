@@ -1080,6 +1080,29 @@ def t52_metal_sources_found_through_the_project_description():
     assert not pif_has_metal(None)
 
 
+@test
+def t53_session_restarts_when_its_environment_changes():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters import xcode_session as xs
+    from xcfs.util import Fail
+    d = SB + "/t53"; os.makedirs(d + "/session", exist_ok=True)
+    ctx = type("Ctx", (), {"build_dir": d, "resources": {}})
+    stopped = []
+    saved = (xs.ping, xs.stop, xs.swbuild_path, xs.socket_path)
+    xs.ping, xs.stop = (lambda sp: True), (lambda c: stopped.append(1))
+    xs.swbuild_path, xs.socket_path = (lambda: None), (lambda c: d + "/s.sock")
+    try:
+        json.dump({"PATH": "/usr/bin"}, open(d + "/session/daemon-env.json", "w"))
+        assert xs.ensure_daemon(None, ctx, d, {"PATH": "/usr/bin"}) == d + "/s.sock" and not stopped
+        try:
+            xs.ensure_daemon(None, ctx, d, {"PATH": "/usr/bin", "EXTERNAL_TOOLCHAINS_DIR": "/x"})
+        except Fail:
+            pass   # no swbuild here to start a new one; what matters is that the old one was stopped
+        assert stopped == [1], "a session with another environment must be replaced"
+    finally:
+        xs.ping, xs.stop, xs.swbuild_path, xs.socket_path = saved
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

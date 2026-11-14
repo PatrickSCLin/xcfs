@@ -685,9 +685,15 @@ def lib_root():
 
 
 def ensure_daemon(adapter, ctx, cwd, env):
+    """The checkout's session, started with this environment. A session started with another one (say, before the
+    Metal toolchain was found to be needed) is replaced: swbuild reads its environment once."""
     sp = socket_path(ctx)
+    env_file = os.path.join(session_dir(ctx), "daemon-env.json")
     if ping(sp):
-        return sp
+        if read_json(env_file, None) == env:
+            return sp
+        say("  restarting the build session: its environment changed")
+        stop(ctx)
     swb = swbuild_path()
     if not swb:
         raise Fail("no swbuild in this Xcode")
@@ -699,6 +705,7 @@ def ensure_daemon(adapter, ctx, cwd, env):
         p = subprocess.Popen([sys.executable, "-c", code, sp, swb, cwd, json.dumps(env), log_dir], stdin=subprocess.DEVNULL,
                              stdout=log, stderr=log, start_new_session=True, cwd="/")
     ctx.resources["session_pid"] = p.pid
+    write_json(env_file, env)
     t0 = time.time()
     while time.time() - t0 < 30:
         if ping(sp):
