@@ -1287,6 +1287,17 @@ def t58_test_takes_a_scheme_of_its_own():
     assert r["tests"] == 3 and seen[0][:2] == ("test", "ModelsTests"), (r, seen)
     Recording().test(Context("worktree", SB, SB, {}, entry, SB + "/b58"), {})
     assert seen[1][1] == "App" and seen[0][2] == seen[1][2], "another scheme must build into the same DerivedData: %s" % seen
+    # Swift Testing prints its own summary next to XCTest's (which then says 0)
+    lines = ["Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds",
+             "\u2714 Test run with 16 tests in 0 suites passed after 0.105 seconds."]
+    Recording.xcodebuild = lambda self, *a, **k: {"ok": True, "_lines": lines}
+    r = Recording().test(Context("worktree", SB, SB, {}, entry, SB + "/b58"), {})
+    assert r["tests"] == 16 and r["failures"] == 0 and r["failed"] == [], r
+    lines = ["\u2718 Test displayNameFallsBackToHandle() failed after 0.002 seconds with 1 issue.",
+             "\u2718 Test run with 16 tests in 0 suites failed after 0.105 seconds with 1 issue.",
+             "Executed 2 tests, with 0 failures (0 unexpected) in 0.010 (0.011) seconds"]
+    r = Recording().test(Context("worktree", SB, SB, {}, entry, SB + "/b58"), {})
+    assert r["tests"] == 18 and r["failures"] == 1 and r["failed"] == ["displayNameFallsBackToHandle()"], r
 
 
 @test

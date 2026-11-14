@@ -328,15 +328,22 @@ class XcodeAdapter(Adapter):
         lines = r.pop("_lines")
         tests = failures = None
         failed = []
+        xct = swt = None   # XCTest's summary and Swift Testing's, both printed when a bundle has both kinds
         for l in lines:
             m = re.search(r"Executed (\d+) tests?, with (\d+) failures?", l)
             if m:
-                tests, failures = int(m.group(1)), int(m.group(2))
+                xct = (int(m.group(1)), int(m.group(2)))
+            m = re.search(r"Test run with (\d+) tests?\b.*?(passed|failed)(?:.*?with (\d+) issues?)?", l)
+            if m:
+                swt = (int(m.group(1)), int(m.group(3) or (1 if m.group(2) == "failed" else 0)))
+            if xct or swt:
+                tests = (xct or (0, 0))[0] + (swt or (0, 0))[0]
+                failures = (xct or (0, 0))[1] + (swt or (0, 0))[1]
             m = re.match(r"Test Case '-\[(\S+) (\S+)\]' failed", l.strip())
             if m:
                 failed.append("%s/%s" % (m.group(1).split(".")[-1], m.group(2)))
             m = re.search(r"Test (\S+) .*failed after", l)
-            if m and "✘" in l:
+            if m and "✘" in l and "Test run with" not in l:
                 failed.append(m.group(1))
         return dict(r, tests=tests, failures=failures, failed=sorted(set(failed)), result_bundle=bundle,
                     destination=dest)
