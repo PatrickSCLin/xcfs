@@ -6,12 +6,19 @@ from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say
 
 ENTRY_KEYS = {"adapter", "root", "workspace", "project", "package", "scheme", "target", "configurations", "default",
               "warm", "simulator", "packagesDir", "xcodebuildArgs", "buildSettings", "driver", "prepare",
-              "reexportWhenChanged", "pinDerivedData", "sharedXcodeCaches", "skipScripts"}
+              "reexportWhenChanged", "pinDerivedData", "sharedXcodeCaches", "skipScripts", "swiftDriver"}
 CONFIG_KEYS = {"configuration", "destination", "testDestination", "buildSettings"}
 TRASH = ".xcfs-trash"
 PCM_DIR = "Build/Intermediates.noindex/SwiftExplicitPrecompiledModules"
 DIAG = re.compile(r"^(?P<file>/[^:\n]+?):(?P<line>\d+):(?:(?P<col>\d+):)? (?P<sev>error|warning|note): (?P<msg>.*)$")
 BARE = re.compile(r"^(?:[\w./+-]+: )?(?P<sev>error|fatal error): (?P<msg>.*)$")
+# The experimental swift-driver (toolchains/swift-driver in the xcfs repository) is made for one Swift release.
+PATCHED_DRIVER_SWIFT = "6.4.2"
+
+
+def swift_release(text):
+    m = re.search(r"Apple Swift version \S+ \([^)]*\)", text or "")
+    return m.group(0) if m else ""
 
 
 def dd_root():
@@ -104,6 +111,8 @@ class XcodeAdapter(Adapter):
         if "skipScripts" in entry and not (isinstance(entry["skipScripts"], list) and
                                            all(isinstance(x, str) for x in entry["skipScripts"])):
             p.append("skipScripts must be a list of script phase names")
+        if entry.get("swiftDriver", "native") not in ("native", "api-digests"):
+            p.append("swiftDriver must be \"native\" or \"api-digests\"")
         if entry.get("driver", "xcodebuild") not in ("xcodebuild", "session", "auto"):
             p.append("driver must be \"xcodebuild\", \"session\" or \"auto\"")
         return p
@@ -231,7 +240,41 @@ class XcodeAdapter(Adapter):
                             SDK_STAT_CACHE_DIR=root)
         settings.update(ctx.entry.get("buildSettings", {}))
         settings.update(conf.get("buildSettings", {}))
+        if ctx.entry.get("swiftDriver", "native") == "api-digests":
+            swiftc, why = self.patched_swift_driver()
+            if swiftc:
+                settings.update(SWIFT_USE_INTEGRATED_DRIVER="NO", SWIFT_EXEC=swiftc)
+            elif not XcodeAdapter._warned_driver:
+                from ..util import warn
+                warn("swiftDriver \"api-digests\": %s; building with Xcode's own Swift driver" % why)
+                XcodeAdapter._warned_driver = True
         return settings
+
+    _swift_version = None
+    _warned_driver = False
+
+    def swift_version(self):
+        """The selected Xcode's Swift, as `swiftc --version` names it: "Apple Swift version 6.4.2 (swiftlang-...)"."""
+        if XcodeAdapter._swift_version is None:
+            r = run("xcrun", "swiftc", "--version", check=False)
+            XcodeAdapter._swift_version = swift_release(r.stdout + r.stderr) if r.returncode == 0 else ""
+        return XcodeAdapter._swift_version
+
+    def patched_swift_driver(self):
+        """(path of the SWIFT_EXEC wrapper, None) when the experimental driver is built for the selected Xcode's
+        Swift, else (None, why not). A driver built for another Swift is never used: its frontend would differ."""
+        from .. import state
+        root = os.path.join(state.cache_dir(), "swift-driver", PATCHED_DRIVER_SWIFT)
+        swiftc, info = os.path.join(root, "bin", "swiftc"), read_json(os.path.join(root, "toolchain.json"), None)
+        have = self.swift_version()
+        if "Apple Swift version %s " % PATCHED_DRIVER_SWIFT not in have + " ":
+            return None, "it is made for Swift %s and the selected Xcode has %s" % (PATCHED_DRIVER_SWIFT, have or "none")
+        if not info or not os.access(swiftc, os.X_OK):
+            return None, "not built (run toolchains/swift-driver/build.sh from the xcfs repository)"
+        if swift_release(info.get("swiftVersion", "")) != have:
+            return None, "built for %s, the selected Xcode has %s (rebuild with build.sh --force)" % (
+                info.get("swiftVersion"), have)
+        return swiftc, None
 
     def prune_logs(self, d, keep=20):
         try:
@@ -519,6 +562,10 @@ class XcodeAdapter(Adapter):
         # hidden directories are skipped (measured: 105k stray files made resolution take 24s instead of 12s).
         checks.append({"ok": not bad, "message": "no build output inside local package directories" +
                        "".join("\n         " + b for b in bad)})
+        if entry.get("swiftDriver", "native") == "api-digests":
+            swiftc, why = self.patched_swift_driver()
+            checks.append({"ok": bool(swiftc), "message": "experimental Swift driver: " +
+                           (swiftc if swiftc else why + "; builds use Xcode's own driver")})
         from . import xcode_session
         checks += xcode_session.doctor(self, root, entry)
         return checks

@@ -954,6 +954,43 @@ def t46_session_can_skip_named_script_phases():
 
 
 
+@test
+def t47_experimental_swift_driver_only_when_built_for_this_swift():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode import XcodeAdapter, PATCHED_DRIVER_SWIFT
+    a = XcodeAdapter()
+    assert a.validate({"adapter": "xcode", "swiftDriver": "api-digests"}) == []
+    assert a.validate({"adapter": "xcode", "swiftDriver": "fast"}), "an unknown swiftDriver value must be refused"
+    on = type("Ctx", (), {"entry": {"swiftDriver": "api-digests", "sharedXcodeCaches": False}})
+    off = type("Ctx", (), {"entry": {"sharedXcodeCaches": False}})
+    have = "Apple Swift version %s (swiftlang-x)" % PATCHED_DRIVER_SWIFT
+    saved = os.environ.get("XCFS_CACHE")
+    os.environ["XCFS_CACHE"] = SB + "/cache-driver"
+    try:
+        XcodeAdapter._swift_version, XcodeAdapter._warned_driver = have, False
+        assert "SWIFT_EXEC" not in a.build_settings(on, {}), "not built yet: Xcode's own driver"
+        root = SB + "/cache-driver/swift-driver/" + PATCHED_DRIVER_SWIFT
+        os.makedirs(root + "/bin")
+        wrapper = root + "/bin/swiftc"
+        open(wrapper, "w").write("#!/bin/sh\n"); os.chmod(wrapper, 0o755)
+        json.dump({"swiftVersion": "swift-driver version: 1.0 " + have}, open(root + "/toolchain.json", "w"))
+        s = a.build_settings(on, {"buildSettings": {"OTHER": "1"}})
+        assert s.get("SWIFT_EXEC") == wrapper and s.get("SWIFT_USE_INTEGRATED_DRIVER") == "NO" and s["OTHER"] == "1", s
+        assert "SWIFT_EXEC" not in a.build_settings(off, {}), "only when the entry asks for it"
+        XcodeAdapter._swift_version = have.replace("swiftlang-x", "swiftlang-y")      # same Swift, another build
+        assert "SWIFT_EXEC" not in a.build_settings(on, {}), "built for another Xcode: never used"
+        XcodeAdapter._swift_version = "Apple Swift version 9.9 (swiftlang-z)"
+        assert "SWIFT_EXEC" not in a.build_settings(on, {}), "another Swift release: never used"
+        assert "9.9" in a.patched_swift_driver()[1]
+    finally:
+        XcodeAdapter._swift_version = None
+        if saved is None:
+            os.environ.pop("XCFS_CACHE", None)
+        else:
+            os.environ["XCFS_CACHE"] = saved
+
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

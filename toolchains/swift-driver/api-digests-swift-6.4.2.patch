@@ -1,0 +1,803 @@
+diff --git a/Sources/SwiftDriver/Driver/Driver.swift b/Sources/SwiftDriver/Driver/Driver.swift
+index 9b386e9..1ab046e 100644
+--- a/Sources/SwiftDriver/Driver/Driver.swift
++++ b/Sources/SwiftDriver/Driver/Driver.swift
+@@ -11,6 +11,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ //
+ //===----------------------------------------------------------------------===//
++// Modified by the xcfs project: experimental per-name API digests (see APIDigests.swift).
+ import SwiftOptions
+ 
+ import class Dispatch.DispatchQueue
+@@ -2090,8 +2091,8 @@ extension Driver {
+     }
+ 
+     let buildRecord = buildRecordInfo.buildRecord(
+-      jobs, self.incrementalCompilationState?.blockingConcurrentMutationToProtectedState{
+-        $0.skippedCompilationInputs
++      jobs, self.incrementalCompilationState?.blockingConcurrentAccessOrMutationToProtectedState{
++        $0.skippedCompilationInputs.subtracting($0.inputsOfUndecidedInterfaceChanges())
+       })
+ 
+     do {
+@@ -2103,6 +2104,12 @@ extension Driver {
+       buildRecordInfo.removeBuildRecord()
+       return
+     }
++    if let output = moduleOutputInfo.output?.outputPath,
++       let modulePath = VirtualPath.lookup(output).absolutePath?.pathString {
++      APIDigests.recordEmittedModule(modulePath: modulePath, moduleName: moduleOutputInfo.name,
++                                     fileSystem: fileSystem,
++                                     frontendPath: try? toolchain.getToolPath(.swiftCompiler).pathString)
++    }
+   }
+ 
+   private func printBindings(_ job: Job) {
+diff --git a/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift b/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift
+new file mode 100644
+index 0000000..7bed6bc
+--- /dev/null
++++ b/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift
+@@ -0,0 +1,496 @@
++//===----------------------------------------------------------------------===//
++//
++// This source file is part of the Swift open source project
++//
++// Copyright (c) 2014 - 2025 Apple Inc. and the Swift project authors
++// Licensed under Apache License v2.0
++//
++// See LICENSE.txt for license information
++// See CONTRIBUTORS.txt for the list of Swift project authors
++//
++// SPDX-License-Identifier: Apache-2.0
++//
++//===----------------------------------------------------------------------===//
++// Added by the xcfs project to swift-driver 6.4.2.
++//
++// Experimental: per-name semantic digests of a module's API, so that a client
++// rebuilds only the files that use names whose meaning changed.
++//
++// The module dependency graph embedded in a .swiftmodule treats the whole
++// module as one "source file": any change to its interface changes the
++// module's fingerprint, and the frontend links that fingerprint to every
++// declaration the module defines. A client then recompiles every file that
++// uses any name from the module. Top-level functions, extension members and
++// type headers carry no fingerprint of their own, so the graph alone cannot
++// tell which declarations really changed.
++//
++// When the environment variable SWIFT_DRIVER_API_DIGEST_DIR names a directory:
++//  - after the build, the driver extracts a symbol graph (all access levels) from
++//    the emitted binary module and turns it into one digest per dependency key
++//    (top-level name, type, member of a type, any member name) and stores it as
++//    <dir>/<module>/<graph key>.json, where the graph key hashes every node and
++//    fingerprint of the module's dependency graph (the module fingerprint alone
++//    does not change when only a type body changes);
++//  - when a client integrates a changed module, it looks up the digests of the
++//    graph it had integrated before and of the new one, and invalidates only the declarations whose
++//    digest differs. A key missing from either side counts as changed; a
++//    missing digest file falls back to the stock behavior.
++//
++// A digest covers what a declaration's users depend on: its declaration
++// fragments, generic signature and USR (which spells out resolved types), and
++// the layout of every same-module type it refers to (stored properties, enum
++// cases, superclass and conformances, transitively; all members for classes,
++// actors and protocols).
++//
++//===----------------------------------------------------------------------===//
++
++import Foundation
++import class Dispatch.DispatchQueue
++import protocol TSCBasic.FileSystem
++import struct TSCBasic.AbsolutePath
++#if canImport(CryptoKit)
++import CryptoKit
++#endif
++
++@_spi(Testing) public enum APIDigests {
++  static let environmentKey = "SWIFT_DRIVER_API_DIGEST_DIR"
++  static let symbolGraphDirSuffix = ".api-digest-symbolgraph"
++
++  /// The digest store, if the feature is on.
++  static var storeDir: URL? {
++    #if canImport(CryptoKit)
++    guard let dir = ProcessInfo.processInfo.environment[environmentKey], !dir.isEmpty else { return nil }
++    return URL(fileURLWithPath: dir, isDirectory: true)
++    #else
++    return nil
++    #endif
++  }
++
++  /// Where the emit-module job writes the symbol graph for a module at `modulePath`.
++  static func symbolGraphDir(forModuleAt modulePath: String) -> String {
++    modulePath + symbolGraphDirSuffix
++  }
++
++  /// Whether changed source-file interfaces of the module being built are narrowed with digests.
++  enum IntraModuleState {
++    case off
++    /// Waiting for the emit-module job; holds the digests of the module as it was before this build.
++    case pending(Digests)
++    case decided(old: Digests, new: Digests)
++    /// The new digests could not be had: changes invalidate whole files, as the stock driver does.
++    case fallback
++  }
++
++  /// The module this driver emits: where, its name, and the toolchain's frontend.
++  nonisolated(unsafe) static var emittedModule: (path: String, name: String, frontend: String?)?
++
++  /// The nodes whose digest differs between `old` and `new`, or is missing from either.
++  static func changedNodes(_ nodes: [ModuleDependencyGraph.Node], old: Digests, new: Digests,
++                           holder: InternedStringTableHolder) -> [ModuleDependencyGraph.Node] {
++    nodes.filter { node in
++      switch node.key.designator {
++      case .externalDepend, .sourceFileProvide: return false
++      default:
++        let a = old.value(for: node.key.designator, in: holder)
++        let b = new.value(for: node.key.designator, in: holder)
++        return a == nil || b == nil || a != b
++      }
++    }
++  }
++
++  /// The stored digests of one version of a module.
++  struct Digests {
++    var top: [String: String] = [:]
++    var type: [String: String] = [:]
++    var member: [String: String] = [:]
++    var any: [String: String] = [:]
++
++    func value(for designator: DependencyKey.Designator, in holder: InternedStringTableHolder) -> String? {
++      switch designator {
++      case .topLevel(name: let n): return top[n.lookup(in: holder)]
++      case .nominal(context: let c), .potentialMember(context: let c):
++        // An extension is keyed by its extended type plus "@" and a hash of the extension;
++        // the whole type's digest covers it.
++        let context = c.lookup(in: holder)
++        return type[context] ?? context.split(separator: "@", maxSplits: 1).first.flatMap { type[String($0)] }
++      case .member(context: let c, name: let n):
++        // Members the symbol graph leaves out are synthesized (e.g. an inferred associated type);
++        // the type they belong to determines them.
++        let context = c.lookup(in: holder)
++        return member[context + " " + n.lookup(in: holder)] ?? type[context]
++      case .dynamicLookup(name: let n): return any[n.lookup(in: holder)]
++      case .externalDepend, .sourceFileProvide: return nil
++      }
++    }
++  }
++
++  // MARK: - Store
++
++  static func fileURL(module: String, fingerprint: String) -> URL? {
++    guard let store = storeDir else { return nil }
++    let safe = { (s: String) in String(s.map { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" ? $0 : "_" }) }
++    return store.appendingPathComponent(safe(module), isDirectory: true)
++      .appendingPathComponent(safe(fingerprint) + ".json")
++  }
++
++  static func load(module: String, fingerprint: String) -> Digests? {
++    guard let url = fileURL(module: module, fingerprint: fingerprint),
++          let data = try? Data(contentsOf: url),
++          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
++    else { return nil }
++    func map(_ k: String) -> [String: String] { obj[k] as? [String: String] ?? [:] }
++    return Digests(top: map("top"), type: map("type"), member: map("member"), any: map("any"))
++  }
++
++  static func store(_ d: Digests, module: String, fingerprint: String) {
++    guard let url = fileURL(module: module, fingerprint: fingerprint) else { return }
++    let obj: [String: Any] = ["version": 1, "module": module,
++                              "top": d.top, "type": d.type, "member": d.member, "any": d.any]
++    guard let data = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]) else { return }
++    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
++    prune(url.deletingLastPathComponent(), keep: 63)
++    let tmp = url.appendingPathExtension("tmp\(ProcessInfo.processInfo.processIdentifier)")
++    do {
++      try data.write(to: tmp)
++      _ = try? FileManager.default.removeItem(at: url)
++      try FileManager.default.moveItem(at: tmp, to: url)
++    } catch {
++      _ = try? FileManager.default.removeItem(at: tmp)
++    }
++  }
++
++  /// Keep the newest `keep` digest files of a module (a client only ever needs the version it built
++  /// against last and the current one).
++  static func prune(_ dir: URL, keep: Int) {
++    let fm = FileManager.default
++    guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
++    let files = names.filter { $0.hasSuffix(".json") }.map { dir.appendingPathComponent($0) }
++    guard files.count > keep else { return }
++    let dated = files.map { ($0, ((try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date) ?? .distantPast) }
++    for (f, _) in dated.sorted(by: { $0.1 > $1.1 }).dropFirst(keep) { try? fm.removeItem(at: f) }
++  }
++
++  // MARK: - Producer side
++
++  /// How to load the module this driver emits (search paths, SDK, target, Clang arguments).
++  nonisolated(unsafe) static var extractionArguments: [String]?
++
++  /// Called after a build: store the digests of the emitted module under its graph key, extracting a
++  /// symbol graph (all access levels) from the binary module if this version has none stored yet.
++  /// The binary module is used rather than the emit-module job because in Swift 6.4 a private-level
++  /// symbol graph there queries local variables of bodies that job never type-checks.
++  static func recordEmittedModule(modulePath: String, moduleName: String, fileSystem: FileSystem,
++                                  frontendPath: String?) {
++    _ = digestsOfEmittedModule(modulePath: modulePath, moduleName: moduleName, fileSystem: fileSystem,
++                               frontendPath: frontendPath)
++  }
++
++  /// The digests of the module at `modulePath`, from the store or extracted now (and stored).
++  static func digestsOfEmittedModule(modulePath: String, moduleName: String, fileSystem: FileSystem,
++                                     frontendPath: String?) -> Digests? {
++    guard let storeURL = storeDir, let loadArgs = extractionArguments,
++          FileManager.default.fileExists(atPath: modulePath),
++          let key = moduleGraphKey(modulePath: modulePath, fileSystem: fileSystem),
++          let url = fileURL(module: moduleName, fingerprint: key)
++    else { return nil }
++    let fm = FileManager.default
++    if let stored = load(module: moduleName, fingerprint: key) { return stored }
++    guard let frontend = frontendPath else { return nil }
++    let tool = (frontend as NSString).deletingLastPathComponent + "/swift-symbolgraph-extract"
++    let outDir = symbolGraphDir(forModuleAt: modulePath)
++    try? fm.removeItem(atPath: outDir)
++    try? fm.createDirectory(atPath: outDir, withIntermediateDirectories: true)
++    let cache = storeURL.appendingPathComponent("ModuleCache").path
++    let moduleDir = (modulePath as NSString).deletingLastPathComponent
++    let args = ["-module-name", moduleName, "-I", moduleDir] + loadArgs +
++      ["-module-cache-path", cache, "-minimum-access-level", "private", "-skip-inherited-docs", "-skip-synthesized-members",
++       "-output-dir", outDir]
++    let started = Date()
++    let process = Process()
++    process.executableURL = URL(fileURLWithPath: tool)
++    process.arguments = args
++    let errPipe = Pipe()
++    process.standardError = errPipe
++    process.standardOutput = FileHandle.nullDevice
++    var status: Int32 = -1
++    var errText = ""
++    do {
++      try process.run()
++      let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
++      process.waitUntilExit()
++      status = process.terminationStatus
++      errText = String(decoding: errData.suffix(4000), as: UTF8.self)
++    } catch {
++      errText = "\(error)"
++    }
++    let files = ((try? fm.contentsOfDirectory(atPath: outDir)) ?? []).filter { $0.hasSuffix(".symbols.json") }
++    let extracted = Date()
++    var digests: Digests?
++    if status == 0, !files.isEmpty {
++      digests = compute(symbolGraphFiles: files.map { outDir + "/" + $0 })
++    }
++    let bytes = files.reduce(0) { $0 + (((try? fm.attributesOfItem(atPath: outDir + "/" + $1))?[.size] as? Int) ?? 0) }
++    if let d = digests { store(d, module: moduleName, fingerprint: key) }
++    // A short log per module, for diagnosing extraction failures.
++    let log = "\(Date()) key=\(key) status=\(status) files=\(files.count) stored=\(digests != nil) " +
++      "seconds=\(String(format: "%.2f", Date().timeIntervalSince(started))) " +
++      "extract=\(String(format: "%.2f", extracted.timeIntervalSince(started))) bytes=\(bytes)\n" +
++      (status == 0 && ProcessInfo.processInfo.environment["SWIFT_DRIVER_API_DIGEST_LOG_ARGS"] == nil
++        ? "" : "\(tool) \(args.joined(separator: " "))\n\(errText)\n")
++    let logURL = url.deletingLastPathComponent().appendingPathComponent("extract.log")
++    if let h = try? FileHandle(forWritingTo: logURL) {
++      h.seekToEndOfFile(); h.write(Data(log.utf8)); try? h.close()
++    } else {
++      try? Data(log.utf8).write(to: logURL)
++    }
++    try? fm.removeItem(atPath: outDir)
++    return digests
++  }
++
++  /// Identifies one version of a module's dependency graph: every definition node's key and fingerprint.
++  /// The module fingerprint alone does not change when only a type body changes.
++  static func graphKey(_ entries: [String]) -> String {
++    #if canImport(CryptoKit)
++    let text = entries.sorted().joined(separator: "\n")
++    return SHA256.hash(data: Data(text.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
++    #else
++    return ""
++    #endif
++  }
++
++  static func graphKeyEntry(_ key: DependencyKey, _ fingerprint: InternedString?,
++                            in holder: InternedStringTableHolder) -> String? {
++    if case .externalDepend = key.designator { return nil }
++    return key.description(in: holder) + "|" + (fingerprint?.lookup(in: holder) ?? "-")
++  }
++
++  /// The graph key of the module at `modulePath`, from its embedded dependency graph.
++  static func moduleGraphKey(modulePath: String, fileSystem: FileSystem) -> String? {
++    let queue = DispatchQueue(label: "api-digests")
++    return queue.sync { () -> String? in
++      let table = InternedStringTable(queue)
++      guard let path = try? VirtualPath(path: modulePath),
++            let graph = try? SourceFileDependencyGraph.read(
++              from: TypedVirtualPath(file: path.intern(), type: .swiftModule),
++              on: fileSystem, internedStringTable: table)
++      else { return nil }
++      var entries: [String] = []
++      graph.forEachNode { node in
++        guard node.definitionVsUse == .definition,
++              let e = graphKeyEntry(node.key, node.fingerprint, in: table) else { return }
++        entries.append(e)
++      }
++      return entries.isEmpty ? nil : graphKey(entries)
++    }
++  }
++
++  // MARK: - Computing digests from a symbol graph
++
++  static func compute(symbolGraphFiles: [String]) -> Digests? {
++    #if canImport(CryptoKit)
++    struct Sym {
++      var usr: String
++      var kind: String
++      var path: [String]
++      var base: String       // canonical text of what users depend on
++      var refs: [String]     // USRs referenced by the declaration
++    }
++    var syms: [String: Sym] = [:]
++    var members: [String: [String]] = [:]       // type USR -> member USRs
++    var memberOf: [String: String] = [:]        // member USR -> type USR
++    var supers: [String: [String]] = [:]        // type USR -> conformances / superclass USRs
++    var conformances: [String: [String]] = [:]  // type USR -> "conformsTo<USR>" / "inheritsFrom<USR>"
++
++    var moduleName = ""
++    for file in symbolGraphFiles.sorted() {
++      guard let data = FileManager.default.contents(atPath: file),
++            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
++      else { return nil }
++      if moduleName.isEmpty, let m = (root["module"] as? [String: Any])?["name"] as? String,
++         !file.contains("@") {
++        moduleName = m
++      }
++      for s in root["symbols"] as? [[String: Any]] ?? [] {
++        guard let id = s["identifier"] as? [String: Any], let usr = id["precise"] as? String,
++              let kind = (s["kind"] as? [String: Any])?["identifier"] as? String
++        else { continue }
++        var refs: [String] = []
++        var text: [String] = []
++        for f in s["declarationFragments"] as? [[String: Any]] ?? [] {
++          text.append(f["spelling"] as? String ?? "")
++          if let r = f["preciseIdentifier"] as? String { refs.append(r); text.append("<\(r)>") }
++        }
++        var canon: [String: Any] = ["usr": usr, "kind": kind, "fragments": text]
++        for k in ["pathComponents", "accessLevel", "swiftGenerics", "swiftExtension", "functionSignature",
++                  "availability", "spi"] {
++          if let v = s[k] { canon[k] = v }
++        }
++        let base = (try? JSONSerialization.data(withJSONObject: canon, options: [.sortedKeys]))
++          .map { String(decoding: $0, as: UTF8.self) } ?? usr
++        let path = s["pathComponents"] as? [String] ?? []
++        if var existing = syms[usr] {
++          existing.base += "\n" + base
++          existing.refs += refs
++          syms[usr] = existing
++        } else {
++          syms[usr] = Sym(usr: usr, kind: kind, path: path, base: base, refs: refs)
++        }
++      }
++      for r in root["relationships"] as? [[String: Any]] ?? [] {
++        guard let kind = r["kind"] as? String, let src = r["source"] as? String, let dst = r["target"] as? String
++        else { continue }
++        switch kind {
++        case "memberOf":
++          members[dst, default: []].append(src)
++          memberOf[src] = dst
++        case "conformsTo", "inheritsFrom":
++          supers[src, default: []].append(dst)
++          conformances[src, default: []].append(kind + "<" + dst + ">")
++        case "requirementOf", "optionalRequirementOf":
++          members[dst, default: []].append(src)
++          memberOf[src] = dst
++        default:
++          // overrides, defaultImplementationOf, extensionTo: record them in the source's text
++          if var s = syms[src] { s.base += "\n\(kind)<\(dst)>"; syms[src] = s }
++        }
++      }
++    }
++
++    let typeKinds: Set<String> = ["swift.struct", "swift.enum", "swift.class", "swift.protocol", "swift.actor",
++                                  "swift.typealias", "swift.associatedtype"]
++    let allMemberKinds: Set<String> = ["swift.class", "swift.protocol", "swift.actor"]
++    let layoutMemberKinds: Set<String> = ["swift.property", "swift.enum.case"]
++
++    // Edges a declaration's meaning depends on.
++    func edges(_ usr: String) -> [String] {
++      guard let s = syms[usr] else { return [] }
++      var out = s.refs.filter { syms[$0] != nil }
++      out += (supers[usr] ?? []).filter { syms[$0] != nil }
++      if typeKinds.contains(s.kind) {
++        for m in members[usr] ?? [] {
++          guard let ms = syms[m] else { continue }
++          if allMemberKinds.contains(s.kind) || layoutMemberKinds.contains(ms.kind) { out.append(m) }
++        }
++      }
++      return out
++    }
++
++    // Digest of each strongly connected component, successors first (Tarjan).
++    let order = syms.keys.sorted()
++    var index = [String: Int](), low = [String: Int](), onStack = Set<String>(), stack = [String]()
++    var next = 0
++    var digest = [String: String]()
++    func hash(_ s: String) -> String {
++      SHA256.hash(data: Data(s.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
++    }
++    func strongConnect(_ v: String) {
++      index[v] = next; low[v] = next; next += 1
++      stack.append(v); onStack.insert(v)
++      for w in edges(v) {
++        if index[w] == nil {
++          strongConnect(w)
++          low[v] = min(low[v]!, low[w]!)
++        } else if onStack.contains(w) {
++          low[v] = min(low[v]!, index[w]!)
++        }
++      }
++      if low[v] == index[v] {
++        var component: [String] = []
++        while let w = stack.popLast() {
++          onStack.remove(w)
++          component.append(w)
++          if w == v { break }
++        }
++        let inside = Set(component)
++        var parts = component.sorted().map { syms[$0]!.base + "\n" + (conformances[$0] ?? []).sorted().joined(separator: ",") }
++        let outside = Set(component.flatMap(edges).filter { !inside.contains($0) })
++        parts += outside.sorted().map { digest[$0] ?? "?" }
++        let d = hash(parts.joined(separator: "\u{1}"))
++        for w in component { digest[w] = d }
++      }
++    }
++    for v in order where index[v] == nil { strongConnect(v) }
++
++    // A type, as a whole: itself plus every member.
++    func fullTypeDigest(_ usr: String) -> String {
++      var parts = [digest[usr] ?? ""]
++      parts += (members[usr] ?? []).map { digest[$0] ?? "" }.sorted()
++      return hash(parts.joined(separator: "\u{1}"))
++    }
++    func baseName(_ component: String) -> String {
++      if let p = component.firstIndex(of: "(") { return String(component[..<p]) }
++      return component
++    }
++    func isOperator(_ name: String) -> Bool {
++      guard let c = name.unicodeScalars.first else { return false }
++      return !(CharacterSet.letters.contains(c) || c == "_")
++    }
++
++    // The dependency graph names a type by its mangled name without the "$s" prefix, which is a Swift
++    // USR without "s:". @objc classes and protocols have Clang USRs; spell their mangled name out.
++    func context(_ usr: String) -> String? {
++      if usr.hasPrefix("s:") { return String(usr.dropFirst(2)) }
++      // Imported Objective-C and C types, extended here.
++      if syms[usr] == nil {
++        let imported: [(String, String)] = [("c:objc(cs)", "C"), ("c:objc(pl)", "P"), ("c:@T@", "a"),
++                                            ("c:@E@", "V"), ("c:@S@", "V")]
++        for (prefix, kind) in imported where usr.hasPrefix(prefix) {
++          let name = usr.dropFirst(prefix.count)
++          guard !name.isEmpty, name.unicodeScalars.allSatisfy({ $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "_") })
++          else { return nil }
++          return "So\(name.utf8.count)\(name)\(kind)"
++        }
++        return nil
++      }
++      guard let s = syms[usr], !moduleName.isEmpty else { return nil }
++      let suffix: [String: String] = ["swift.class": "C", "swift.protocol": "P", "swift.actor": "C",
++                                      "swift.struct": "V", "swift.enum": "O"]
++      var out = "\(moduleName.utf8.count)\(moduleName)"
++      var owner: String? = usr
++      var chain: [Sym] = []
++      while let o = owner, let os = syms[o] { chain.insert(os, at: 0); owner = memberOf[o] }
++      for c in chain {
++        guard let name = c.path.last, name.unicodeScalars.allSatisfy({ $0.isASCII }),
++              let k = suffix[c.kind] else { return nil }
++        out += "\(name.utf8.count)\(name)\(k)"
++      }
++      return out
++    }
++
++    var top = [String: [String]](), type = [String: [String]](), member = [String: [String]](),
++        any = [String: [String]]()
++    for (usr, s) in syms {
++      guard let last = s.path.last else { continue }
++      let name = baseName(last)
++      let d = typeKinds.contains(s.kind) ? fullTypeDigest(usr) : (digest[usr] ?? "")
++      any[name, default: []].append(d)
++      if let owner = memberOf[usr] {
++        if let context = context(owner) { member[context + " " + name, default: []].append(d) }
++        // Member operators are found by top-level operator lookup.
++        if isOperator(name) { top[name, default: []].append(d) }
++      } else if s.path.count == 1 {
++        top[name, default: []].append(d)
++      }
++      if typeKinds.contains(s.kind), let c = context(usr) {
++        type[c, default: []].append(d)
++      }
++    }
++    // Types extended but not defined here (e.g. `extension String`): the digest of the members and
++    // conformances added here.
++    for owner in Set(members.keys).union(conformances.keys) where syms[owner] == nil {
++      guard let c = context(owner) else { continue }
++      type[c, default: []] += (members[owner] ?? []).map { digest[$0] ?? "" }
++      type[c, default: []] += (conformances[owner] ?? []).map { c in
++        let target = String(c[c.index(after: c.firstIndex(of: "<")!)...].dropLast())
++        return c + (digest[target] ?? "")
++      }
++    }
++    func fold(_ m: [String: [String]]) -> [String: String] {
++      m.mapValues { hash($0.sorted().joined(separator: "\u{1}")) }
++    }
++    return Digests(top: fold(top), type: fold(type), member: fold(member), any: fold(any))
++    #else
++    return nil
++    #endif
++  }
++}
+diff --git a/Sources/SwiftDriver/IncrementalCompilation/IncrementalCompilationProtectedState.swift b/Sources/SwiftDriver/IncrementalCompilation/IncrementalCompilationProtectedState.swift
+index ef4b730..d69803b 100644
+--- a/Sources/SwiftDriver/IncrementalCompilation/IncrementalCompilationProtectedState.swift
++++ b/Sources/SwiftDriver/IncrementalCompilation/IncrementalCompilationProtectedState.swift
+@@ -11,6 +11,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ //
+ //===----------------------------------------------------------------------===//
++// Modified by the xcfs project: experimental per-name API digests (see APIDigests.swift).
+ 
+ import Dispatch
+ import SwiftOptions
+@@ -57,6 +58,14 @@ extension IncrementalCompilationState {
+       self.jobEmitModule = jobEmitModule
+       self.driver = driver
+       self.explicitModulePlanner = explicitModulePlanner
++      // Experimental: narrow changed file interfaces with API digests, given those of the module as it was.
++      if jobEmitModule != nil, APIDigests.storeDir != nil,
++         let output = driver.moduleOutputInfo.output?.outputPath,
++         let modulePath = VirtualPath.lookup(output).absolutePath?.pathString,
++         let key = APIDigests.moduleGraphKey(modulePath: modulePath, fileSystem: driver.fileSystem),
++         let prior = APIDigests.load(module: driver.moduleOutputInfo.name, fingerprint: key) {
++        moduleDependencyGraph.intraModuleDigests = .pending(prior)
++      }
+     }
+   }
+ }
+@@ -89,6 +98,9 @@ extension IncrementalCompilationState.ProtectedState {
+   fileprivate mutating func collectUnbatchedJobsDiscoveredToBeNeededAfterFinishing(
+     job finishedJob: Job) throws -> [Job]? {
+       mutationSafetyPrecondition()
++      if finishedJob.kind == .emitModule, case .pending(let old) = moduleDependencyGraph.intraModuleDigests {
++        return try decideDeferredInterfaceChanges(old: old)
++      }
+       // Find and deal with inputs that now need to be compiled
+       let invalidatedInputs = collectInputsInvalidatedByRunning(finishedJob)
+       assert(invalidatedInputs.isDisjoint(with: finishedJob.primarySwiftSourceFiles),
+@@ -103,6 +115,51 @@ extension IncrementalCompilationState.ProtectedState {
+       return try getUnbatchedJobs(for: invalidatedInputs)
+     }
+ 
++  /// The emit-module job finished: get the module's new API digests and schedule the files that use
++  /// declarations whose digest changed in the source files whose interface changed so far.
++  fileprivate mutating func decideDeferredInterfaceChanges(old: APIDigests.Digests) throws -> [Job] {
++    mutationSafetyPrecondition()
++    let graph = moduleDependencyGraph
++    var new: APIDigests.Digests?
++    if let output = driver.moduleOutputInfo.output?.outputPath,
++       let modulePath = VirtualPath.lookup(output).absolutePath?.pathString {
++      new = APIDigests.digestsOfEmittedModule(
++        modulePath: modulePath, moduleName: driver.moduleOutputInfo.name, fileSystem: driver.fileSystem,
++        frontendPath: try? driver.toolchain.getToolPath(.swiftCompiler).pathString)
++    }
++    graph.intraModuleDigests = new.map { .decided(old: old, new: $0) } ?? .fallback
++    let deferred = graph.deferredInterfaceChanges
++    graph.deferredInterfaceChanges = [:]
++    var nodes = DirectlyInvalidatedNodeSet()
++    for (source, fileNode) in deferred {
++      guard let new = new else { nodes.insert(fileNode); continue }
++      let defined = Array((graph.nodeFinder.findNodes(for: .known(source)) ?? [:]).values)
++      let changed = APIDigests.changedNodes(defined, old: old, new: new, holder: graph)
++      reporter?.report("API digests of \(fileNode.description(in: graph)): \(changed.count) of \(defined.count) nodes changed")
++      nodes.formUnion(changed)
++    }
++    if new == nil { reporter?.report("No API digests for this module's new version; invalidating whole files") }
++    guard let inputs = graph.collectInputsInBuildUsingInvalidated(nodes: nodes) else {
++      return try getUnbatchedJobs(for: Set(skippedCompileJobs.keys.swiftSourceFiles))
++    }
++    for input in inputs { reporter?.report("Queuing because of changed API digests:", input) }
++    return try getUnbatchedJobs(for: Set(inputs))
++  }
++
++  /// Inputs that a deferred file-interface change would have invalidated, if the emit-module job never
++  /// finished; the build record must not call them up to date.
++  mutating func inputsOfUndecidedInterfaceChanges() -> Set<TypedVirtualPath> {
++    mutationSafetyPrecondition()
++    let graph = moduleDependencyGraph
++    guard !graph.deferredInterfaceChanges.isEmpty else { return [] }
++    let nodes = DirectlyInvalidatedNodeSet(graph.deferredInterfaceChanges.values)
++    graph.deferredInterfaceChanges = [:]
++    guard let inputs = graph.collectInputsInBuildUsingInvalidated(nodes: nodes) else {
++      return Set(skippedCompileJobs.keys)
++    }
++    return Set(inputs.map { $0.typedFile })
++  }
++
+   /// After `job` finished find out which inputs must compiled that were not known to need compilation before
+   fileprivate mutating func collectInputsInvalidatedByRunning(_ job: Job)-> Set<SwiftSourceFile> {
+     mutationSafetyPrecondition()
+diff --git a/Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraph.swift b/Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraph.swift
+index 424d2eb..b7af56a 100644
+--- a/Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraph.swift
++++ b/Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraph.swift
+@@ -11,6 +11,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ //
+ //===----------------------------------------------------------------------===//
++// Modified by the xcfs project: experimental per-name API digests (see APIDigests.swift).
+ 
+ import SwiftOptions
+ 
+@@ -62,6 +63,11 @@ import struct Foundation.TimeInterval
+ 
+   fileprivate var currencyCache: ExternalDependencyCurrencyCache
+ 
++  /// Experimental (see ``APIDigests``): whether a changed source-file interface invalidates only the
++  /// declarations whose API digest changed, and the changes waiting for the module's new digests.
++  var intraModuleDigests: APIDigests.IntraModuleState = .off
++  var deferredInterfaceChanges: [DependencySource: Node] = [:]
++
+   /// To speed all the node insertions and lookups, intern all the strings.
+   /// Put them here because it matches the concurrency constraints; just as modifications to this graph
+   /// are serialized, so must all the mods to this table be.
+diff --git a/Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraphParts/Integrator.swift b/Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraphParts/Integrator.swift
+index aa2c56c..5f79047 100644
+--- a/Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraphParts/Integrator.swift
++++ b/Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraphParts/Integrator.swift
+@@ -11,6 +11,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ //
+ //===----------------------------------------------------------------------===//
++// Modified by the xcfs project: experimental per-name API digests (see APIDigests.swift).
+ 
+ extension ModuleDependencyGraph {
+ 
+@@ -40,6 +41,13 @@ extension ModuleDependencyGraph {
+     /// After integration is complete, this dictionary contains the nodes that have disappeared from this `DependencySource`.
+     var disappearedNodes = [DependencyKey: Graph.Node]()
+ 
++    /// Set when the interface of an imported module or of a source file changed and per-name API digests
++    /// narrow the change to the declarations whose digest differs.
++    var narrowedInterfaceChange: (node: Graph.Node, old: APIDigests.Digests, new: APIDigests.Digests)?
++    /// Graph keys (see ``APIDigests``) of the module version integrated before and of the one being integrated.
++    var priorGraphKey: String?
++    var newGraphKey: String?
++
+     init(sourceGraph: SourceFileDependencyGraph,
+          dependencySource: DependencySource,
+          destination: ModuleDependencyGraph)
+@@ -50,6 +58,18 @@ extension ModuleDependencyGraph {
+       self.disappearedNodes = destination.nodeFinder
+       .findNodes(for: .known(dependencySource))
+         ?? [:]
++      if dependencySource.typedFile.type == .swiftModule, APIDigests.storeDir != nil {
++        self.priorGraphKey = APIDigests.graphKey(disappearedNodes.values.compactMap {
++          APIDigests.graphKeyEntry($0.key, $0.fingerprint, in: destination)
++        })
++        var entries: [String] = []
++        sourceGraph.forEachNode { node in
++          guard node.definitionVsUse == .definition,
++                let e = APIDigests.graphKeyEntry(node.key, node.fingerprint, in: destination) else { return }
++          entries.append(e)
++        }
++        self.newGraphKey = APIDigests.graphKey(entries)
++      }
+     }
+ 
+     var reporter: IncrementalCompilationState.Reporter? {
+@@ -100,12 +120,25 @@ extension ModuleDependencyGraph.Integrator {
+   private mutating func integrate() {
+     integrateEachSourceNode()
+     handleDisappearedNodes()
++    handleModuleInterfaceChange()
+     // Ensure transitive closure will get started.
+     destination.ensureGraphWillRetrace(invalidatedNodes)
+   }
+   private mutating func integrateEachSourceNode() {
+     sourceGraph.forEachNode { integrate(oneNode: $0) }
+   }
++  /// Invalidate only the declarations of a changed module or source file whose API digest differs.
++  private mutating func handleModuleInterfaceChange() {
++    guard let change = narrowedInterfaceChange else { return }
++    let nodes = destination.nodeFinder.findNodes(for: .known(dependencySource)) ?? [:]
++    let changed = APIDigests.changedNodes(Array(nodes.values), old: change.old, new: change.new, holder: destination)
++    for node in changed {
++      addChanged(node)
++      reporter?.report("API digest changed: \(node.description(in: destination))")
++    }
++    reporter?.report("API digests of \(change.node.description(in: destination)): \(changed.count) of \(nodes.count) nodes changed")
++  }
++
+   private mutating func handleDisappearedNodes() {
+     for (_, node) in disappearedNodes {
+       addDisappeared(node)
+@@ -177,6 +210,39 @@ extension ModuleDependencyGraph.Integrator {
+       reporter?.report("Fingerprint \(disposition.rawValue) for existing \(matchHere.description(in: destination))")
+       break
+     case .changed:
++      if sourceType == .swiftModule, APIDigests.storeDir != nil,
++         case .sourceFileProvide(name: let module) = matchHere.key.designator,
++         matchHere.key.aspect == .interface,
++         let oldKey = priorGraphKey, let newKey = newGraphKey {
++        let moduleName = module.lookup(in: destination)
++        if let old = APIDigests.load(module: moduleName, fingerprint: oldKey),
++           let new = APIDigests.load(module: moduleName, fingerprint: newKey) {
++          // Decide which declarations changed once every node of the module has been integrated.
++          narrowedInterfaceChange = (matchHere, old, new)
++          matchHere.setFingerprint(integrand.fingerprint)
++          reporter?.report("Fingerprint \(disposition.rawValue) for existing \(matchHere.description(in: destination)); consulting API digests")
++          return matchHere
++        }
++        reporter?.report("No API digests for module \(moduleName) (\(oldKey) -> \(newKey)); invalidating all of it")
++      }
++      if sourceType == .swift, isUpdating,
++         case .sourceFileProvide = matchHere.key.designator, matchHere.key.aspect == .interface {
++        switch destination.intraModuleDigests {
++        case .pending:
++          // The module's new digests come with the emit-module job; decide then.
++          destination.deferredInterfaceChanges[dependencySource] = matchHere
++          matchHere.setFingerprint(integrand.fingerprint)
++          reporter?.report("Fingerprint \(disposition.rawValue) for existing \(matchHere.description(in: destination)); waiting for API digests")
++          return matchHere
++        case .decided(let old, let new):
++          narrowedInterfaceChange = (matchHere, old, new)
++          matchHere.setFingerprint(integrand.fingerprint)
++          reporter?.report("Fingerprint \(disposition.rawValue) for existing \(matchHere.description(in: destination)); consulting API digests")
++          return matchHere
++        case .off, .fallback:
++          break
++        }
++      }
+       matchHere.setFingerprint(integrand.fingerprint)
+       addChanged(matchHere)
+       reporter?.report("Fingerprint \(disposition.rawValue) for existing \(matchHere.description(in: destination))")
+diff --git a/Sources/SwiftDriver/Jobs/EmitModuleJob.swift b/Sources/SwiftDriver/Jobs/EmitModuleJob.swift
+index 30b5c97..97d0438 100644
+--- a/Sources/SwiftDriver/Jobs/EmitModuleJob.swift
++++ b/Sources/SwiftDriver/Jobs/EmitModuleJob.swift
+@@ -1,3 +1,4 @@
++import Foundation
+ //===----------------------------------------------------------------------===//
+ //
+ // This source file is part of the Swift open source project
+@@ -11,6 +12,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ //
+ //===----------------------------------------------------------------------===//
++// Modified by the xcfs project: experimental per-name API digests (see APIDigests.swift).
+ 
+ import SwiftOptions
+ extension Driver {
+@@ -115,6 +117,23 @@ extension Driver {
+ 
+     try addCommonSymbolGraphOptions(commandLine: &commandLine)
+ 
++    // Experimental: remember how to load this module, to extract its API digests after the build.
++    if APIDigests.storeDir != nil, !forVariantModule {
++      var args: [String] = ["-target", targetTriple.triple]
++      if let sdk = frontendTargetInfo.sdkPath?.path { args += ["-sdk", VirtualPath.lookup(sdk).name] }
++      for opt in parsedOptions.arguments(for: .I, .F, .Fsystem, .Isystem) {
++        args += [opt.option.spelling, opt.argument.asSingle]
++      }
++      // Clang arguments, minus those that only make sense with explicitly built modules.
++      let dropped = ["-fno-implicit-modules", "-fno-implicit-module-maps", "-fmodule-file=", "-fmodules-cache-path="]
++      for opt in parsedOptions.arguments(for: .Xcc) {
++        let a = opt.argument.asSingle
++        if dropped.contains(where: { a.hasPrefix($0) }) { continue }
++        args += ["-Xcc", a]
++      }
++      APIDigests.extractionArguments = args
++    }
++
+     try commandLine.appendLast(.checkApiAvailabilityOnly, from: &parsedOptions)
+ 
+     if parsedOptions.hasArgument(.parseAsLibrary, .emitLibrary) {

@@ -163,7 +163,10 @@ container); `target` (default: from the scheme); `configurations` (name → `con
 PIF); `driver` (`xcodebuild`, `session`, `auto`); `pinDerivedData`; `sharedXcodeCaches` (default true: builds use the
 module, compilation and SDK stat caches Xcode shares between projects); `skipScripts` (session driver only: names of
 the project's script phases an agent's builds leave out — a linter, a localization sync; xcfs removes them from a copy
-of the project description, the project itself is untouched).
+of the project description, the project itself is untouched); `swiftDriver` (experimental, `"api-digests"`: build
+with a patched Swift driver that recompiles only the files a changed interface really affects — see
+[toolchains/swift-driver](toolchains/swift-driver/README.md); Xcode's own driver whenever it is not built for the
+selected Xcode).
 
 Bazel toolchain keys: `build`, `test`, `run`, `warm` (shell commands run in the checkout; `--config` appends
 arguments), `env`, `outputUserRoot`, `stopServerOnRelease`. The adapter owns each checkout's Bazel output base — kept
