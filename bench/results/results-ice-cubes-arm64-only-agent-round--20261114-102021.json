@@ -1,0 +1,104 @@
+{
+ "profile": "Ice Cubes (arm64 only, agent round)",
+ "agents": 3,
+ "started": "20261114-102021",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "98098b9"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "plain": {
+   "total_seconds": 142.7,
+   "steps": [
+    [
+     "create",
+     0.3
+    ],
+    [
+     "create",
+     0.0
+    ],
+    [
+     "first build",
+     60.1
+    ],
+    [
+     "edit 1 + build",
+     8.0
+    ],
+    [
+     "edit 2 + build",
+     8.2
+    ],
+    [
+     "edit 3 + build",
+     29.9
+    ],
+    [
+     "edit 4 + build",
+     5.9
+    ],
+    [
+     "edit 5 + build",
+     30.2
+    ],
+    [
+     "remove",
+     0.1
+    ]
+   ],
+   "left_kb": 1549044,
+   "disk_kb_after": 1339100
+  },
+  "xcfs (session)": {
+   "total_seconds": 37.4,
+   "steps": [
+    [
+     "checkout",
+     0.2
+    ],
+    [
+     "first build",
+     1.7
+    ],
+    [
+     "edit 1 + check",
+     2.3
+    ],
+    [
+     "edit 2 + check",
+     1.3
+    ],
+    [
+     "edit 3 + check",
+     1.5
+    ],
+    [
+     "edit 4 + check",
+     8.6
+    ],
+    [
+     "edit 5 + check",
+     1.6
+    ],
+    [
+     "final build",
+     19.1
+    ],
+    [
+     "release",
+     0.9
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 23420
+  }
+ }
+}

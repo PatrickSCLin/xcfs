@@ -1,0 +1,473 @@
+{
+ "profile": "Wikipedia iOS (arm64 only)",
+ "agents": 3,
+ "started": "20261114-063751",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "0919f3e"
+ },
+ "plain": {
+  "checkouts": [
+   {
+    "agent": 1,
+    "create_seconds": 1.1,
+    "create_disk_kb": 116740,
+    "first_build_seconds": 93.1,
+    "build_disk_kb": 2777408,
+    "checkout_kb": 113640,
+    "caches_kb": 2918516,
+    "caches": 1,
+    "processes": 0,
+    "rss_kb": 0
+   },
+   {
+    "agent": 2,
+    "create_seconds": 0.8,
+    "create_disk_kb": 112460,
+    "first_build_seconds": 90.1,
+    "build_disk_kb": 2747584,
+    "checkout_kb": 113640,
+    "caches_kb": 2919592,
+    "caches": 1,
+    "processes": 0,
+    "rss_kb": 0
+   },
+   {
+    "agent": 3,
+    "create_seconds": 0.9,
+    "create_disk_kb": 116068,
+    "first_build_seconds": 90.0,
+    "build_disk_kb": 2820968,
+    "checkout_kb": 113640,
+    "caches_kb": 2922900,
+    "caches": 1,
+    "processes": 0,
+    "rss_kb": 0
+   }
+  ],
+  "edit_loop": [
+   {
+    "step": "no-op build",
+    "seconds": 16.0,
+    "ok": true
+   },
+   {
+    "step": "edit a function body in the app target",
+    "seconds": 22.9,
+    "ok": true
+   },
+   {
+    "step": "edit a function body in a package ~300 files import (WMFData)",
+    "seconds": 18.1,
+    "ok": true
+   },
+   {
+    "step": "add a public declaration to that package",
+    "seconds": 45.2,
+    "ok": true
+   },
+   {
+    "step": "edit a function body in the app target (repeat 2)",
+    "seconds": 22.9,
+    "ok": true
+   },
+   {
+    "step": "edit a function body in a package ~300 files import (WMFData) (repeat 2)",
+    "seconds": 17.9,
+    "ok": true
+   },
+   {
+    "step": "add a public declaration to that package (repeat 2)",
+    "seconds": 46.4,
+    "ok": true
+   }
+  ],
+  "removal": [
+   {
+    "agent": 1,
+    "seconds": 0.4,
+    "reclaimed_kb": 130624,
+    "caches_left": 1,
+    "caches_left_kb": 2924852,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   },
+   {
+    "agent": 2,
+    "seconds": 0.4,
+    "reclaimed_kb": 118052,
+    "caches_left": 1,
+    "caches_left_kb": 2919592,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   },
+   {
+    "agent": 3,
+    "seconds": 0.4,
+    "reclaimed_kb": 107344,
+    "caches_left": 1,
+    "caches_left_kb": 2922900,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   }
+  ]
+ },
+ "xcfs": {
+  "xcodebuild": {
+   "overrides": {
+    "driver": "xcodebuild"
+   },
+   "warm": {
+    "seconds": 285.7,
+    "disk_kb": 9475684,
+    "slots": [
+     {
+      "slot": "<work>/xcfs-xcodebuild/pool/wikipedia-ios-f74fbf.noindex/slot-1",
+      "index": 1,
+      "ok": true,
+      "seconds": 94.5,
+      "error": null
+     },
+     {
+      "slot": "<work>/xcfs-xcodebuild/pool/wikipedia-ios-f74fbf.noindex/slot-2",
+      "index": 2,
+      "ok": true,
+      "seconds": 94.8,
+      "error": null
+     },
+     {
+      "slot": "<work>/xcfs-xcodebuild/pool/wikipedia-ios-f74fbf.noindex/slot-3",
+      "index": 3,
+      "ok": true,
+      "seconds": 92.4,
+      "error": null
+     }
+    ]
+   },
+   "checkouts": [
+    {
+     "agent": 1,
+     "create_seconds": 0.3,
+     "create_disk_kb": -10036,
+     "first_build_seconds": 16.1,
+     "build_disk_kb": 1860,
+     "warm_at_baseline": true,
+     "checkout_kb": 113640,
+     "caches_kb": 3305596,
+     "caches": 1,
+     "processes": 0,
+     "rss_kb": 0
+    },
+    {
+     "agent": 2,
+     "create_seconds": 0.3,
+     "create_disk_kb": -10036,
+     "first_build_seconds": 16.0,
+     "build_disk_kb": 2860,
+     "warm_at_baseline": true,
+     "checkout_kb": 113640,
+     "caches_kb": 3306156,
+     "caches": 1,
+     "processes": 0,
+     "rss_kb": 0
+    },
+    {
+     "agent": 3,
+     "create_seconds": 0.3,
+     "create_disk_kb": -10080,
+     "first_build_seconds": 15.9,
+     "build_disk_kb": 2612,
+     "warm_at_baseline": true,
+     "checkout_kb": 113640,
+     "caches_kb": 3306956,
+     "caches": 1,
+     "processes": 0,
+     "rss_kb": 0
+    }
+   ],
+   "edit_loop": [
+    {
+     "step": "no-op build",
+     "seconds": 15.6,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in the app target \u2014 xcfs check of the file",
+     "seconds": 24.0,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in the app target",
+     "seconds": 15.4,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package ~300 files import (WMFData) \u2014 xcfs check of the file",
+     "seconds": 18.4,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package ~300 files import (WMFData)",
+     "seconds": 15.4,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package \u2014 xcfs check of the file",
+     "seconds": 53.3,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package",
+     "seconds": 15.4,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in the app target (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 23.4,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in the app target (repeat 2)",
+     "seconds": 15.4,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package ~300 files import (WMFData) (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 18.8,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package ~300 files import (WMFData) (repeat 2)",
+     "seconds": 15.4,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 51.4,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package (repeat 2)",
+     "seconds": 15.4,
+     "ok": true
+    }
+   ],
+   "release": [
+    {
+     "agent": 1,
+     "seconds": 1.1,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "seconds": 1.0,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    },
+    {
+     "agent": 3,
+     "seconds": 1.0,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    }
+   ],
+   "retire": {
+    "seconds": 0.7,
+    "ok": true,
+    "reclaimed_kb_after_10s": 9465112,
+    "caches_left": 0,
+    "caches_left_kb": 0,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   }
+  },
+  "session": {
+   "overrides": {
+    "driver": "session"
+   },
+   "warm": {
+    "seconds": 282.4,
+    "disk_kb": 9163712,
+    "slots": [
+     {
+      "slot": "<work>/xcfs-session/pool/wikipedia-ios-f74fbf.noindex/slot-1",
+      "index": 1,
+      "ok": true,
+      "seconds": 95.6,
+      "error": null
+     },
+     {
+      "slot": "<work>/xcfs-session/pool/wikipedia-ios-f74fbf.noindex/slot-2",
+      "index": 2,
+      "ok": true,
+      "seconds": 91.3,
+      "error": null
+     },
+     {
+      "slot": "<work>/xcfs-session/pool/wikipedia-ios-f74fbf.noindex/slot-3",
+      "index": 3,
+      "ok": true,
+      "seconds": 91.4,
+      "error": null
+     }
+    ]
+   },
+   "checkouts": [
+    {
+     "agent": 1,
+     "create_seconds": 0.3,
+     "create_disk_kb": -10848,
+     "first_build_seconds": 12.2,
+     "build_disk_kb": 8448,
+     "warm_at_baseline": true,
+     "checkout_kb": 113640,
+     "caches_kb": 3211744,
+     "caches": 1,
+     "processes": 1,
+     "rss_kb": 24560
+    },
+    {
+     "agent": 2,
+     "create_seconds": 0.3,
+     "create_disk_kb": -10060,
+     "first_build_seconds": 12.1,
+     "build_disk_kb": 7216,
+     "warm_at_baseline": true,
+     "checkout_kb": 113640,
+     "caches_kb": 3208088,
+     "caches": 1,
+     "processes": 1,
+     "rss_kb": 24528
+    },
+    {
+     "agent": 3,
+     "create_seconds": 0.3,
+     "create_disk_kb": -10056,
+     "first_build_seconds": 12.0,
+     "build_disk_kb": 7392,
+     "warm_at_baseline": true,
+     "checkout_kb": 113640,
+     "caches_kb": 3207904,
+     "caches": 1,
+     "processes": 1,
+     "rss_kb": 24384
+    }
+   ],
+   "edit_loop": [
+    {
+     "step": "no-op build",
+     "seconds": 11.6,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in the app target \u2014 xcfs check of the file",
+     "seconds": 18.0,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in the app target",
+     "seconds": 18.8,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package ~300 files import (WMFData) \u2014 xcfs check of the file",
+     "seconds": 2.5,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package ~300 files import (WMFData)",
+     "seconds": 14.3,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package \u2014 xcfs check of the file",
+     "seconds": 3.2,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package",
+     "seconds": 47.9,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in the app target (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 16.9,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in the app target (repeat 2)",
+     "seconds": 18.7,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package ~300 files import (WMFData) (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 2.5,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package ~300 files import (WMFData) (repeat 2)",
+     "seconds": 14.1,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 3.6,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package (repeat 2)",
+     "seconds": 44.9,
+     "ok": true
+    }
+   ],
+   "release": [
+    {
+     "agent": 1,
+     "seconds": 1.2,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "seconds": 1.2,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    },
+    {
+     "agent": 3,
+     "seconds": 1.1,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    }
+   ],
+   "retire": {
+    "seconds": 0.7,
+    "ok": true,
+    "reclaimed_kb_after_10s": 9212120,
+    "caches_left": 0,
+    "caches_left_kb": 0,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   }
+  }
+ },
+ "reused_from": "20261114-031103"
+}

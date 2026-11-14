@@ -1,0 +1,252 @@
+{
+ "profile": "Home Assistant iOS (arm64, zero-config)",
+ "agents": 3,
+ "started": "20261114-185000",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "f160c75"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "xcfs (defaults)": {
+   "total_seconds": 98.9,
+   "steps": [
+    [
+     "checkout",
+     0.2
+    ],
+    [
+     "first build",
+     4.3
+    ],
+    [
+     "edit 1 + check",
+     17.4
+    ],
+    [
+     "edit 2 + check",
+     8.0
+    ],
+    [
+     "edit 3 + check",
+     7.6
+    ],
+    [
+     "edit 4 + check",
+     27.5
+    ],
+    [
+     "edit 5 + check",
+     5.3
+    ],
+    [
+     "final build",
+     27.3
+    ],
+    [
+     "release",
+     1.1
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 27476,
+   "decisions": [
+    {
+     "step": "first build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "api-digests",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 1 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 2 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 3 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 4 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 5 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "final build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "api-digests",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    }
+   ]
+  },
+  "xcfs (defaults-without-driver-patch)": {
+   "total_seconds": 159.9,
+   "steps": [
+    [
+     "checkout",
+     0.2
+    ],
+    [
+     "first build",
+     4.3
+    ],
+    [
+     "edit 1 + check",
+     19.0
+    ],
+    [
+     "edit 2 + check",
+     8.4
+    ],
+    [
+     "edit 3 + check",
+     6.9
+    ],
+    [
+     "edit 4 + check",
+     53.3
+    ],
+    [
+     "edit 5 + check",
+     7.2
+    ],
+    [
+     "final build",
+     59.4
+    ],
+    [
+     "release",
+     1.1
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 57588,
+   "decisions": [
+    {
+     "step": "first build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "native (configured)",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 1 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 2 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 3 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 4 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 5 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "final build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "native (configured)",
+     "skipped_scripts": [
+      "Run SwiftLint",
+      "Swiftlint"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    }
+   ]
+  }
+ }
+}

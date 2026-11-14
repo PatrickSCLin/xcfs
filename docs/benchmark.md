@@ -60,6 +60,10 @@ both xcfs columns):
 | Ice Cubes | 164.4 s | 38.0 s | **16.4 s** (10×) |
 | Wikipedia iOS | 255.4 s | 90.4 s | **42.4 s** (6×) |
 
+These two rows were measured before the driver had its version line and features file (commit 8c2d298); both
+projects built correctly in that state, but the [zero-configuration table](#zero-configuration-on-projects-xcfs-was-not-developed-on)
+below measures the driver as it is now and supersedes them.
+
 Where it went (Wikipedia, session → with the driver): the check after the public declaration 33.9 → 10.2 s, the final
 build 34.2 → 11.5 s; the other steps within 0.5 s. On Ice Cubes: that check 8.6 → 2.1 s, the final build 19.1 → 5.1 s.
 Edits measured alone on fresh checkouts (3 repeats, no check; same session driver with and without the experimental
@@ -163,6 +167,10 @@ One architecture:
 | public declaration added to `Models` | 30.0 / 30.3 s | 30.7 / 30.6 s | 24.6 / 24.8 s |
 | `xcfs check` of the edited file, per edit above | — | (a full build) | 2.5 / 1.5, 1.2 / 1.4, 1.7 / 1.9 s |
 
+Raw results: [bench/results](../bench/results/README.md), plain side from the run of 02:52, xcfs sides from its rerun
+of 06:25. In the xcodebuild column an edit's time is that of `xcfs check`, which with the `xcodebuild` driver is a full
+build (the build after it is a no-op, ≈5.3 s).
+
 Two architectures (generic destination; the session side was rerun after it was made to build both architectures
 like `xcodebuild` — the first session run built one and is not shown):
 
@@ -201,6 +209,9 @@ One architecture:
 | function body, `WMFData` | 18.1 / 17.9 s | 18.4 / 18.8 s | 14.3 / 14.1 s |
 | public declaration added to `WMFData` | 45.2 / 46.4 s | 53.3 / 51.4 s | 47.9 / 44.9 s |
 | `xcfs check` of the edited file, per edit above | — | (a full build) | 18.0 / 16.9, 2.5 / 2.5, 3.2 / 3.6 s |
+
+Raw results: [bench/results](../bench/results/README.md), plain side from the run of 03:11, xcfs sides from its rerun
+of 06:37; the xcodebuild column times `xcfs check` as above (the build after it ≈15.5 s).
 
 A check of a file in the app target takes 17–18 s: the app target is the module the project's script phases belong
 to. Checks in a package take 2.5–3.6 s.

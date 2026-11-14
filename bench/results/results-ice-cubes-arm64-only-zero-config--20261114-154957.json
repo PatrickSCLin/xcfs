@@ -1,0 +1,225 @@
+{
+ "profile": "Ice Cubes (arm64 only, zero-config)",
+ "agents": 3,
+ "started": "20261114-154957",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "98098b9"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "plain": {
+   "total_seconds": 161.8,
+   "steps": [
+    [
+     "create",
+     0.4
+    ],
+    [
+     "create",
+     0.0
+    ],
+    [
+     "first build",
+     77.8
+    ],
+    [
+     "edit 1 + build",
+     8.2
+    ],
+    [
+     "edit 2 + build",
+     8.5
+    ],
+    [
+     "edit 3 + build",
+     30.3
+    ],
+    [
+     "edit 4 + build",
+     6.1
+    ],
+    [
+     "edit 5 + build",
+     30.3
+    ],
+    [
+     "remove",
+     0.1
+    ]
+   ],
+   "left_kb": 1550340,
+   "disk_kb_after": 1500632
+  },
+  "xcfs (defaults)": {
+   "total_seconds": 56.9,
+   "steps": [
+    [
+     "checkout",
+     0.2
+    ],
+    [
+     "first build",
+     6.3
+    ],
+    [
+     "edit 1 + check",
+     7.8
+    ],
+    [
+     "edit 2 + check",
+     8.4
+    ],
+    [
+     "edit 3 + check",
+     11.0
+    ],
+    [
+     "edit 4 + check",
+     6.2
+    ],
+    [
+     "edit 5 + check",
+     10.6
+    ],
+    [
+     "final build",
+     5.6
+    ],
+    [
+     "release",
+     0.9
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 23896,
+   "decisions": [
+    {
+     "step": "first build",
+     "ok": true,
+     "driver": "xcodebuild",
+     "swift_driver": "api-digests"
+    },
+    {
+     "step": "edit 1 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "edit 2 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "edit 3 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "edit 4 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "edit 5 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "final build",
+     "ok": true,
+     "driver": "xcodebuild",
+     "swift_driver": "api-digests"
+    }
+   ]
+  },
+  "xcfs (defaults-without-driver-patch)": {
+   "total_seconds": 96.8,
+   "steps": [
+    [
+     "checkout",
+     0.2
+    ],
+    [
+     "first build",
+     6.2
+    ],
+    [
+     "edit 1 + check",
+     8.2
+    ],
+    [
+     "edit 2 + check",
+     8.6
+    ],
+    [
+     "edit 3 + check",
+     30.7
+    ],
+    [
+     "edit 4 + check",
+     6.3
+    ],
+    [
+     "edit 5 + check",
+     30.3
+    ],
+    [
+     "final build",
+     5.4
+    ],
+    [
+     "release",
+     0.8
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 10776,
+   "decisions": [
+    {
+     "step": "first build",
+     "ok": true,
+     "driver": "xcodebuild",
+     "swift_driver": "native (configured)"
+    },
+    {
+     "step": "edit 1 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "edit 2 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "edit 3 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "edit 4 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "edit 5 + check",
+     "ok": true,
+     "driver": "xcodebuild"
+    },
+    {
+     "step": "final build",
+     "ok": true,
+     "driver": "xcodebuild",
+     "swift_driver": "native (configured)"
+    }
+   ]
+  }
+ }
+}

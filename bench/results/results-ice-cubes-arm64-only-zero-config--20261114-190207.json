@@ -1,0 +1,196 @@
+{
+ "profile": "Ice Cubes (arm64 only, zero-config)",
+ "agents": 3,
+ "started": "20261114-190207",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "98098b9"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "xcfs (defaults)": {
+   "total_seconds": 17.1,
+   "steps": [
+    [
+     "checkout",
+     0.4
+    ],
+    [
+     "first build",
+     1.8
+    ],
+    [
+     "edit 1 + check",
+     2.2
+    ],
+    [
+     "edit 2 + check",
+     1.6
+    ],
+    [
+     "edit 3 + check",
+     1.5
+    ],
+    [
+     "edit 4 + check",
+     2.2
+    ],
+    [
+     "edit 5 + check",
+     1.2
+    ],
+    [
+     "final build",
+     5.1
+    ],
+    [
+     "release",
+     0.9
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 15752,
+   "decisions": [
+    {
+     "step": "first build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "api-digests",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 1 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 2 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 3 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 4 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 5 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "final build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "api-digests",
+     "skipped_scripts": []
+    }
+   ]
+  },
+  "xcfs (defaults-without-driver-patch)": {
+   "total_seconds": 39.1,
+   "steps": [
+    [
+     "checkout",
+     0.4
+    ],
+    [
+     "first build",
+     1.9
+    ],
+    [
+     "edit 1 + check",
+     2.6
+    ],
+    [
+     "edit 2 + check",
+     1.6
+    ],
+    [
+     "edit 3 + check",
+     1.8
+    ],
+    [
+     "edit 4 + check",
+     8.7
+    ],
+    [
+     "edit 5 + check",
+     1.6
+    ],
+    [
+     "final build",
+     19.5
+    ],
+    [
+     "release",
+     0.9
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 25924,
+   "decisions": [
+    {
+     "step": "first build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "native (configured)",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 1 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 2 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 3 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 4 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "edit 5 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": []
+    },
+    {
+     "step": "final build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "native (configured)",
+     "skipped_scripts": []
+    }
+   ]
+  }
+ }
+}

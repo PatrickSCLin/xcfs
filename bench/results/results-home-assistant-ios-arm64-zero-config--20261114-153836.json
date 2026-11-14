@@ -1,0 +1,57 @@
+{
+ "profile": "Home Assistant iOS (arm64, zero-config)",
+ "agents": 3,
+ "started": "20261114-153836",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "f160c75"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "plain": {
+   "total_seconds": 537.8,
+   "steps": [
+    [
+     "create",
+     1.5
+    ],
+    [
+     "first build",
+     276.9
+    ],
+    [
+     "edit 1 + build",
+     31.1
+    ],
+    [
+     "edit 2 + build",
+     29.3
+    ],
+    [
+     "edit 3 + build",
+     86.0
+    ],
+    [
+     "edit 4 + build",
+     28.6
+    ],
+    [
+     "edit 5 + build",
+     83.2
+    ],
+    [
+     "remove",
+     1.1
+    ]
+   ],
+   "left_kb": 5660292,
+   "disk_kb_after": 5664932
+  }
+ }
+}

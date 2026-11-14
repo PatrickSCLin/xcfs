@@ -1,0 +1,252 @@
+{
+ "profile": "Element X iOS (arm64, zero-config)",
+ "agents": 3,
+ "started": "20261114-182835",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "0a8a3c4"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "xcfs (defaults)": {
+   "total_seconds": 57.4,
+   "steps": [
+    [
+     "checkout",
+     0.4
+    ],
+    [
+     "first build",
+     2.9
+    ],
+    [
+     "edit 1 + check",
+     15.5
+    ],
+    [
+     "edit 2 + check",
+     1.7
+    ],
+    [
+     "edit 3 + check",
+     1.9
+    ],
+    [
+     "edit 4 + check",
+     15.2
+    ],
+    [
+     "edit 5 + check",
+     1.4
+    ],
+    [
+     "final build",
+     16.4
+    ],
+    [
+     "release",
+     1.4
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 6128,
+   "decisions": [
+    {
+     "step": "first build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "api-digests",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 1 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 2 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 3 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 4 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 5 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "final build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "api-digests",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    }
+   ]
+  },
+  "xcfs (defaults-without-driver-patch)": {
+   "total_seconds": 93.5,
+   "steps": [
+    [
+     "checkout",
+     0.4
+    ],
+    [
+     "first build",
+     2.9
+    ],
+    [
+     "edit 1 + check",
+     18.5
+    ],
+    [
+     "edit 2 + check",
+     1.9
+    ],
+    [
+     "edit 3 + check",
+     1.7
+    ],
+    [
+     "edit 4 + check",
+     32.1
+    ],
+    [
+     "edit 5 + check",
+     1.6
+    ],
+    [
+     "final build",
+     32.5
+    ],
+    [
+     "release",
+     1.2
+    ]
+   ],
+   "left_kb": 0,
+   "disk_kb_after": 9076,
+   "decisions": [
+    {
+     "step": "first build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "native (configured)",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 1 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 2 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 3 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 4 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "edit 5 + check",
+     "ok": true,
+     "driver": "session",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    },
+    {
+     "step": "final build",
+     "ok": true,
+     "driver": "session",
+     "swift_driver": "native (configured)",
+     "skipped_scripts": [
+      "\u26a0\ufe0f SwiftLint",
+      "\ud83e\uddf9 SwiftFormat"
+     ],
+     "skipped_scripts_reason": "auto: linter-only phases"
+    }
+   ]
+  }
+ }
+}

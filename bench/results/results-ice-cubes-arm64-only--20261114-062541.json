@@ -1,0 +1,473 @@
+{
+ "profile": "Ice Cubes (arm64 only)",
+ "agents": 3,
+ "started": "20261114-062541",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "98098b9"
+ },
+ "plain": {
+  "checkouts": [
+   {
+    "agent": 1,
+    "create_seconds": 0.4,
+    "create_disk_kb": 87504,
+    "first_build_seconds": 80.3,
+    "build_disk_kb": 1529344,
+    "checkout_kb": 86932,
+    "caches_kb": 1546364,
+    "caches": 1,
+    "processes": 0,
+    "rss_kb": 0
+   },
+   {
+    "agent": 2,
+    "create_seconds": 0.3,
+    "create_disk_kb": 87540,
+    "first_build_seconds": 72.0,
+    "build_disk_kb": 1484124,
+    "checkout_kb": 86932,
+    "caches_kb": 1546436,
+    "caches": 1,
+    "processes": 0,
+    "rss_kb": 0
+   },
+   {
+    "agent": 3,
+    "create_seconds": 0.3,
+    "create_disk_kb": 87592,
+    "first_build_seconds": 71.9,
+    "build_disk_kb": 1537136,
+    "checkout_kb": 86932,
+    "caches_kb": 1546284,
+    "caches": 1,
+    "processes": 0,
+    "rss_kb": 0
+   }
+  ],
+  "edit_loop": [
+   {
+    "step": "no-op build",
+    "seconds": 5.9,
+    "ok": true
+   },
+   {
+    "step": "edit a function body in a leaf package (Timeline)",
+    "seconds": 7.9,
+    "ok": true
+   },
+   {
+    "step": "edit a function body in a package 12 others depend on (Models)",
+    "seconds": 8.4,
+    "ok": true
+   },
+   {
+    "step": "add a public declaration to that package",
+    "seconds": 30.0,
+    "ok": true
+   },
+   {
+    "step": "edit a function body in a leaf package (Timeline) (repeat 2)",
+    "seconds": 7.5,
+    "ok": true
+   },
+   {
+    "step": "edit a function body in a package 12 others depend on (Models) (repeat 2)",
+    "seconds": 8.2,
+    "ok": true
+   },
+   {
+    "step": "add a public declaration to that package (repeat 2)",
+    "seconds": 30.3,
+    "ok": true
+   }
+  ],
+  "removal": [
+   {
+    "agent": 1,
+    "seconds": 0.1,
+    "reclaimed_kb": 103788,
+    "caches_left": 1,
+    "caches_left_kb": 1551240,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   },
+   {
+    "agent": 2,
+    "seconds": 0.1,
+    "reclaimed_kb": 87412,
+    "caches_left": 1,
+    "caches_left_kb": 1546436,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   },
+   {
+    "agent": 3,
+    "seconds": 0.1,
+    "reclaimed_kb": 87476,
+    "caches_left": 1,
+    "caches_left_kb": 1546284,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   }
+  ]
+ },
+ "xcfs": {
+  "xcodebuild": {
+   "overrides": {
+    "driver": "xcodebuild"
+   },
+   "warm": {
+    "seconds": 190.9,
+    "disk_kb": 5202456,
+    "slots": [
+     {
+      "slot": "<work>/xcfs-xcodebuild/pool/IceCubesApp-d281bb.noindex/slot-1",
+      "index": 1,
+      "ok": true,
+      "seconds": 63.8,
+      "error": null
+     },
+     {
+      "slot": "<work>/xcfs-xcodebuild/pool/IceCubesApp-d281bb.noindex/slot-2",
+      "index": 2,
+      "ok": true,
+      "seconds": 62.6,
+      "error": null
+     },
+     {
+      "slot": "<work>/xcfs-xcodebuild/pool/IceCubesApp-d281bb.noindex/slot-3",
+      "index": 3,
+      "ok": true,
+      "seconds": 62.7,
+      "error": null
+     }
+    ]
+   },
+   "checkouts": [
+    {
+     "agent": 1,
+     "create_seconds": 0.2,
+     "create_disk_kb": -1384,
+     "first_build_seconds": 6.1,
+     "build_disk_kb": 248,
+     "warm_at_baseline": true,
+     "checkout_kb": 86932,
+     "caches_kb": 1888940,
+     "caches": 1,
+     "processes": 0,
+     "rss_kb": 0
+    },
+    {
+     "agent": 2,
+     "create_seconds": 0.2,
+     "create_disk_kb": -1400,
+     "first_build_seconds": 6.1,
+     "build_disk_kb": 1444,
+     "warm_at_baseline": true,
+     "checkout_kb": 86932,
+     "caches_kb": 1891544,
+     "caches": 1,
+     "processes": 0,
+     "rss_kb": 0
+    },
+    {
+     "agent": 3,
+     "create_seconds": 0.2,
+     "create_disk_kb": -1428,
+     "first_build_seconds": 6.3,
+     "build_disk_kb": -580,
+     "warm_at_baseline": true,
+     "checkout_kb": 86932,
+     "caches_kb": 1888864,
+     "caches": 1,
+     "processes": 0,
+     "rss_kb": 0
+    }
+   ],
+   "edit_loop": [
+    {
+     "step": "no-op build",
+     "seconds": 5.2,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a leaf package (Timeline) \u2014 xcfs check of the file",
+     "seconds": 8.2,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a leaf package (Timeline)",
+     "seconds": 5.2,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package 12 others depend on (Models) \u2014 xcfs check of the file",
+     "seconds": 8.5,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package 12 others depend on (Models)",
+     "seconds": 5.2,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package \u2014 xcfs check of the file",
+     "seconds": 30.7,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package",
+     "seconds": 5.2,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a leaf package (Timeline) (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 8.0,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a leaf package (Timeline) (repeat 2)",
+     "seconds": 5.2,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package 12 others depend on (Models) (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 8.5,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package 12 others depend on (Models) (repeat 2)",
+     "seconds": 5.2,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 30.6,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package (repeat 2)",
+     "seconds": 5.4,
+     "ok": true
+    }
+   ],
+   "release": [
+    {
+     "agent": 1,
+     "seconds": 0.8,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "seconds": 0.8,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    },
+    {
+     "agent": 3,
+     "seconds": 0.8,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    }
+   ],
+   "retire": {
+    "seconds": 0.7,
+    "ok": true,
+    "reclaimed_kb_after_10s": 5232084,
+    "caches_left": 0,
+    "caches_left_kb": 0,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   }
+  },
+  "session": {
+   "overrides": {
+    "driver": "session"
+   },
+   "warm": {
+    "seconds": 206.1,
+    "disk_kb": 5197596,
+    "slots": [
+     {
+      "slot": "<work>/xcfs-session/pool/IceCubesApp-d281bb.noindex/slot-1",
+      "index": 1,
+      "ok": true,
+      "seconds": 81.0,
+      "error": null
+     },
+     {
+      "slot": "<work>/xcfs-session/pool/IceCubesApp-d281bb.noindex/slot-2",
+      "index": 2,
+      "ok": true,
+      "seconds": 61.4,
+      "error": null
+     },
+     {
+      "slot": "<work>/xcfs-session/pool/IceCubesApp-d281bb.noindex/slot-3",
+      "index": 3,
+      "ok": true,
+      "seconds": 61.7,
+      "error": null
+     }
+    ]
+   },
+   "checkouts": [
+    {
+     "agent": 1,
+     "create_seconds": 0.2,
+     "create_disk_kb": -1404,
+     "first_build_seconds": 1.7,
+     "build_disk_kb": 1136,
+     "warm_at_baseline": true,
+     "checkout_kb": 86932,
+     "caches_kb": 1881012,
+     "caches": 1,
+     "processes": 1,
+     "rss_kb": 24288
+    },
+    {
+     "agent": 2,
+     "create_seconds": 0.2,
+     "create_disk_kb": -1424,
+     "first_build_seconds": 1.7,
+     "build_disk_kb": 2148,
+     "warm_at_baseline": true,
+     "checkout_kb": 86932,
+     "caches_kb": 1880972,
+     "caches": 1,
+     "processes": 1,
+     "rss_kb": 24336
+    },
+    {
+     "agent": 3,
+     "create_seconds": 0.2,
+     "create_disk_kb": -3860,
+     "first_build_seconds": 1.7,
+     "build_disk_kb": 1212,
+     "warm_at_baseline": true,
+     "checkout_kb": 86932,
+     "caches_kb": 1881088,
+     "caches": 1,
+     "processes": 1,
+     "rss_kb": 24256
+    }
+   ],
+   "edit_loop": [
+    {
+     "step": "no-op build",
+     "seconds": 0.9,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a leaf package (Timeline) \u2014 xcfs check of the file",
+     "seconds": 2.5,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a leaf package (Timeline)",
+     "seconds": 3.1,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package 12 others depend on (Models) \u2014 xcfs check of the file",
+     "seconds": 1.2,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package 12 others depend on (Models)",
+     "seconds": 3.7,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package \u2014 xcfs check of the file",
+     "seconds": 1.7,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package",
+     "seconds": 24.6,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a leaf package (Timeline) (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 1.5,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a leaf package (Timeline) (repeat 2)",
+     "seconds": 3.1,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package 12 others depend on (Models) (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 1.4,
+     "ok": true
+    },
+    {
+     "step": "edit a function body in a package 12 others depend on (Models) (repeat 2)",
+     "seconds": 3.8,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package (repeat 2) \u2014 xcfs check of the file",
+     "seconds": 1.9,
+     "ok": true
+    },
+    {
+     "step": "add a public declaration to that package (repeat 2)",
+     "seconds": 24.8,
+     "ok": true
+    }
+   ],
+   "release": [
+    {
+     "agent": 1,
+     "seconds": 0.9,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "seconds": 0.9,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    },
+    {
+     "agent": 3,
+     "seconds": 0.9,
+     "ok": true,
+     "processes_left": 0,
+     "rss_left_kb": 0,
+     "error": null
+    }
+   ],
+   "retire": {
+    "seconds": 0.7,
+    "ok": true,
+    "reclaimed_kb_after_10s": 5227040,
+    "caches_left": 0,
+    "caches_left_kb": 0,
+    "processes_left": 0,
+    "rss_left_kb": 0
+   }
+  }
+ },
+ "reused_from": "20261114-025200"
+}
