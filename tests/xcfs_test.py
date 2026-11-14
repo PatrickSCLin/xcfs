@@ -1277,7 +1277,10 @@ def t58_test_takes_a_scheme_of_its_own():
     seen = []
 
     class Recording(XcodeAdapter):
-        def xcodebuild(self, ctx, action, conf_name, conf, extra=(), destination=None, log_name=None, timeout=None):
+        def driver(self, ctx): return "xcodebuild"
+
+        def xcodebuild(self, ctx, action, conf_name, conf, extra=(), destination=None, log_name=None, timeout=None,
+                       dd=None):
             seen.append((action, self.scheme(ctx), self.derived_data(ctx, conf_name), destination))
             return {"ok": True, "_lines": ["Executed 3 tests, with 0 failures (0 unexpected)"]}
     entry = {"adapter": "xcode", "project": "App.xcodeproj", "scheme": "App",
@@ -1315,6 +1318,56 @@ def t59_warm_leaves_a_current_slot_alone():
     assert r["slots"][0].get("already_warm"), r
     r = xcfs("pool", "warm", repo, "--slot", slot_rows(repo) and list(slot_rows(repo))[0], env=E)
     assert r["_code"] == 0 and not r["slots"][0].get("already_warm"), "asked for one slot, it is warmed: %s" % r
+
+
+@test
+def t60_session_builds_the_tests_it_runs():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapter import Context
+    from xcfs.adapters import xcode_session as xs
+    from xcfs.adapters.xcode import XcodeAdapter
+    unit = "com.apple.product-type.bundle.unit-test"
+    pif = [{"type": "target", "contents": {"name": n, "productTypeIdentifier": t}} for n, t in (
+        ("App", "com.apple.product-type.application"), ("ModelsTests-product", unit), ("NetworkClientTests-product", unit),
+        ("AppTests", unit))]
+    root = SB + "/t60"
+    ctx = Context("worktree", root, root, {}, {"adapter": "xcode"}, SB + "/b60")
+    assert xs.test_targets(ctx, pif, "ModelsTests") == ["ModelsTests-product"]       # a package's test scheme
+    assert xs.test_targets(ctx, pif, "NetworkClient") == ["NetworkClientTests-product"]   # a library's scheme
+    assert xs.test_targets(ctx, pif, "Elsewhere") == []
+    os.makedirs(root + "/A.xcodeproj/xcshareddata/xcschemes")
+    open(root + "/A.xcodeproj/xcshareddata/xcschemes/App.xcscheme", "w").write(
+        '<Scheme><TestAction><Testables><TestableReference skipped = "NO"><BuildableReference '
+        'BlueprintName = "AppTests" BuildableName = "AppTests.xctest"></BuildableReference></TestableReference>'
+        '</Testables></TestAction></Scheme>')
+    assert xs.test_targets(ctx, pif, "App") == ["AppTests"], "a scheme file's testables come first"
+    # with the session driver: the session builds, xcodebuild only runs, in the session's DerivedData
+    calls = []
+
+    class Session(XcodeAdapter):
+        def driver(self, ctx): return "session"
+
+        def xcodebuild(self, ctx, action, conf_name, conf, extra=(), destination=None, log_name=None, timeout=None, dd=None):
+            calls.append((action, self.scheme(ctx), dd))
+            return {"ok": True, "seconds": 5.0, "_lines": ["\u2714 Test run with 3 tests in 0 suites passed after 0.1 seconds."]}
+    saved = xs.build_tests
+    entry = {"adapter": "xcode", "scheme": "App", "configurations": {"sim": {"testDestination": "id=X"}}}
+    try:
+        xs.build_tests = lambda a, c, n, conf, args, scheme: {"ok": True, "seconds": 1.5, "derived_data": "/dd/swbuild",
+                                                             "compile_tasks": 2, "test_targets": ["ModelsTests-product"]}
+        r = Session().test(Context("worktree", root, root, {}, entry, SB + "/b60"), {"scheme": "ModelsTests"})
+        assert calls[-1] == ("test-without-building", "ModelsTests", "/dd/swbuild") and r["tests"] == 3, (calls, r)
+        assert r["built_by"] == "session" and r["seconds"] == 6.5, r
+        xs.build_tests = lambda *a: {"ok": False, "seconds": 2.0, "derived_data": "/dd/swbuild",
+                                     "diagnostics": [{"severity": "error", "message": "boom"}]}
+        n = len(calls)
+        r = Session().test(Context("worktree", root, root, {}, entry, SB + "/b60"), {"scheme": "ModelsTests"})
+        assert not r["ok"] and len(calls) == n and r["diagnostics"][0]["message"] == "boom", "tests that do not build are not run"
+        xs.build_tests = lambda *a: None
+        r = Session().test(Context("worktree", root, root, {}, entry, SB + "/b60"), {"scheme": "Elsewhere"})
+        assert calls[-1][0] == "test" and calls[-1][2] is None, "no test target found: xcodebuild builds and runs: %s" % calls
+    finally:
+        xs.build_tests = saved
 
 
 def main():

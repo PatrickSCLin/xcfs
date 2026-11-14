@@ -433,9 +433,11 @@ def metal_toolchain(ctx, pif=None):
     return None, None
 
 
-def make_request(adapter, ctx, pif, conf, dd, files=None, scheme_cache=None):
+def make_request(adapter, ctx, pif, conf, dd, files=None, scheme_cache=None, targets=None):
     scheme = adapter.scheme(ctx)
-    if ctx.entry.get("target"):
+    if targets:
+        names, implicit = targets, True
+    elif ctx.entry.get("target"):
         names, implicit = [ctx.entry["target"]], True
     else:   # the PIF's key covers the scheme files, so its name keys the answer
         cached = read_json(scheme_cache, None) if scheme_cache else None
@@ -788,7 +790,37 @@ def call(sp, req, timeout):
         s.close()
 
 
-def session_build(adapter, ctx, name, conf, args, files=None):
+TEST_PRODUCTS = ("com.apple.product-type.bundle.unit-test", "com.apple.product-type.bundle.ui-testing")
+
+
+def test_targets(ctx, pif, scheme):
+    """The test targets a scheme runs: its scheme file's testables, or, for a package's generated scheme, the test
+    target of that name (Xcode names a package's test product `<name>-product`; a library's scheme tests `<name>Tests`).
+    Empty when none is found."""
+    root = ctx.toolchain_root
+    for f in glob.glob(os.path.join(root, "*.xcworkspace", "xcshareddata", "xcschemes", scheme + ".xcscheme")) + \
+            glob.glob(os.path.join(root, "**", "*.xcodeproj", "xcshareddata", "xcschemes", scheme + ".xcscheme"),
+                      recursive=True):
+        try:
+            text = open(f, errors="replace").read()
+        except OSError:
+            continue
+        m = re.search(r"<TestAction\b.*?</TestAction>", text, re.S)
+        names = re.findall(r'<TestableReference\b[^>]*>\s*<BuildableReference\b[^>]*BlueprintName\s*=\s*"([^"]+)"',
+                           m.group(0), re.S) if m else []
+        if names:
+            return names
+    tests = {t.get("name") for t in (e["contents"] for e in pif or [] if e.get("type") == "target")
+             if t.get("productTypeIdentifier") in TEST_PRODUCTS}
+    for cand in (scheme, scheme + "-product", scheme + "Tests", scheme + "Tests-product"):
+        if cand in tests:
+            return [cand]
+    return []
+
+
+def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None):
+    """A build through the session. With test_scheme: build that scheme's test targets (into the same DerivedData,
+    so whatever the last build made is reused); None when it has none the session can find."""
     t0 = time.time()
     scheme = adapter.scheme(ctx)
     pif_path, exported = export_pif(adapter, ctx, scheme)
@@ -803,8 +835,14 @@ def session_build(adapter, ctx, name, conf, args, files=None):
     pif_path, skipped = patch_pif(pif_path, skip)
     pif = load_pif(pif_path)
     dd = adapter.derived_data(ctx, name, "swbuild")
-    req, target, ext = make_request(adapter, ctx, pif, conf, dd, files, scheme_cache=pif_path[:-len(".json")] + ".scheme")
-    kind = "files" if files else "build"
+    targets = None
+    if test_scheme:
+        targets = test_targets(ctx, pif, test_scheme)
+        if not targets:
+            return None
+    req, target, ext = make_request(adapter, ctx, pif, conf, dd, files, scheme_cache=pif_path[:-len(".json")] + ".scheme",
+                                    targets=targets)
+    kind = "files" if files else "tests" if test_scheme else "build"
     rdir = os.path.join(session_dir(ctx), "requests")
     os.makedirs(rdir, exist_ok=True)
     rfile = os.path.join(rdir, "%s-%s.json" % (name, kind))   # this session's own request file
@@ -827,6 +865,8 @@ def session_build(adapter, ctx, name, conf, args, files=None):
            "pif_exported": exported, "reused_description": out.get("reused_description", False),
            "compile_tasks": out.get("compiled", 0), "result": out["result"], "timing": out.get("timing"),
            "skipped_scripts": skipped, "skipped_scripts_reason": skip_why if skipped else None}
+    if targets:
+        res["test_targets"] = targets
     if out.get("message"):
         res["diagnostics"].insert(0, {"file": None, "line": 0, "column": 0, "severity": "error",
                                       "message": "swbuild: " + out["message"]})
@@ -838,6 +878,10 @@ def session_build(adapter, ctx, name, conf, args, files=None):
 
 def build(adapter, ctx, name, conf, args):
     return session_build(adapter, ctx, name, conf, args)
+
+
+def build_tests(adapter, ctx, name, conf, args, scheme):
+    return session_build(adapter, ctx, name, conf, args, test_scheme=scheme)
 
 
 def check(adapter, ctx, name, conf, files, args):

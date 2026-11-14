@@ -2,7 +2,7 @@
 import glob, json, os, plistlib, re, subprocess, time
 
 from ..adapter import Adapter
-from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say, trash_and_delete, under
+from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say, trash_and_delete, under, warn
 
 ENTRY_KEYS = {"adapter", "root", "workspace", "project", "package", "scheme", "target", "configurations", "default",
               "warm", "simulator", "packagesDir", "xcodebuildArgs", "buildSettings", "driver", "prepare",
@@ -194,9 +194,9 @@ class XcodeAdapter(Adapter):
         # One DerivedData per configuration and per driver: xcodebuild and the session each rebuild what the other built.
         return os.path.join(ctx.build_dir, driver, conf_name)
 
-    def xcodebuild(self, ctx, action, conf_name, conf, extra=(), destination=None, log_name=None, timeout=None):
+    def xcodebuild(self, ctx, action, conf_name, conf, extra=(), destination=None, log_name=None, timeout=None, dd=None):
         args, cwd = self.container_args(ctx)
-        dd = self.derived_data(ctx, conf_name)
+        dd = dd or self.derived_data(ctx, conf_name)
         cmd = ["xcodebuild", action, *args, "-scheme", self.scheme(ctx), "-configuration", conf.get("configuration", "Debug"),
                "-destination", destination or conf.get("destination", "generic/platform=iOS Simulator"),
                "-derivedDataPath", dd, "-hideShellScriptEnvironment"]
@@ -317,14 +317,32 @@ class XcodeAdapter(Adapter):
 
     def test(self, ctx, args):
         name, conf = self.conf(ctx.entry, args.get("config"))
-        if args.get("scheme"):   # a test scheme of its own (a package's tests, say), built into the same DerivedData
+        scheme = args.get("scheme") or self.scheme(ctx)
+        # With the session driver, the session builds the scheme's test targets into the DerivedData its builds use
+        # (only what changed since the last build is compiled), and xcodebuild runs them without building.
+        # xcodebuild's own build would start from nothing: its settings differ from the session's.
+        built, action, dd = None, "test", None
+        if self.driver(ctx) == "session":
+            from . import xcode_session
+            built = xcode_session.build_tests(self, ctx, name, conf, args, scheme)
+            if built is None:
+                warn("no test target of scheme %s found for the build session; xcodebuild builds the tests" % scheme)
+            elif not built["ok"]:
+                return dict(built, tests=None, failures=None, failed=[], built_by="session")
+            else:
+                action, dd = "test-without-building", built["derived_data"]
+        if args.get("scheme"):   # a test scheme of its own (a package's tests, say)
             ctx.entry = dict(ctx.entry, scheme=args["scheme"])
         dest = conf.get("testDestination") or "id=" + self.simulator(ctx)
         bundle = os.path.join(ctx.build_dir, "results", "%s-%s.xcresult" % (time.strftime("%Y%m%d-%H%M%S"), name))
         extra = ["-resultBundlePath", bundle]
         for t in args.get("only") or []:
             extra.append("-only-testing:" + t)
-        r = self.xcodebuild(ctx, "test", name, conf, extra, destination=dest, timeout=args.get("timeout"))
+        r = self.xcodebuild(ctx, action, name, conf, extra, destination=dest, timeout=args.get("timeout"), dd=dd)
+        if built:
+            r.update(built_by="session", build_seconds=built["seconds"], test_seconds=r["seconds"],
+                     seconds=round(built["seconds"] + r["seconds"], 2), test_targets=built.get("test_targets"),
+                     compile_tasks=built.get("compile_tasks"))
         lines = r.pop("_lines")
         tests = failures = None
         failed = []
