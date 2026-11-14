@@ -807,6 +807,21 @@ for line in sys.stdin:
         sys.stdout.write("Found multiple targets named 'App'"); sys.stdout.flush(); time.sleep(600)
     if mode == "silent":
         time.sleep(600)
+    if mode.startswith("stat-cache-stall"):
+        stall, mode = mode == "stat-cache-stall", "stat-cache-stall-done"
+        evs = [{"kind": "taskStarted", "ruleInfo": "ClangStatCache /x/clang-stat-cache /sdk", "id": 2}]
+        if stall:   # the first build: a stat cache that never finishes, until it is killed
+            for ev in evs:
+                s = json.dumps(ev); sys.stdout.write("%d\n%s\n" % (len(s), s)); sys.stdout.flush()
+            import subprocess
+            r = subprocess.run([os.environ["FAKE_STAT_CACHE"], "600"]).returncode
+            evs = [{"kind": "taskComplete", "id": 2, "result": "failed"}, {"kind": "buildCompleted", "result": "failed"}]
+        else:
+            evs += [{"kind": "taskComplete", "id": 2, "result": "success"}, {"kind": "buildCompleted", "result": "ok"}]
+        for ev in evs:
+            s = json.dumps(ev); sys.stdout.write("%d\n%s\n" % (len(s), s)); sys.stdout.flush()
+        sys.stdout.write("swbuild> "); sys.stdout.flush()
+        continue
     for ev in ({"kind": "reportBuildDescription", "buildDescriptionID": "d1"},
                {"kind": "taskStarted", "ruleInfo": "SwiftCompile normal arm64 /x/A.swift", "id": 1},
                {"kind": "error", "message": "boom", "location": {"path": "/tmp/A.swift", "line": 3, "column": 7}},
@@ -843,7 +858,22 @@ def t43_session_failure_modes():
     out = xs.handle(sb, {"pif": "p", "kind": "build", "request": SB + "/req.json", "configuration": "Debug", "timeout": 20}, last)
     assert not out["reused_description"], "a description was reused after the build settings changed: %s" % out
     sb.quit()
-    return "error-then-hang detected in %.1fs" % (time.time() - t0)
+    took = time.time() - t0
+    # A stat-cache task that never finishes is ended, and the build runs again.
+    os.symlink("/bin/sleep", SB + "/clang-stat-cache")
+    open(mode, "w").write("stat-cache-stall")
+    sb = xs.Swbuild(fake, SB, dict(env, FAKE_STAT_CACHE=SB + "/clang-stat-cache"), log)
+    saved, xs.STAT_CACHE_STALL = xs.STAT_CACHE_STALL, 1
+    try:
+        t0 = time.time()
+        out = xs.handle(sb, {"pif": "p", "kind": "build", "request": SB + "/req.json", "configuration": "Debug",
+                             "timeout": 60}, {})
+    finally:
+        xs.STAT_CACHE_STALL = saved
+        sb.quit()
+    assert out["result"] == "ok" and out["attempts"] == 2 and len(out["ended_stalled_processes"]) == 1, out
+    assert time.time() - t0 < 15, "the stalled stat cache was not ended in time"
+    return "error-then-hang detected in %.1fs" % took
 
 
 def git_commit(path, msg):

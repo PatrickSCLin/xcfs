@@ -481,6 +481,32 @@ def make_request(adapter, ctx, pif, conf, dd, files=None, scheme_cache=None):
 
 
 # ------------------------------------------------------------------ the daemon
+# Xcode's clang-stat-cache (the SDK's stat cache, in the DerivedData folder every project shares) takes well under a
+# second; once, in a build that started while another build wrote the same file, it waited forever on file-system
+# events. A stat-cache task this old is ended and the build run again (once); the build's JSON says so.
+STAT_CACHE_STALL = 120
+
+
+def descendants(pid, name):
+    """Pids of the processes below pid whose executable is called name."""
+    table = {}
+    for l in run("ps", "-axo", "pid=,ppid=,comm=", check=False).stdout.splitlines():
+        parts = l.split(None, 2)
+        if len(parts) == 3 and parts[0].isdigit() and parts[1].isdigit():
+            table[int(parts[0])] = (int(parts[1]), parts[2])
+    out = []
+    for p, (pp, comm) in table.items():
+        if os.path.basename(comm) != name:
+            continue
+        q, seen = pp, set()
+        while q and q not in seen and q != pid:
+            seen.add(q)
+            q = table.get(q, (0, ""))[0]
+        if q == pid:
+            out.append(p)
+    return out
+
+
 class Swbuild:
     """One swbuild process and its output, read on a thread."""
 
@@ -533,12 +559,21 @@ class Swbuild:
                             % (shq(configuration), shq(request_file), shq(pif))).encode())
         self.p.stdin.flush()
         diags, seen, desc, result, compiled = [], set(), None, None, 0
-        started, by_kind, slowest, marks = {}, {}, [], {}
+        started, by_kind, slowest, marks, ended = {}, {}, [], {}, []
         buf = ""
         while True:
             left = timeout - (time.time() - t0)
             if left <= 0:
                 return {"result": "timeout", "seconds": time.time() - t0, "diagnostics": diags}
+            if not ended and any(kind == "ClangStatCache" and time.time() - t1 > STAT_CACHE_STALL
+                                 for t1, kind, _ in started.values()):
+                ended = descendants(self.p.pid, "clang-stat-cache")
+                for pid in ended:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+                self.log.write("xcfs: ended a stalled clang-stat-cache: %s\n" % ended)
             try:
                 chunk = self.q.get(timeout=min(2, left))
             except queue.Empty:
@@ -601,8 +636,10 @@ class Swbuild:
                   "task_seconds_by_kind": {k: [n, round(sec, 2)] for k, (n, sec) in
                                            sorted(by_kind.items(), key=lambda kv: -kv[1][1])[:12]},
                   "slowest_tasks": [[what, round(dt, 2)] for dt, what in slowest[:10]]}
+        if ended and result != "ok" and result != "succeeded":
+            result = "stalled"   # handle() builds again
         return {"result": result, "seconds": time.time() - t0, "diagnostics": diags, "description": desc,
-                "compiled": compiled, "timing": timing}
+                "compiled": compiled, "timing": timing, "ended_stalled_processes": ended}
 
 
 def shq(s):
@@ -669,7 +706,7 @@ def handle(sb, req, last):
         reused = True
     with open(req["request"], "w") as fh:
         json.dump(rq, fh)
-    attempts, out = 0, None
+    attempts, out, stalled = 0, None, []
     while attempts < 2:
         attempts += 1
         out = sb.build(req["configuration"], req["request"], req["pif"], req["timeout"])
@@ -679,7 +716,11 @@ def handle(sb, req, last):
             if out["result"] == "command-error":
                 break             # the same command fails the same way: report it
             continue
+        if out["result"] == "stalled" and attempts < 2:
+            stalled = out["ended_stalled_processes"]
+            continue              # the stalled task failed the build; it runs again
         break
+    out["ended_stalled_processes"] = stalled + out.get("ended_stalled_processes", [])
     if out.get("description") and out["result"] in ("ok", "succeeded", "failed"):
         last[key] = out["description"]
     out.update(reused_description=reused, attempts=attempts)
@@ -789,6 +830,9 @@ def session_build(adapter, ctx, name, conf, args, files=None):
     if out.get("message"):
         res["diagnostics"].insert(0, {"file": None, "line": 0, "column": 0, "severity": "error",
                                       "message": "swbuild: " + out["message"]})
+    if out.get("ended_stalled_processes"):
+        res["stalled"] = ("Xcode's clang-stat-cache stalled (pid %s) and was ended; the build ran again"
+                          % ", ".join(map(str, out["ended_stalled_processes"])))
     return res
 
 
