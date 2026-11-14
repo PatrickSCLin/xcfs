@@ -51,10 +51,10 @@ index 542d930..a43c5df 100644
  }
 diff --git a/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift b/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift
 new file mode 100644
-index 0000000..34a4fde
+index 0000000..bfb6c26
 --- /dev/null
 +++ b/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift
-@@ -0,0 +1,578 @@
+@@ -0,0 +1,600 @@
 +//===----------------------------------------------------------------------===//
 +//
 +// This source file is part of the Swift open source project
@@ -167,7 +167,29 @@ index 0000000..34a4fde
 +    var member: [String: String] = [:]
 +    var any: [String: String] = [:]
 +
++    /// An extension of a generic type that admits noncopyable or nonescapable arguments (Optional, Result, ...)
++    /// is named in the dependency graph by the extended type plus its implicit Copyable/Escapable requirements,
++    /// e.g. "SqsRi_zRi0_zrlE" for `extension Optional`; the symbol graph names the extended type ("Sq").
++    static func extendedType(_ context: String) -> String? {
++      guard let r = context.range(of: #"s(Ri[0-9]*_z)+rlE$"#, options: .regularExpression),
++            r.lowerBound > context.startIndex else { return nil }
++      return String(context[..<r.lowerBound])
++    }
++
 +    func value(for designator: DependencyKey.Designator, in holder: InternedStringTableHolder) -> String? {
++      if let v = exactValue(for: designator, in: holder) { return v }
++      switch designator {
++      case .nominal(context: let c), .potentialMember(context: let c):
++        let context = String(c.lookup(in: holder).split(separator: "@", maxSplits: 1).first ?? "")
++        return Self.extendedType(context).flatMap { type[$0] }
++      case .member(context: let c, name: let n):
++        return Self.extendedType(c.lookup(in: holder)).flatMap { member[$0 + " " + n.lookup(in: holder)] }
++      default:
++        return nil
++      }
++    }
++
++    func exactValue(for designator: DependencyKey.Designator, in holder: InternedStringTableHolder) -> String? {
 +      switch designator {
 +      case .topLevel(name: let n): return top[n.lookup(in: holder)]
 +      case .nominal(context: let c), .potentialMember(context: let c):
