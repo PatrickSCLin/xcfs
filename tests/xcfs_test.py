@@ -1002,7 +1002,10 @@ def t47_experimental_swift_driver_follows_the_selected_xcode():
         assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and len(started) == n, "a failed self-test: not retried"
         assert "self-test" in a.swift_driver_decision, a.swift_driver_decision
         os.remove(root_a + "/build-failed")
-        json.dump({"ok": True}, open(root_a + "/selftest.json", "w"))
+        json.dump({"ok": True}, open(root_a + "/selftest.json", "w"))         # passed an older self-test
+        n = len(started)
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and len(started) == n + 1, "the newer self-test runs first"
+        json.dump({"ok": True, "version": sd.SELFTEST_VERSION}, open(root_a + "/selftest.json", "w"))
         s = a.build_settings(ctx(buildSettings={"OTHER": "1"}), {})
         assert s.get("SWIFT_EXEC") == wrapper and s.get("SWIFT_USE_INTEGRATED_DRIVER") == "NO" and s["OTHER"] == "1", s
         assert "SWIFT_EXEC" not in a.build_settings(ctx(swiftDriver="native"), {}), "native turns it off"
@@ -1125,6 +1128,26 @@ def t53_session_restarts_when_its_environment_changes():
         assert stopped == [1], "a session with another environment must be replaced"
     finally:
         xs.ping, xs.stop, xs.swbuild_path, xs.socket_path = saved
+
+
+@test
+def t54_driver_selftest_edits_are_consistent():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib", "xcfs", "adapters", "swiftdriver"))
+    saved = sys.argv
+    sys.argv = ["selftest.py"]
+    try:
+        import selftest as st
+    finally:
+        sys.argv = saved
+    from xcfs.adapters import swift_driver as sd
+    assert st.VERSION == sd.SELFTEST_VERSION, "selftest.py and swift_driver.py must agree on the self-test version"
+    files = dict(st.A_FILES)
+    for label, rel, find, replace, b_builds in st.EDITS:
+        assert find is None or find in files[rel], "%s: %r is not in %s at that point" % (label, find, rel)
+        files[rel] = files[rel] + replace if find is None else files[rel].replace(find, replace, 1)
+        if not b_builds:
+            files[rel] = files[rel].replace(replace, find, 1)
+    assert len(st.EDITS) >= 12, "the self-test covers at least the cases listed in its docstring"
 
 
 def main():

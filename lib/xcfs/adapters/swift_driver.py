@@ -16,6 +16,7 @@ from ..util import read_json, run
 # line gets its line's patch if `git apply --check` accepts it; nothing is applied fuzzily.
 KITS = {"6.4": {"patch": "api-digests-swift-6.4.2.patch", "resolved": "Package-swift-6.4.resolved"}}
 KIT_FILES = ("build.sh", "selftest.py")
+SELFTEST_VERSION = 2       # selftest.py's VERSION: an installed driver tested by an older self-test is tested again
 RETRY_AFTER = 24 * 3600    # a failed build is not retried sooner
 VERSION_LINE = re.compile(r"Apple Swift version (?P<swift>\d+\.\d+(?:\.\d+)?) \((?P<build>swiftlang-[^ )]+)[^)]*\)")
 DRIVER_LINE = re.compile(r"swift-driver version: (?P<driver>[0-9][^ \n]*)")
@@ -97,15 +98,18 @@ def status():
     r = root(info)
     wrapper, toolchain = os.path.join(r, "bin", "swiftc"), read_json(os.path.join(r, "toolchain.json"), None)
     test = read_json(os.path.join(r, "selftest.json"), None)
-    if toolchain and os.access(wrapper, os.X_OK) and swift_release(toolchain.get("swiftVersion", "")) == info["release"]:
-        if test and test.get("ok"):
-            return wrapper, None, False
+    built = bool(toolchain and os.access(wrapper, os.X_OK)
+                 and swift_release(toolchain.get("swiftVersion", "")) == info["release"])
+    if built and test and test.get("ok") and test.get("version") == SELFTEST_VERSION:
+        return wrapper, None, False
     if building():
         return None, "being built for %s in the background (log: %s)" % (tag, os.path.join(r, "build.log")), False
     failed = os.path.join(r, "build-failed")
     if os.path.exists(failed) and time.time() - os.path.getmtime(failed) < RETRY_AFTER:
         why = open(failed).read().strip() or "its build failed"
         return None, "%s (log: %s); retried after a day" % (why, os.path.join(r, "build.log")), False
+    if built and test and test.get("ok"):
+        return None, "built for %s; its newer self-test has not run yet" % tag, True
     return None, "not built yet for %s" % tag, True
 
 
@@ -138,12 +142,16 @@ FAILURES = {2: "the build script was given bad arguments", 3: "the patch does no
 
 
 def start_build():
-    """Build the selected Xcode's driver in a detached process; returns the log path, or None."""
+    """Build the selected Xcode's driver in a detached process (or, when it is built and only its self-test is out of
+    date, run the self-test again); returns the log path, or None."""
     info = selected()
     tag, kit = kit_for(info)
     if not tag:
         return None
     r = root(info)
+    toolchain = read_json(os.path.join(r, "toolchain.json"), None)
+    retest = bool(toolchain and swift_release(toolchain.get("swiftVersion", "")) == info["release"]
+                  and os.access(os.path.join(r, "bin", "swiftc"), os.X_OK))
     os.makedirs(r, exist_ok=True)
     if building():
         return None
@@ -160,9 +168,14 @@ def start_build():
             pass
     log = os.path.join(r, "build.log")
     reasons = " ".join("%d) echo %s > \"$2/build-failed\";;" % (k, json.dumps(v)) for k, v in FAILURES.items())
-    script = ('"$1" "$2" "$3" "$4" "$5" "$6"; rc=$?; '
+    if retest:   # selftest.py exits 1 on a failure; reported like build.sh's 4
+        run_it = ('python3 "%s" "$2/bin/swiftc" "$2/selftest.json" || (exit 4)'
+                  % os.path.join(kitdir, "selftest.py"))
+    else:
+        run_it = '"$1" "$2" "$3" "$4" "$5" "$6"'
+    script = ('%s; rc=$?; '
               'case $rc in 0) ;; %s *) echo "its build failed (exit $rc)" > "$2/build-failed";; esac; '
-              'rm -f "$2/building"' % reasons)
+              'rm -f "$2/building"' % (run_it, reasons))
     with open(log, "w") as out:
         p = subprocess.Popen(["/bin/sh", "-c", script, "sh", os.path.join(kitdir, "build.sh"), r, tag,
                               kit["patch"], kit["resolved"], info["driver"]],

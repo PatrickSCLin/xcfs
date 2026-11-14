@@ -52,9 +52,15 @@ Nothing to configure. With the default `"swiftDriver": "auto"`, xcfs reads the s
 (`swift-6.4.2-RELEASE`) and the patch of its release line, and on the first build with that Xcode starts building
 the driver in the background: clone the tag, `git apply --check` (a patch that does not apply means Xcode's own
 driver — nothing is applied fuzzily), apply, build with the pinned dependencies, then a correctness self-test
-(`selftest.py`: two modules built with the new driver directly, four edits whose recompiled files are checked — an
-unused new function recompiles nothing, a layout change through a typealias, an `Optional` extension and a changed
-return type recompile exactly their users). Only a driver that passed is used. About 1.5 minutes; builds use
+(`selftest.py`): two modules, A and B importing A, built incrementally with the new driver; thirteen edits to A
+(a new function, a layout change through a typealias behind a private stored property, an `Optional` extension
+member, a return type, a default argument value, availability, main-actor isolation, `package` access, an enum case,
+a protocol requirement with a default implementation, `let` to `var`, `@discardableResult`, `throws`), the breaking
+ones undone afterwards. After every step the oracle builds both modules from nothing at the same paths: every object
+file must be byte-for-byte what the incremental build left, and each module must build or fail the same way (Swift's
+output is reproducible, so any difference is a missed recompile; injecting one — a stale object — is caught). One
+more check makes sure the driver narrows rebuilds at all: a new function nobody uses recompiles no file of B. The
+stock driver passes the oracle but fails that check. About 30 seconds. Only a driver that passed is used. About 1.5 minutes; builds use
 Xcode's own driver meanwhile.
 
 Each Xcode gets its own install, `~/Library/Caches/xcfs/swift-driver/<swift>-<swift build>-<hash of the Xcode's
