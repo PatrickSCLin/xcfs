@@ -18,4 +18,8 @@ In the one-architecture runs, the xcodebuild column's per-edit times in the docs
 `xcodebuild` driver a check is a full build, and the build that follows it is a no-op (≈5.3 s on Ice Cubes, ≈15.5 s
 on Wikipedia).
 
+Incremental vs clean (`bench/oracle.py`): `oracle-ice-cubes-20261115-002829.json`,
+`oracle-ice-cubes-xcode27.1-20261115-010135.json` (with `DEVELOPER_DIR` set to Xcode 27.1),
+`oracle-wikipedia-ios-20261114-233450.json`.
+
 Runs of the two-architecture tables and of Telegram-iOS were not kept.

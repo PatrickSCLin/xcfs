@@ -1,0 +1,95 @@
+{
+ "profile": "Wikipedia iOS",
+ "steps": [
+  {
+   "edit": "an @objc property is added to a Swift class Objective-C uses (generated header)",
+   "incremental_ok": true,
+   "incremental_seconds": 118.1,
+   "clean_ok": true,
+   "clean_seconds": 135.8,
+   "objects_compared": 3218,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "a property is added to an Objective-C class Swift uses (module of headers, ObjC layout)",
+   "incremental_ok": true,
+   "incremental_seconds": 62.8,
+   "clean_ok": true,
+   "clean_seconds": 151.8,
+   "objects_compared": 3218,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "an @objc property Objective-C reads gets another Objective-C name (it breaks)",
+   "incremental_ok": false,
+   "incremental_seconds": 58.2,
+   "clean_ok": false,
+   "clean_seconds": 163.8,
+   "objects_compared": 0,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "edit a function body in the app target",
+   "incremental_ok": true,
+   "incremental_seconds": 25.8,
+   "clean_ok": true,
+   "clean_seconds": 125.8,
+   "objects_compared": 3218,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "edit a function body in a package ~300 files import (WMFData)",
+   "incremental_ok": true,
+   "incremental_seconds": 17.9,
+   "clean_ok": true,
+   "clean_seconds": 128.9,
+   "objects_compared": 3218,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "add a public declaration to that package",
+   "incremental_ok": true,
+   "incremental_seconds": 42.2,
+   "clean_ok": true,
+   "clean_seconds": 129.8,
+   "objects_compared": 3218,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  }
+ ]
+}

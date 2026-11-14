@@ -121,6 +121,34 @@ Not included: NetNewsWire (its build needs a generated secrets file from a scrip
 Swift packages; CocoaPods is covered only by `examples/generic-sample`), and a Tuist project (it needs the Tuist binary).
 Profiles: `bench/profiles/{kickstarter,element-x,signal,home-assistant}.json`.
 
+## Is an incremental build the same as a clean one?
+
+Speed is worth nothing if an incremental build can leave something stale. [bench/oracle.py](../bench/oracle.py)
+checks it on real apps with xcfs's defaults (build session, experimental Swift driver): one worktree takes a list of
+edits one after another and is built incrementally after each; for every step a fresh worktree gets the same edits
+and is built from nothing, and every object file of the clean build is compared with the incremental one (code and
+symbol names; a build that fails must fail on both sides). The edits are the kind a dependency graph can get wrong:
+
+| project | edits (cumulative; the breaking ones are undone after their step) | steps | objects per step | differences |
+|---|---|---|---|---|
+| Ice Cubes, Xcode 27.2 | a stored property added to an `@Observable` class 15 files use (macro expansion, class layout); a default argument added; an argument label changed and a setter made `private(set)` (callers break); a private stored property added to a struct other packages pass by value; an enum case added (switches break); a function body in a leaf package and in `Models`; a public declaration added to `Models` | 9 | 3,230 | **0** |
+| Ice Cubes, Xcode 27.1 | the same, with the driver xcfs built for that Xcode | 9 | 3,230 | **0** |
+| Wikipedia iOS, Xcode 27.2 | an `@objc` property added to a Swift class Objective-C uses (generated `-Swift.h`); a property added to an Objective-C class Swift uses (Clang module, Objective-C layout); an `@objc` name changed (an Objective-C caller breaks); a function body in the app target and in `WMFData`; a public declaration added to `WMFData` | 6 | 3,218 | **0** |
+
+Raw results: `oracle-*.json` in [bench/results](../bench/results/README.md).
+
+What had to be taken out of the comparison, because it differs between two correct builds: paths of different
+lengths move compiled-in strings (`#file`, assertions) and the code that refers to them, so both checkouts get paths
+of one length; labels of string literals contain the string, including source paths; an object named after a hash
+of its source path. And one case is checked again rather than excluded: on Ice Cubes, three objects of `StatusKit`
+(`StatusRowView.o`, `AccessoryView.o` and the package's merged object) come out of a clean build with different code
+than the same file compiled alone — the incremental build's object equals the one compiled alone in the clean
+checkout, which has nothing stale, so those count as equal. The oracle recompiles a differing object's sources in
+the clean checkout and compares once more before it reports a difference.
+
+The self-test every experimental driver passes before xcfs uses it applies the same rule, byte for byte, to two
+small modules and 19 steps (`lib/xcfs/adapters/swiftdriver/selftest.py`).
+
 ## Where the time goes
 
 Why larger projects gain less, and what was tried — each row measured before and after, repeated:

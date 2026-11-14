@@ -1,0 +1,178 @@
+{
+ "profile": "Ice Cubes",
+ "steps": [
+  {
+   "edit": "a stored property is added to an @Observable class 15 files use (macro expansion, class layout)",
+   "incremental_ok": true,
+   "incremental_seconds": 20.0,
+   "clean_ok": true,
+   "clean_seconds": 102.5,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": [
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/StatusRowView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/StatusRowView.o"
+   ]
+  },
+  {
+   "edit": "a parameter of that class's method gains a default value",
+   "incremental_ok": true,
+   "incremental_seconds": 18.6,
+   "clean_ok": true,
+   "clean_seconds": 105.9,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": [
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/StatusRowView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/StatusRowView.o"
+   ]
+  },
+  {
+   "edit": "a public method's argument label changes (its callers break)",
+   "incremental_ok": false,
+   "incremental_seconds": 7.8,
+   "clean_ok": false,
+   "clean_seconds": 73.5,
+   "objects_compared": 0,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "an observed property's setter becomes private (a binding to it breaks)",
+   "incremental_ok": false,
+   "incremental_seconds": 16.6,
+   "clean_ok": false,
+   "clean_seconds": 92.5,
+   "objects_compared": 0,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "a private stored property is added to a struct other packages pass by value (layout)",
+   "incremental_ok": true,
+   "incremental_seconds": 25.4,
+   "clean_ok": true,
+   "clean_seconds": 103.2,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": [
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/AccessoryView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/StatusRowView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/AccessoryView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/StatusRowView.o"
+   ]
+  },
+  {
+   "edit": "an enum other packages switch over gains a case (they break)",
+   "incremental_ok": false,
+   "incremental_seconds": 6.0,
+   "clean_ok": false,
+   "clean_seconds": 62.8,
+   "objects_compared": 0,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "edit a function body in a leaf package (Timeline)",
+   "incremental_ok": true,
+   "incremental_seconds": 4.0,
+   "clean_ok": true,
+   "clean_seconds": 116.0,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": [
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/AccessoryView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/StatusRowView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/AccessoryView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/StatusRowView.o"
+   ]
+  },
+  {
+   "edit": "edit a function body in a package 12 others depend on (Models)",
+   "incremental_ok": true,
+   "incremental_seconds": 8.2,
+   "clean_ok": true,
+   "clean_seconds": 114.6,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": [
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/AccessoryView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/StatusRowView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/AccessoryView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/StatusRowView.o"
+   ]
+  },
+  {
+   "edit": "add a public declaration to that package",
+   "incremental_ok": true,
+   "incremental_seconds": 13.6,
+   "clean_ok": true,
+   "clean_seconds": 112.2,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "api-digests",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": [
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/AccessoryView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/arm64/StatusRowView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/AccessoryView.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/Binary/StatusKit.o",
+    "StatusKit.build/Debug-iphonesimulator/StatusKit-t.build/Objects-normal/x86_64/StatusRowView.o"
+   ]
+  }
+ ]
+}
