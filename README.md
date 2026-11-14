@@ -59,6 +59,15 @@ xcfs --version
 manager), build it: `scripts/build-single-file.sh` writes `dist/xcfs`, the whole tool as a Python zip application.
 A Homebrew tap is planned.
 
+What runs on its own: on the first build with an Xcode of the Swift 6.4 line, xcfs builds a patched
+[swift-driver](https://github.com/swiftlang/swift-driver) in the background (`git clone` of the release tag — for the
+releases the patch was made on, only if the tag points at the known commit; `git apply`; `swift build`; a correctness self-test; one to two
+minutes, about 400 MB in `~/Library/Caches/xcfs/swift-driver`, plus the per-module digests it keeps there, about
+1 GB after the benchmarks below), and uses it for Swift compilation once the self-test
+has passed. Until then, and whenever anything does not fit, builds use Xcode's own driver. `"swiftDriver": "native"`
+in a configuration (or `XCFS_SWIFT_DRIVER=native`) turns it off; `xcfs doctor` shows its state. See
+[its notes](lib/xcfs/adapters/swiftdriver/README.md).
+
 ## Commands
 
 | command | what it does |
@@ -303,7 +312,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 45 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 56 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

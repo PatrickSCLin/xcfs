@@ -5,7 +5,7 @@ End-to-end tests for bin/xcfs. Every test builds its own throw-away git reposito
 state directory, its own fake DerivedData root, its own config directory. The sandbox path deliberately contains a
 space and non-ASCII characters. Needs macOS (APFS clonefile, hdiutil, lsof).
 """
-import json, os, plistlib, shutil, signal, subprocess, sys, tempfile, time
+import json, os, plistlib, re, shutil, signal, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 XCFS = os.path.realpath(sys.argv[sys.argv.index("--xcfs") + 1]) if "--xcfs" in sys.argv else os.path.join(os.path.dirname(HERE), "bin", "xcfs")
@@ -1180,6 +1180,31 @@ def t55_ignored_xcconfig_changes_reexport_the_pif():
     assert k1 != k0, "a git-ignored xcconfig is read by the build service when it plans: its change must count"
     open(pods, "w").write("OTHER_LDFLAGS = -ObjC -lz\n")
     assert key() != k1, "so must a change to a generated (ignored) CocoaPods xcconfig"
+
+
+@test
+def t56_driver_release_tags_are_pinned_to_their_commits():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters import swift_driver as sd
+    for line, kit in sd.KITS.items():
+        assert kit.get("commits"), "the releases of %s are pinned" % line
+        for tag, commit in kit["commits"].items():
+            assert tag.startswith("swift-%s." % line) and re.fullmatch(r"[0-9a-f]{40}", commit), (tag, commit)
+    # A mirror whose tag points at another commit: build.sh stops before applying or building anything.
+    mirror = SB + "/driver-mirror"
+    sh("git", "init", "-q", mirror)
+    open(mirror + "/README", "w").write("not the release\n")
+    sh("git", "-C", mirror, "add", "-A")
+    sh("git", "-C", mirror, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "x")
+    sh("git", "-C", mirror, "tag", "swift-6.4.2-RELEASE")
+    kit = os.path.join(os.path.dirname(HERE), "lib", "xcfs", "adapters", "swiftdriver")
+    root = SB + "/driver-install"
+    r = subprocess.run(["sh", os.path.join(kit, "build.sh"), root, "swift-6.4.2-RELEASE", "api-digests-swift-6.4.2.patch",
+                        "Package-swift-6.4.resolved", "1.168.6", sd.KITS["6.4"]["commits"]["swift-6.4.2-RELEASE"]],
+                       capture_output=True, text=True, env=dict(os.environ, XCFS_SWIFT_DRIVER_REPO=mirror))
+    assert r.returncode == 5, (r.returncode, r.stderr[-500:])
+    assert "not building it" in r.stderr and not os.path.exists(root + "/bin"), r.stderr[-500:]
+    assert 5 in sd.FAILURES
 
 
 def main():

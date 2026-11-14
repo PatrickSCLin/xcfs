@@ -13,8 +13,11 @@ from .. import state
 from ..util import read_json, run
 
 # Patches by swift-driver release line, with the dependency pins each was built and measured with. A release of the
-# line gets its line's patch if `git apply --check` accepts it; nothing is applied fuzzily.
-KITS = {"6.4": {"patch": "api-digests-swift-6.4.2.patch", "resolved": "Package-swift-6.4.resolved"}}
+# line gets its line's patch if `git apply --check` accepts it; nothing is applied fuzzily. The releases the patch was
+# made and measured on are pinned to their commits: a tag moved elsewhere is not built.
+KITS = {"6.4": {"patch": "api-digests-swift-6.4.2.patch", "resolved": "Package-swift-6.4.resolved",
+                "commits": dict.fromkeys(("swift-6.4.0-RELEASE", "swift-6.4.1-RELEASE", "swift-6.4.2-RELEASE"),
+                                         "174567a5681a9a949bcd52f821deb8fa65105434")}}
 KIT_FILES = ("build.sh", "selftest.py")
 SELFTEST_VERSION = 2       # selftest.py's VERSION: an installed driver tested by an older self-test is tested again
 RETRY_AFTER = 24 * 3600    # a failed build is not retried sooner
@@ -138,7 +141,8 @@ def building():
 
 
 FAILURES = {2: "the build script was given bad arguments", 3: "the patch does not apply to this release",
-            4: "the driver failed its correctness self-test"}
+            4: "the driver failed its correctness self-test",
+            5: "the release tag does not point at the commit the patch was made for"}
 
 
 def start_build():
@@ -172,13 +176,13 @@ def start_build():
         run_it = ('python3 "%s" "$2/bin/swiftc" "$2/selftest.json" || (exit 4)'
                   % os.path.join(kitdir, "selftest.py"))
     else:
-        run_it = '"$1" "$2" "$3" "$4" "$5" "$6"'
+        run_it = '"$1" "$2" "$3" "$4" "$5" "$6" "$7"'
     script = ('%s; rc=$?; '
               'case $rc in 0) ;; %s *) echo "its build failed (exit $rc)" > "$2/build-failed";; esac; '
               'rm -f "$2/building"' % (run_it, reasons))
     with open(log, "w") as out:
         p = subprocess.Popen(["/bin/sh", "-c", script, "sh", os.path.join(kitdir, "build.sh"), r, tag,
-                              kit["patch"], kit["resolved"], info["driver"]],
+                              kit["patch"], kit["resolved"], info["driver"], kit.get("commits", {}).get(tag, "")],
                              stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
                              env=dict(os.environ, XCFS_CACHE=state.cache_dir()), start_new_session=True)
     with open(os.path.join(r, "building"), "w") as f:

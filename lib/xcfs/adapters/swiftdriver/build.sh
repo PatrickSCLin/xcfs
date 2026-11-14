@@ -1,36 +1,48 @@
 #!/bin/sh
 # Build the experimental swift-driver for the selected Xcode, check it, and install it where xcfs looks for it.
 #
-#   build.sh <install dir> <swift-driver tag> <patch> <Package.resolved> <driver version>
+#   build.sh <install dir> <swift-driver tag> <patch> <Package.resolved> <driver version> [<commit of the tag>]
 #
 # xcfs runs this by itself (in the background, on the first build with an Xcode that has no driver yet) and picks
 # the arguments for the selected Xcode: the swift-driver release tag of its Swift, the patch made for that release
 # line, the dependency pins it was built with, and the version its own driver reports. By hand, the same arguments,
 # e.g. build.sh ~/Library/Caches/xcfs/swift-driver/6.4.2-<build>-<xcode> swift-6.4.2-RELEASE \
-#        api-digests-swift-6.4.2.patch Package-swift-6.4.resolved 1.168.6
+#        api-digests-swift-6.4.2.patch Package-swift-6.4.resolved 1.168.6 174567a5681a9a949bcd52f821deb8fa65105434
+#
+# A tag can be moved; for the releases the patch was made and measured on, xcfs passes the commit the tag must point
+# at, and nothing is built from anything else. The commit that was built is recorded in toolchain.json either way.
+# XCFS_SWIFT_DRIVER_REPO names another clone URL (a mirror).
 #
 # Into the install directory: bin/swift-driver (the patched driver), bin/swiftc (the SWIFT_EXEC wrapper),
 # toolchain.json (what it was built for), selftest.json (the correctness self-test; xcfs uses the driver only when it
 # passed), lib/ and include/ (links to the toolchain), share/ (the toolchain's, with a features file for this driver),
 # store/ (API digests, created on use). Nothing outside that directory is touched.
 #
-# Exit codes: 3 the patch does not apply to that release (no fuzzy applying), 4 the self-test failed.
+# Exit codes: 3 the patch does not apply to that release (no fuzzy applying), 4 the self-test failed, 5 the tag does
+# not point at the expected commit.
 set -eu
 
-[ $# -eq 5 ] || { echo "usage: build.sh <install dir> <tag> <patch> <Package.resolved> <driver version>" >&2; exit 2; }
+[ $# -eq 5 ] || [ $# -eq 6 ] || {
+  echo "usage: build.sh <install dir> <tag> <patch> <Package.resolved> <driver version> [<commit>]" >&2; exit 2; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$1
 TAG=$2
 case "$3" in /*) PATCH=$3 ;; *) PATCH="$HERE/$3" ;; esac
 case "$4" in /*) RESOLVED=$4 ;; *) RESOLVED="$HERE/$4" ;; esac
 DRIVER_VERSION=$5
+EXPECTED_COMMIT=${6:-}
 SRC="$ROOT/src"
 VERSION_LINE=$(/usr/bin/xcrun swiftc --version 2>&1 | head -1)
 FRONTEND=$(/usr/bin/xcrun -f swift-frontend)
 
 rm -rf "$SRC"
 mkdir -p "$ROOT"
-git clone -q --depth 1 --branch "$TAG" https://github.com/swiftlang/swift-driver.git "$SRC"
+git clone -q --depth 1 --branch "$TAG" "${XCFS_SWIFT_DRIVER_REPO:-https://github.com/swiftlang/swift-driver.git}" "$SRC"
+COMMIT=$(git -C "$SRC" rev-parse HEAD)
+if [ -n "$EXPECTED_COMMIT" ] && [ "$COMMIT" != "$EXPECTED_COMMIT" ]; then
+  echo "build.sh: $TAG points at $COMMIT, not at $EXPECTED_COMMIT; not building it" >&2
+  exit 5
+fi
 if ! git -C "$SRC" apply --check "$PATCH"; then
   echo "build.sh: $(basename "$PATCH") does not apply to $TAG" >&2
   exit 3
@@ -91,11 +103,11 @@ EOF
 chmod +x "$ROOT/bin/swiftc.new"
 mv "$ROOT/bin/swiftc.new" "$ROOT/bin/swiftc"
 
-python3 - "$ROOT/toolchain.json" "$VERSION_LINE" "$FRONTEND" "$TAG" "$(basename "$PATCH")" "$DRIVER_VERSION" <<'EOF'
+python3 - "$ROOT/toolchain.json" "$VERSION_LINE" "$FRONTEND" "$TAG" "$(basename "$PATCH")" "$DRIVER_VERSION" "$COMMIT" <<'EOF'
 import json, sys
-path, version, frontend, tag, patch, driver = sys.argv[1:]
-json.dump({"swiftVersion": version, "frontend": frontend, "swiftDriverTag": tag, "patch": patch,
-           "driverVersion": driver}, open(path, "w"), indent=1)
+path, version, frontend, tag, patch, driver, commit = sys.argv[1:]
+json.dump({"swiftVersion": version, "frontend": frontend, "swiftDriverTag": tag, "swiftDriverCommit": commit,
+           "patch": patch, "driverVersion": driver}, open(path, "w"), indent=1)
 EOF
 
 # Correctness self-test with this driver; xcfs uses it only if this passes.
