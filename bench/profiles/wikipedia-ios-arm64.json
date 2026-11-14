@@ -63,5 +63,43 @@
       "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { return {n} }\n"
     }
   ],
-  "editRepeats": 2
+  "editRepeats": 2,
+  "knobs": {
+    "baseline": {},
+    "no-index": {
+      "COMPILER_INDEX_STORE_ENABLE": "NO"
+    },
+    "implicit-modules": {
+      "SWIFT_ENABLE_EXPLICIT_MODULES": "NO",
+      "CLANG_ENABLE_EXPLICIT_MODULES": "NO"
+    },
+    "no-debug-dylib": {
+      "ENABLE_DEBUG_DYLIB": "NO"
+    },
+    "skip-appintents": {
+      "LM_SKIP_METADATA_EXTRACTION": "YES"
+    },
+    "compilation-caching": {
+      "COMPILATION_CACHE_ENABLE_CACHING": "YES"
+    },
+    "skip-scripts": {
+      "_entry": {
+        "skipScripts": [
+          "Update Localizations",
+          "SwiftLint"
+        ]
+      }
+    },
+    "agent": {
+      "COMPILER_INDEX_STORE_ENABLE": "NO",
+      "LM_SKIP_METADATA_EXTRACTION": "YES",
+      "ENABLE_DEBUG_DYLIB": "NO",
+      "_entry": {
+        "skipScripts": [
+          "Update Localizations",
+          "SwiftLint"
+        ]
+      }
+    }
+  }
 }

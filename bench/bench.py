@@ -42,7 +42,8 @@ for k in ("CLAUDE_CODE_SESSION_ID",):
     ENV.pop(k, None)
 # A cache every checkout shares (a build tool's disk cache, say): the profile's commands find it in $XCFS_BENCH_CACHE.
 ENV["XCFS_BENCH_CACHE"] = os.path.realpath(arg("--cache", os.path.join(WORK, "shared-cache")))
-RESULTS = {"profile": PROFILE["name"], "agents": N, "started": STAMP, "machine": {}, "plain": {}, "xcfs": {}}
+RESULTS = {"profile": PROFILE["name"], "agents": N, "started": STAMP, "machine": {}, "plain": {}, "xcfs": {},
+           "round": {}}
 VARIANTS = PROFILE["xcfs"].get("variants") or {"xcfs": {}}
 
 
@@ -322,6 +323,85 @@ def run_xcfs(variant, overrides):
     XENV = {}
 
 
+# ------------------------------------------------------------------ one agent's round of work
+def round_edits():
+    edits = PROFILE.get("edits", [])
+    k = int(PROFILE.get("roundEdits", 5))
+    return [edits[i % len(edits)] for i in range(k)] if edits else []
+
+
+def run_round_plain():
+    """A whole task, the plain way: a worktree with the project's setup, a first build, then every edit verified by a
+    build (xcodebuild has no faster way to say whether a change compiles), then removal."""
+    P = PROFILE["plain"]
+    dest = os.path.join(WORK, "%s-wt-round" % os.path.basename(SOURCE))
+    branch = "xcfs-bench/round"
+    steps, t0, f0 = [], time.time(), free_kb()
+    for c in P["create"]:
+        t, code, _ = shell(fmt(c, dest=dest, branch=branch), SOURCE, "round-plain")
+        steps.append(("create", t))
+    t, code, _ = shell(fmt(P["build"], dest=dest), dest, "round-plain")
+    steps.append(("first build", t))
+    base = int(time.time() * 1000) % 10 ** 9 * 10
+    for i, e in enumerate(round_edits(), 1):
+        apply_edit(dest, e, base + i)
+        t, code, _ = shell(fmt(P["build"], dest=dest), dest, "round-plain")
+        steps.append(("edit %d + build" % i, t))
+    t, code, _ = shell(fmt(P["remove"], dest=dest, branch=branch), SOURCE, "round-plain")
+    steps.append(("remove", t))
+    total = round(time.time() - t0, 1)
+    time.sleep(3)
+    left = owned_caches(dest)
+    RESULTS["round"]["plain"] = {"total_seconds": total, "steps": steps, "left_kb": du_kb(*left),
+                                 "disk_kb_after": f0 - free_kb()}
+    say("round[plain]: %.1fs total; left behind %s" % (total, gb(du_kb(*left))))
+    for c in left:  # put the machine back (not timed)
+        subprocess.run(["chmod", "-R", "u+w", c], capture_output=True)
+        shutil.rmtree(c, ignore_errors=True)
+    subprocess.run(["git", "-C", SOURCE, "branch", "-D", branch], capture_output=True)
+
+
+def run_round_xcfs(variant, overrides):
+    """A whole task through xcfs: a slot warmed beforehand (not timed), checkout, a first build, every edit verified
+    with `xcfs check`, one full build at the end, release."""
+    global XENV
+    d = os.path.join(WORK, "round-xcfs-" + variant)
+    XENV = dict(ENV, XCFS_STATE=d + "/state", XCFS_CACHE=d + "/cache", XCFS_POOL_ROOT=d + "/pool",
+                XDG_CONFIG_HOME=d + "/config")
+    cfg = json.loads(json.dumps(PROFILE["xcfs"]["config"]))
+    for t in cfg.get("toolchains", []):
+        t.update(overrides)
+    cfg_dir = os.path.join(d, "config", "xcfs")
+    os.makedirs(cfg_dir, exist_ok=True)
+    json.dump(cfg, open(os.path.join(cfg_dir, os.path.basename(SOURCE) + ".json"), "w"), indent=1)
+    json.dump({"buildTimeout": 6 * 3600, "warmOnRelease": False}, open(os.path.join(cfg_dir, "settings.json"), "w"))
+    t, code, _, out = xcfs("pool", "warm", SOURCE, "--slots", "1", log_name="round-xcfs-%s" % variant)
+    if code != 0:
+        raise SystemExit("round warm-up failed: %s" % out.get("error"))
+    steps, t0, f0 = [], time.time(), free_kb()
+    t, code, _, out = xcfs("checkout", SOURCE, "xcfs-bench/round-%s" % variant, log_name="round-xcfs-%s" % variant)
+    wt = out["worktree"]
+    steps.append(("checkout", t))
+    t, code, _, out = xcfs("build", wt, log_name="round-xcfs-%s" % variant)
+    steps.append(("first build", t))
+    base = int(time.time() * 1000) % 10 ** 9 * 10
+    for i, e in enumerate(round_edits(), 1):
+        apply_edit(wt, e, base + i)
+        t, code, _, out = xcfs("check", os.path.join(wt, e["file"]), log_name="round-xcfs-%s" % variant)
+        steps.append(("edit %d + check" % i, t))
+    t, code, _, out = xcfs("build", wt, log_name="round-xcfs-%s" % variant)
+    steps.append(("final build", t))
+    revert_edits(wt)  # the agent would commit; the benchmark must not leave edits behind
+    t, code, _, out = xcfs("release", wt, "--no-warm", "--prune-branch", log_name="round-xcfs-%s" % variant)
+    steps.append(("release", t))
+    total = round(time.time() - t0, 1)
+    RESULTS["round"]["xcfs (%s)" % variant] = {"total_seconds": total, "steps": steps, "left_kb": 0,
+                                               "disk_kb_after": f0 - free_kb()}
+    say("round[xcfs %s]: %.1fs total" % (variant, total))
+    xcfs("pool", "resize", SOURCE, "0", log_name="round-xcfs-%s" % variant)
+    XENV = {}
+
+
 # ------------------------------------------------------------------ report
 def gb(kb):
     if kb is None:
@@ -377,6 +457,15 @@ def report():
           "| disk for %d built checkouts (volume free space used) | %s |" % (N, col(disk)),
           "| resident memory of their processes after building | %s |" % col(mem),
           "| left behind after removing them (plain: removal; xcfs: retiring the pool) | %s |" % col(left), ""]
+    if RESULTS.get("round"):
+        L += ["## One agent's round of work", "",
+              "Plain: worktree + setup, first build, %d edits each verified by a build, removal. xcfs: checkout of a slot "
+              "warmed beforehand, first build, the same edits each verified by `xcfs check`, one final build, release."
+              % len(round_edits()), "", "| side | total | steps | left behind |", "|---|---|---|---|"]
+        for side, r in RESULTS["round"].items():
+            L.append("| %s | **%.1f s** | %s | %s |" % (side, r["total_seconds"], ", ".join(
+                "%s %.1f s" % (n, t) for n, t in r["steps"]), gb(r["left_kb"])))
+        L.append("")
     L += ["## Edit loop in the first checkout", "", head, sep]
     steps = []
     for _, d in sides:
@@ -436,6 +525,10 @@ def main():
         for name, overrides in VARIANTS.items():
             if "xcfs" in PHASES or "xcfs:" + name in PHASES:
                 run_xcfs(name, overrides)
+        if "round" in PHASES:
+            run_round_plain()
+            for name, overrides in VARIANTS.items():
+                run_round_xcfs(name, overrides)
     finally:
         base = os.path.join(WORK, "results-%s-%s" % (re.sub(r"\W+", "-", PROFILE["name"]).lower(), STAMP))
         data = json.dumps(RESULTS, indent=1)

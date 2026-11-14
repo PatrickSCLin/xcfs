@@ -837,6 +837,9 @@ def t43_session_failure_modes():
     xs.handle(sb, {"pif": "p", "kind": "build", "request": SB + "/req.json", "configuration": "Debug", "timeout": 20}, last)
     out = xs.handle(sb, {"pif": "p", "kind": "build", "request": SB + "/req.json", "configuration": "Debug", "timeout": 20}, last)
     assert out["reused_description"] and json.load(open(SB + "/req.json"))["buildDescriptionID"] == "d1", out
+    json.dump({"parameters": {"overrides": {"commandLine": {"table": {"ARCHS": "arm64"}}}}}, open(SB + "/req.json", "w"))
+    out = xs.handle(sb, {"pif": "p", "kind": "build", "request": SB + "/req.json", "configuration": "Debug", "timeout": 20}, last)
+    assert not out["reused_description"], "a description was reused after the build settings changed: %s" % out
     sb.quit()
     return "error-then-hang detected in %.1fs" % (time.time() - t0)
 
@@ -919,6 +922,35 @@ def t45_bazel_output_base_belongs_to_its_checkout():
     assert wait_gone(ob_of(src)) and wait_for(lambda: subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode != 0, 10)
     os.makedirs(SB + "/bazel-root/" + "0" * 32); open(SB + "/bazel-root/" + "0" * 32 + "/README", "w").write("WORKSPACE: /no/such/place\n")
     r = xcfs("gc", "--foreign"); assert any("workspace is gone" in k for k, _ in r["foreign"]), r["foreign"]
+
+
+@test
+def t46_session_can_skip_named_script_phases():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode_session import patch_pif
+    sh_phase = lambda n: {"type": "com.apple.buildphase.shell-script", "name": n, "scriptContents": "true"}
+    pif = [{"type": "workspace", "signature": "W1", "contents": {"projects": ["P1", "P2"]}},
+           {"type": "project", "signature": "P1", "contents": {"targets": ["T1", "T2"]}},
+           {"type": "project", "signature": "P2", "contents": {"targets": ["T3"]}},
+           {"type": "target", "signature": "T1", "contents": {"buildPhases": [sh_phase("Lint"), sh_phase("Keep"),
+                                                                             {"type": "com.apple.buildphase.sources"}]}},
+           {"type": "target", "signature": "T2", "contents": {"buildPhases": [sh_phase("Keep")]}},
+           {"type": "target", "signature": "T3", "contents": {"buildPhases": [sh_phase("Lint")]}}]
+    path = SB + "/pif.json"; json.dump(pif, open(path, "w"))
+    assert patch_pif(path, []) == (path, [])
+    out, skipped = patch_pif(path, ["Lint", "Absent"])
+    assert out != path and skipped == ["Lint"], (out, skipped)
+    p = {e["signature"]: e for e in json.load(open(out))}
+    sigs = set(p)
+    t1 = [e for e in p.values() if e["type"] == "target" and len(e["contents"]["buildPhases"]) == 2][0]
+    assert [ph.get("name") for ph in t1["contents"]["buildPhases"]] == ["Keep", None]
+    assert "T2" in sigs and "T1" not in sigs and "T3" not in sigs, sigs        # changed targets get new signatures
+    for e in p.values():                                                        # and every reference follows them
+        for ref in e["contents"].get("targets", []) + e["contents"].get("projects", []):
+            assert ref in sigs, "dangling reference %s" % ref
+    assert "W1" not in sigs and "P1" not in sigs and "P2" not in sigs
+    assert json.load(open(path))[0]["signature"] == "W1", "the original PIF was modified"
+    assert patch_pif(path, ["Lint", "Absent"]) == (out, ["Lint"]), "a second call should reuse the patched PIF"
 
 
 

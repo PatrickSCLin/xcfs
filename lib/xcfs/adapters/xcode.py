@@ -6,7 +6,7 @@ from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say
 
 ENTRY_KEYS = {"adapter", "root", "workspace", "project", "package", "scheme", "target", "configurations", "default",
               "warm", "simulator", "packagesDir", "xcodebuildArgs", "buildSettings", "driver", "prepare",
-              "reexportWhenChanged", "pinDerivedData", "sharedXcodeCaches"}
+              "reexportWhenChanged", "pinDerivedData", "sharedXcodeCaches", "skipScripts"}
 CONFIG_KEYS = {"configuration", "destination", "testDestination", "buildSettings"}
 TRASH = ".xcfs-trash"
 PCM_DIR = "Build/Intermediates.noindex/SwiftExplicitPrecompiledModules"
@@ -101,6 +101,9 @@ class XcodeAdapter(Adapter):
                 p += ["configurations.%s: unknown key %r" % (n, k) for k in c if k not in CONFIG_KEYS]
         if entry.get("default") and entry["default"] not in confs:
             p.append("default %r is not in configurations" % entry["default"])
+        if "skipScripts" in entry and not (isinstance(entry["skipScripts"], list) and
+                                           all(isinstance(x, str) for x in entry["skipScripts"])):
+            p.append("skipScripts must be a list of script phase names")
         if entry.get("driver", "xcodebuild") not in ("xcodebuild", "session", "auto"):
             p.append("driver must be \"xcodebuild\", \"session\" or \"auto\"")
         return p
@@ -250,6 +253,9 @@ class XcodeAdapter(Adapter):
         if self.driver(ctx) == "session":
             from . import xcode_session
             return xcode_session.build(self, ctx, name, conf, args)
+        if ctx.entry.get("skipScripts"):
+            from ..util import warn
+            warn("skipScripts applies to the session driver only; this xcodebuild build runs every script phase")
         r = self.xcodebuild(ctx, "build", name, conf, timeout=args.get("timeout"))
         r.pop("_lines", None)
         return r

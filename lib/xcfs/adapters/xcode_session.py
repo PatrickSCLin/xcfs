@@ -131,8 +131,9 @@ def export_pif(adapter, ctx, scheme):
                 if re.search(r"\berror\b", l) and "DVTProvisioning" not in l and "result bundle" not in l]
         raise Fail("PIF export failed (%d): %s" % (r.returncode, "\n".join(errs)[:600] or (r.stderr or r.stdout)[-400:]))
     os.replace(tmp, path)
-    for old in sorted(glob.glob(os.path.join(d, "*.json")), key=os.path.getmtime)[:-3]:
-        os.remove(old)
+    for old in sorted((f for f in glob.glob(os.path.join(d, "*.json")) if "-skip-" not in f), key=os.path.getmtime)[:-3]:
+        for f in [old] + glob.glob(old[:-len(".json")] + "-skip-*"):
+            os.remove(f)
     say("  exported PIF in %.1fs" % (time.time() - t0))
     return path, True
 
@@ -151,6 +152,40 @@ def package_schemes(pkg_dir, scheme):
         if c and c not in out:
             out.append(c)
     return out
+
+
+def patch_pif(pif_path, skip):
+    """A copy of the PIF without the shell-script phases named in skip (the project's own scripts an agent's builds
+    need not run: a linter, a localization sync). Objects refer to each other by signature, so a changed target gets
+    a new signature, and so do the project and workspace that list it. Returns (path, names actually skipped)."""
+    if not skip:
+        return pif_path, []
+    key = short_hash(json.dumps(sorted(skip)), 10)
+    out = pif_path[:-len(".json")] + "-skip-" + key + ".json"
+    meta = out + ".skipped"
+    if os.path.isfile(out) and os.path.isfile(meta):
+        return out, json.load(open(meta))
+    pif = load_pif(pif_path)
+    renamed, skipped = {}, set()
+    for e in pif:
+        if e.get("type") != "target":
+            continue
+        phases = e["contents"].get("buildPhases", [])
+        kept = [ph for ph in phases if not (ph.get("type") == "com.apple.buildphase.shell-script" and ph.get("name") in skip)]
+        if len(kept) != len(phases):
+            skipped |= {ph.get("name") for ph in phases if ph not in kept}
+            e["contents"]["buildPhases"] = kept
+            renamed[e["signature"]] = e["signature"] + "-xcfs-" + key
+            e["signature"] = renamed[e["signature"]]
+    for kind, field in (("project", "targets"), ("workspace", "projects")):
+        for e in pif:
+            if e.get("type") == kind and any(x in renamed for x in e["contents"].get(field, [])):
+                e["contents"][field] = [renamed.get(x, x) for x in e["contents"][field]]
+                renamed[e["signature"]] = e["signature"] + "-xcfs-" + key
+                e["signature"] = renamed[e["signature"]]
+    write_json(out, pif)
+    write_json(meta, sorted(skipped))
+    return out, sorted(skipped)
 
 
 def load_pif(path):
@@ -495,9 +530,12 @@ def serve(sock_path, swb, cwd, env_json, log_dir):
 
 
 def handle(sb, req, last):
-    key = (req["pif"], req["kind"])
     with open(req["request"]) as fh:
         rq = json.load(fh)
+    # A build description belongs to one PIF *and* one set of request parameters (build settings, configuration,
+    # destination, targets): reusing it after any of them changed would silently build with the old ones.
+    fingerprint = hashlib.sha256(json.dumps(dict(rq, buildDescriptionID=None), sort_keys=True).encode()).hexdigest()
+    key = (req["pif"], req["kind"], fingerprint)
     reused = False
     if last.get(key):
         rq["buildDescriptionID"] = last[key]
@@ -579,6 +617,7 @@ def session_build(adapter, ctx, name, conf, args, files=None):
     t0 = time.time()
     scheme = adapter.scheme(ctx)
     pif_path, exported = export_pif(adapter, ctx, scheme)
+    pif_path, skipped = patch_pif(pif_path, ctx.entry.get("skipScripts"))
     pif = load_pif(pif_path)
     dd = adapter.derived_data(ctx, name, "swbuild")
     req, target, ext = make_request(adapter, ctx, pif, conf, dd, files)
@@ -603,7 +642,8 @@ def session_build(adapter, ctx, name, conf, args, files=None):
            "seconds": round(time.time() - t0, 2), "build_seconds": round(out.get("seconds", 0), 2),
            "diagnostics": out.get("diagnostics", []), "derived_data": dd, "configuration": name, "driver": "session",
            "pif_exported": exported, "reused_description": out.get("reused_description", False),
-           "compile_tasks": out.get("compiled", 0), "result": out["result"], "timing": out.get("timing")}
+           "compile_tasks": out.get("compiled", 0), "result": out["result"], "timing": out.get("timing"),
+           "skipped_scripts": skipped}
     if out.get("message"):
         res["diagnostics"].insert(0, {"file": None, "line": 0, "column": 0, "severity": "error",
                                       "message": "swbuild: " + out["message"]})
