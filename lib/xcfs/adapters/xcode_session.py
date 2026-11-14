@@ -391,11 +391,26 @@ def run_destination(dest):
             "hostTargetedPlatform": None}
 
 
-def metal_toolchain(ctx):
-    """(EXTERNAL_TOOLCHAINS_DIR, TOOLCHAINS value) when the checkout has Metal sources and the Metal toolchain is
+def pif_has_metal(pif):
+    """Whether the project description refers to a Metal source anywhere: in the project, in a Swift package or in
+    a nested repository that the checkout's own git does not track."""
+    def walk(node):
+        if isinstance(node, dict):
+            p = node.get("path")
+            if isinstance(p, str) and p.endswith(".metal"):
+                return True
+            return any(walk(v) for v in node.values() if isinstance(v, (dict, list)))
+        if isinstance(node, list):
+            return any(walk(v) for v in node)
+        return False
+    return walk(pif or [])
+
+
+def metal_toolchain(ctx, pif=None):
+    """(EXTERNAL_TOOLCHAINS_DIR, TOOLCHAINS value) when the build has Metal sources and the Metal toolchain is
     installed; (None, None) otherwise."""
     files = run("git", "-C", ctx.toolchain_root, "ls-files", "*.metal", check=False).stdout.strip()
-    if not files:
+    if not files and not pif_has_metal(pif):
         return None, None
     for d in sorted(glob.glob("/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-*")):
         for info in glob.glob(os.path.join(d, "**", "*.xctoolchain", "ToolchainInfo.plist"), recursive=True) + \
@@ -431,7 +446,7 @@ def make_request(adapter, ctx, pif, conf, dd, files=None, scheme_cache=None):
     else:
         guids = target_guids(pif, names)
     table = adapter.build_settings(ctx, conf)
-    ext, tc = metal_toolchain(ctx)
+    ext, tc = metal_toolchain(ctx, pif)
     if tc:
         table["TOOLCHAINS"] = tc
     req = {"parameters": {"action": "build", "configurationName": conf.get("configuration", "Debug"),

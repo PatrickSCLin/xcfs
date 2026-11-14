@@ -1069,6 +1069,17 @@ def t51_package_resolution_options_reach_the_pif_export():
     assert package_args([]) == [] and package_args(["-quiet"]) == []
 
 
+@test
+def t52_metal_sources_found_through_the_project_description():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode_session import pif_has_metal
+    pif = [{"type": "project", "contents": {"groupTree": {"children": [
+        {"type": "group", "path": "Sources", "children": [{"type": "file", "path": "Effects/Shader.metal"}]}]}}}]
+    assert pif_has_metal(pif), "a Metal file in a package or a nested repository counts"
+    assert not pif_has_metal([{"type": "project", "contents": {"groupTree": {"children": [{"path": "A.swift"}]}}}])
+    assert not pif_has_metal(None)
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))
