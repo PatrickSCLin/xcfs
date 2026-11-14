@@ -124,6 +124,30 @@ def pif_key(adapter, ctx, scheme):
     return h.hexdigest()[:24]
 
 
+# xcodebuild options that change how packages are resolved, with the number of values each takes. The PIF export
+# resolves packages, so it must use them too (with "-scmProvider system", say, git's own configuration and
+# credential helpers apply).
+PACKAGE_OPTIONS = {"-scmProvider": 1, "-packageCachePath": 1, "-defaultPackageRegistryURL": 1,
+                   "-packageDependencySCMToRegistryTransformation": 1, "-packageFingerprintPolicy": 1,
+                   "-packageSigningEntityPolicy": 1, "-disableAutomaticPackageResolution": 0,
+                   "-onlyUsePackageVersionsFromResolvedFile": 0, "-skipPackagePluginValidation": 0,
+                   "-skipMacroValidation": 0, "-disablePackageRepositoryCache": 0}
+
+
+def package_args(xcodebuild_args):
+    """The package-resolution options among a configuration's xcodebuildArgs, with their values."""
+    out, i = [], 0
+    while i < len(xcodebuild_args):
+        a = xcodebuild_args[i]
+        n = PACKAGE_OPTIONS.get(a)
+        if n is None:
+            i += 1
+            continue
+        out += xcodebuild_args[i:i + 1 + n]
+        i += 1 + n
+    return out
+
+
 def export_pif(adapter, ctx, scheme):
     d = os.path.join(session_dir(ctx), "pif")
     os.makedirs(d, exist_ok=True)
@@ -137,9 +161,9 @@ def export_pif(adapter, ctx, scheme):
     # global folder that no checkout owns and nothing ever removes. -derivedDataPath needs -scheme; the scheme Xcode
     # generates for a package is named after its product or "<package>-Package", so a package tries those in turn.
     own = os.path.join(ctx.build_dir, "swbuild", "pif")
-    extra = []
+    extra = package_args(ctx.entry.get("xcodebuildArgs", []))
     if ctx.entry.get("packagesDir"):
-        extra = ["-clonedSourcePackagesDirPath", os.path.join(ctx.toolchain_root, ctx.entry["packagesDir"])]
+        extra += ["-clonedSourcePackagesDirPath", os.path.join(ctx.toolchain_root, ctx.entry["packagesDir"])]
     candidates = [scheme] if args else package_schemes(cwd, scheme)
     t0 = time.time()
     for sch in candidates:

@@ -1059,6 +1059,16 @@ def t50_session_check_is_redone_for_new_code_or_after_a_failure():
     assert not regression_current({"ok": False, "at": old, "check": check_id()}), "a failure is retried after a day"
 
 
+@test
+def t51_package_resolution_options_reach_the_pif_export():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode_session import package_args
+    assert package_args(["-scmProvider", "system", "-quiet", "-onlyUsePackageVersionsFromResolvedFile",
+                         "-jobs", "4", "-packageCachePath", "/tmp/c"]) == \
+        ["-scmProvider", "system", "-onlyUsePackageVersionsFromResolvedFile", "-packageCachePath", "/tmp/c"]
+    assert package_args([]) == [] and package_args(["-quiet"]) == []
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))
