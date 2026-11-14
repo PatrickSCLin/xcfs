@@ -235,7 +235,8 @@ class XcodeAdapter(Adapter):
         settings.update(conf.get("buildSettings", {}))
         swiftc = self.swift_driver(ctx.entry)
         if swiftc:
-            settings.update(SWIFT_USE_INTEGRATED_DRIVER="NO", SWIFT_EXEC=swiftc)
+            from . import swift_driver as sd
+            settings.update(SWIFT_USE_INTEGRATED_DRIVER="NO", SWIFT_EXEC=swiftc, XCFS_SWIFT_DRIVER_BUILD=sd.install_id())
         return settings
 
     swift_driver_decision = None   # what the last build used, for its output

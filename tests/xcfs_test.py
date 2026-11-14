@@ -856,8 +856,15 @@ def t44_submodules_come_along_locally():
     open(lib + "/lib.c", "w").write("int v = 1;\n"); git_commit(lib, "v1")
     repo = toy_repo("r44", slots=1); E = toy_env()
     sh("git", "-C", repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", lib, "vendor/lib"); git_commit(repo, "add submodule")
+    # a second submodule the source never checked out (optional, or private and unreachable): left alone
+    sh("git", "-C", repo, "config", "-f", ".gitmodules", "submodule.private.path", "vendor/private")
+    sh("git", "-C", repo, "config", "-f", ".gitmodules", "submodule.private.url", "git@example.com:nobody/private")
+    sh("git", "-C", repo, "update-index", "--add", "--cacheinfo", "160000," + sh("git", "-C", lib, "rev-parse", "HEAD").strip() + ",vendor/private")
+    git_commit(repo, "add a submodule the source does not check out")
     w = xcfs("new", repo, "sub", env=E); assert w["_code"] == 0, w; wt = w["worktree"]
     assert open(wt + "/vendor/lib/lib.c").read() == "int v = 1;\n"
+    assert not os.path.isdir(wt + "/vendor/private") or not os.listdir(wt + "/vendor/private"), \
+        "a submodule the source does not check out was initialized"
     assert os.path.realpath(sh("git", "-C", wt + "/vendor/lib", "remote", "get-url", "origin")) == repo + "/vendor/lib", \
         "the submodule was not cloned from the source checkout"
     assert sh("git", "-C", wt, "status", "--porcelain") == ""
@@ -1023,6 +1030,19 @@ def t48_lint_only_script_phases_are_skipped_by_default():
     from xcfs.adapters.xcode import XcodeAdapter
     assert XcodeAdapter().validate({"adapter": "xcode", "skipScripts": "auto"}) == []
     assert XcodeAdapter().validate({"adapter": "xcode", "skipScripts": "all"})
+
+
+@test
+def t49_compile_tasks_count_with_either_swift_driver():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode_session import is_compile_rule
+    for r in ("SwiftCompile normal arm64 /a/A.swift", "SwiftEmitModule normal arm64 Emitting\\ module\\ for\\ A",
+              "CompileC /x/a.o /a/a.m normal arm64 objective-c", "CompileSwift normal arm64 /a/A.swift",
+              "EmitSwiftModule normal arm64"):
+        assert is_compile_rule(r), r
+    for r in ("CompileSwiftSources normal arm64 com.apple.xcode.tools.swift.compiler", "Ld /x/A normal",
+              "PhaseScriptExecution Lint /x.sh", "SwiftDriver A normal arm64"):
+        assert not is_compile_rule(r), r
 
 
 def main():

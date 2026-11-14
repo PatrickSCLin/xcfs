@@ -54,6 +54,20 @@ def status():
     return None, "not built yet", True
 
 
+def install_id():
+    """Changes whenever the installed driver or its features file does; passed as a build setting so the build
+    service plans anew (it keeps build descriptions while the settings are the same)."""
+    parts = []
+    for rel in ("bin/swift-driver", "share/swift/features.json", "toolchain.json"):
+        try:
+            st = os.stat(os.path.join(root(), rel))
+            parts.append("%s:%d:%d" % (rel, st.st_size, int(st.st_mtime)))
+        except OSError:
+            parts.append(rel + ":-")
+    import hashlib
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:12]
+
+
 def building():
     marker = read_json(os.path.join(root(), "building"), None)
     if not marker:

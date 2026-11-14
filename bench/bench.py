@@ -401,8 +401,15 @@ def run_round_xcfs(variant, overrides):
         raise SystemExit("round checkout failed: %s" % out.get("error"))
     wt = out["worktree"]
     steps.append(("checkout", t))
+    decisions = []   # what each build and check used: driver, Swift driver, skipped scripts, success
+
+    def note(step, code, out):
+        decisions.append({"step": step, "ok": code == 0 and out.get("ok", True) is not False,
+                          **{k: out.get(k) for k in ("driver", "swift_driver", "skipped_scripts",
+                                                     "skipped_scripts_reason") if out.get(k) is not None}})
     t, code, _, out = xcfs("build", wt, log_name="round-xcfs-%s" % variant)
     steps.append(("first build", t))
+    note("first build", code, out)
     base = int(time.time() * 1000) % 10 ** 9 * 10
     seen = set()
     for i, e in enumerate(round_edits(), 1):
@@ -412,14 +419,16 @@ def run_round_xcfs(variant, overrides):
         apply_edit(wt, e, base + i)
         t, code, _, out = xcfs("check", os.path.join(wt, e["file"]), log_name="round-xcfs-%s" % variant)
         steps.append(("edit %d + check" % i, t))
+        note("edit %d + check" % i, code, out)
     t, code, _, out = xcfs("build", wt, log_name="round-xcfs-%s" % variant)
     steps.append(("final build", t))
+    note("final build", code, out)
     revert_edits(wt)  # the agent would commit; the benchmark must not leave edits behind
     t, code, _, out = xcfs("release", wt, "--no-warm", "--prune-branch", log_name="round-xcfs-%s" % variant)
     steps.append(("release", t))
     total = round(time.time() - t0, 1)
     RESULTS["round"]["xcfs (%s)" % variant] = {"total_seconds": total, "steps": steps, "left_kb": 0,
-                                               "disk_kb_after": f0 - free_kb()}
+                                               "disk_kb_after": f0 - free_kb(), "decisions": decisions}
     say("round[xcfs %s]: %.1fs total" % (variant, total))
     xcfs("pool", "resize", SOURCE, "0", log_name="round-xcfs-%s" % variant)
     XENV = {}

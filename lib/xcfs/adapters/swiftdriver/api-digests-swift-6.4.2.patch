@@ -34,6 +34,21 @@ index 9b386e9..1ab046e 100644
    }
  
    private func printBindings(_ job: Job) {
+diff --git a/Sources/SwiftDriver/Driver/DriverVersion.swift b/Sources/SwiftDriver/Driver/DriverVersion.swift
+index 542d930..a43c5df 100644
+--- a/Sources/SwiftDriver/Driver/DriverVersion.swift
++++ b/Sources/SwiftDriver/Driver/DriverVersion.swift
+@@ -15,6 +15,9 @@ extension Driver {
+ #if SWIFT_DRIVER_VERSION_DEFINED
+   static let driverSourceVersion: String = SWIFT_DRIVER_VERSION
+ #else
+-  static let driverSourceVersion: String = ""
++  // Modified by the xcfs project: a SwiftPM build defines no version, and build systems read the version line to
++  // decide which options this driver takes (without it, Xcode's build service leaves out -package-name). This is
++  // the version of the release this source is (swift-6.4.2-RELEASE, the driver of Xcode 27.2).
++  static let driverSourceVersion: String = "1.168.6"
+ #endif
+ }
 diff --git a/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift b/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift
 new file mode 100644
 index 0000000..34a4fde

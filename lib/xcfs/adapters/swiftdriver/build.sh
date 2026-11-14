@@ -44,6 +44,36 @@ else
   mv "$ROOT/bin/swift-driver.new" "$ROOT/bin/swift-driver"
 fi
 
+# The build service and the driver find the compiler's resources next to `swiftc`: share/swift/features.json says
+# which options the compiler takes (without it Xcode leaves out -package-name and others), lib/swift holds the
+# macro plugins and runtime libraries. Point both at the Xcode toolchain the driver was built for.
+# The features file describes Xcode's own driver, which takes options the open-source release does not; the build
+# service checks those against the driver it links, not against this one, so they are left out of this driver's
+# copy (the build service then treats them as unsupported, as for an older compiler).
+TOOLCHAIN_USR=$(dirname "$(dirname "$FRONTEND")")
+for d in lib include; do
+  [ -e "$TOOLCHAIN_USR/$d" ] && ln -sfn "$TOOLCHAIN_USR/$d" "$ROOT/$d"
+done
+rm -rf "$ROOT/share"
+mkdir -p "$ROOT/share/swift"
+for e in "$TOOLCHAIN_USR"/share/*; do
+  [ "$(basename "$e")" = swift ] || ln -sfn "$e" "$ROOT/share/$(basename "$e")"
+done
+for e in "$TOOLCHAIN_USR"/share/swift/*; do
+  [ "$(basename "$e")" = features.json ] || ln -sfn "$e" "$ROOT/share/swift/$(basename "$e")"
+done
+python3 - "$TOOLCHAIN_USR/share/swift/features.json" "$ROOT/share/swift/features.json" "$SRC/Sources/SwiftOptions/Options.swift" <<'PY'
+import json, re, sys
+src, dst, options = sys.argv[1:]
+known = set(re.findall(r'Option\("(-[^"]+)"', open(options).read()))
+# Features with which the build service adds an option for the driver itself.
+driver_options = {"emit-localized-strings": "-emit-localized-strings"}
+features = json.load(open(src))
+features["features"] = [f for f in features["features"]
+                        if driver_options.get(f["name"]) is None or driver_options[f["name"]] in known]
+json.dump(features, open(dst, "w"), indent=1)
+PY
+
 cat > "$ROOT/bin/swiftc.new" <<EOF
 #!/bin/sh
 # SWIFT_EXEC for Xcode (written by xcfs swiftdriver/build.sh): the patched swift-driver, run against

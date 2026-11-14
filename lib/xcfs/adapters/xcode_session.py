@@ -233,6 +233,13 @@ def patch_pif(pif_path, skip):
     return out, sorted(skipped)
 
 
+def is_compile_rule(rule):
+    """A task that compiles: with Xcode's integrated Swift driver the build service names Swift jobs SwiftCompile /
+    SwiftEmitModule; with an external driver (SWIFT_USE_INTEGRATED_DRIVER=NO) it relays them as CompileSwift /
+    EmitSwiftModule (CompileSwiftSources, the driver's own task, is not counted)."""
+    return rule.startswith(("SwiftCompile ", "SwiftEmitModule ", "CompileC ", "CompileSwift ", "EmitSwiftModule "))
+
+
 def load_pif(path):
     with open(path) as f:
         return json.load(f)
@@ -495,7 +502,7 @@ class Swbuild:
                     rule = str(j.get("ruleInfo", ""))
                     started[j.get("id")] = (time.time(), rule.split(" ")[0],
                                             (j.get("executionDescription") or rule)[:100])
-                    if rule.startswith(("SwiftCompile", "CompileC", "SwiftEmitModule")):
+                    if is_compile_rule(rule):
                         compiled += 1
                     marks.setdefault("first_task", time.time() - t0)
                 elif k == "taskComplete" and j.get("id") in started:

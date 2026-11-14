@@ -41,12 +41,28 @@ def submodule_overrides(src):
     return out
 
 
+def initialized_submodules(src):
+    """Paths of the source checkout's submodules that are checked out there. One the source never initialized (an
+    optional or private one, say) is left alone: a checkout made from it should not need what the source does without."""
+    r = run("git", "-C", src, "submodule", "status", check=False)
+    out = []
+    for line in r.stdout.splitlines():
+        if line and line[0] != "-":
+            parts = line[1:].split()
+            if len(parts) >= 2:
+                out.append(parts[1])
+    return out
+
+
 def sync_submodules(src, target):
-    """Check out the submodules a commit records. From the source checkout's copies first; if those lack a needed
-    commit, from the submodules' own remotes."""
+    """Check out the submodules a commit records, those the source checkout has checked out. From the source's copies
+    first; if those lack a needed commit, from the submodules' own remotes."""
     if not os.path.isfile(os.path.join(target, ".gitmodules")):
         return False
-    args = ["submodule", "update", "--init", "--recursive", "--checkout", "-j", "8"]
+    paths = initialized_submodules(src)
+    if not paths:
+        return False
+    args = ["submodule", "update", "--init", "--recursive", "--checkout", "-j", "8", "--", *paths]
     r = run("git", "-C", target, *submodule_overrides(src), *args, check=False, timeout=3600)
     if r.returncode != 0:
         r = run("git", "-C", target, *args, check=False, timeout=3600)
