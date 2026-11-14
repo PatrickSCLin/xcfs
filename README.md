@@ -332,6 +332,8 @@ still take the compiler's time, and on a Bazel app (Telegram-iOS) incremental bu
 
 [docs/design.md](docs/design.md): the measurements behind the approach, the architecture and adapter interface, the
 slot lifecycle, the edge cases and how each is handled, and what is not verified.
+[docs/build-systems.md](docs/build-systems.md): what Bazel, Buck2, Gradle, Tuist, Nx and compiler caches do, which of
+those problems the measured apps have, what each is worth in seconds, and why xcfs is not rewritten in a faster language.
 
 ## License
 
