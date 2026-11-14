@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""knobs.py <profile.json> --source <clone> [--work DIR] [--driver session|xcodebuild] [--repeat N] [--only a,b]
+"""knobs.py <profile.json> --source <clone> [--work DIR] [--driver session|xcodebuild] [--repeat N] [--only a,b] [--no-check]
 
 Find out what build settings cost on a real project. One xcfs worktree is built under each variant of the profile's
 "knobs" ({"name": {SETTING: value, ...}}, applied on top of the profile's toolchain buildSettings): a first build
 after the change (the settings change invalidates incremental state), two no-op builds, then the profile's edits,
 each repeated N times with fresh text, each timed as `xcfs build` and — with the session driver — `xcfs check` of the
-edited file. The edits are undone and rebuilt (not timed) before the next variant.
+edited file (--no-check leaves the check out: a check compiles the file, and a build that can reuse that work
+looks faster than it is). The edits are undone and rebuilt (not timed) before the next variant.
 
 Prints a table and writes <work>/knobs-<name>-<time>.json and .md.
 """
@@ -25,6 +26,7 @@ WORK = os.path.realpath(arg("--work", os.path.join(os.path.dirname(SOURCE), "xcf
 DRIVER = arg("--driver", "session")
 REPEAT = int(arg("--repeat", 2))
 ONLY = arg("--only", "").split(",") if arg("--only") else None
+CHECK = DRIVER == "session" and "--no-check" not in sys.argv
 XCFS = os.path.join(ROOT, "bin", "xcfs")
 STAMP = time.strftime("%Y%m%d-%H%M%S")
 os.makedirs(WORK, exist_ok=True)
@@ -101,7 +103,7 @@ def main():
                 for r in range(REPEAT):
                     n += 1
                     apply_edit(wt, e, base + n)
-                    if DRIVER == "session":
+                    if CHECK:
                         c.append(xcfs("check", os.path.join(wt, e["file"]))[0])
                     tb, ob = xcfs("build", wt)
                     b.append(tb if ob.get("ok") else None)
