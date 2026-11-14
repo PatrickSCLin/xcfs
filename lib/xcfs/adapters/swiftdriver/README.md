@@ -1,7 +1,7 @@
 # Experimental: a Swift driver that rebuilds only what an API change touches
 
-**Status: experimental, on by default where it applies.** For Swift 6.4.2 (Xcode 27.2) only; with any other Xcode,
-and until it is built, xcfs builds with Xcode's own driver and says so.
+**Status: experimental, on by default where it applies.** For the Swift 6.4 release line (Xcode 27.x); with an Xcode
+of another line, and until it is built, xcfs builds with Xcode's own driver and says so.
 
 ## The problem
 
@@ -47,22 +47,28 @@ change an interface cost the same, and so does the first build of a checkout. On
 
 ## Use
 
-Nothing to configure. With the default `"swiftDriver": "auto"`, the first build on an Xcode whose Swift is 6.4.2
-starts building the driver in the background (it clones swift-driver at the release tag, applies the patch with the
-pinned dependencies and builds it with Xcode's SwiftPM: about 1-2 minutes; log in the install directory). Builds use
-Xcode's own driver until it is ready, then build with `SWIFT_USE_INTEGRATED_DRIVER=NO` and `SWIFT_EXEC` pointing at
-the installed wrapper. Before every build xcfs compares the selected Xcode's `swiftc --version` with the one the
-driver was built for: another build of the same Swift starts a rebuild, another Swift release means Xcode's own
-driver. A failed build is retried after a day. Each build's JSON says which driver it used (`swift_driver`), and
-`xcfs doctor` reports the state.
+Nothing to configure. With the default `"swiftDriver": "auto"`, xcfs reads the selected Xcode's `swiftc --version`
+(it follows `xcode-select` and `DEVELOPER_DIR`), derives the swift-driver release tag of that Swift
+(`swift-6.4.2-RELEASE`) and the patch of its release line, and on the first build with that Xcode starts building
+the driver in the background: clone the tag, `git apply --check` (a patch that does not apply means Xcode's own
+driver — nothing is applied fuzzily), apply, build with the pinned dependencies, then a correctness self-test
+(`selftest.py`: two modules built with the new driver directly, four edits whose recompiled files are checked — an
+unused new function recompiles nothing, a layout change through a typealias, an `Optional` extension and a changed
+return type recompile exactly their users). Only a driver that passed is used. About 1.5 minutes; builds use
+Xcode's own driver meanwhile.
+
+Each Xcode gets its own install, `~/Library/Caches/xcfs/swift-driver/<swift>-<swift build>-<hash of the Xcode's
+path>/` (or under `$XCFS_CACHE`), because the driver uses that Xcode's frontend and links its `lib/` and `share/`.
+Switching Xcode picks the matching install, or starts building it. A failed build or self-test is recorded and
+retried after a day. Each build's JSON says which driver it used (`swift_driver`, with the reason when it is Xcode's
+own), and `xcfs doctor` reports the state.
 
 Overrides, in the toolchain entry of the config: `"swiftDriver": "native"` never uses it; `"api-digests"` warns on
-every build that cannot use it. `XCFS_SWIFT_DRIVER=native|auto|api-digests` overrides the config. To build it by
-hand: `lib/xcfs/adapters/swiftdriver/build.sh [--force]`.
+every build that cannot use it. `XCFS_SWIFT_DRIVER=native|auto|api-digests` overrides the config. To build by hand:
+`build.sh <install dir> <tag> <patch> <Package.resolved> <driver version>` (see its header).
 
-Everything lives in `~/Library/Caches/xcfs/swift-driver/6.4.2/` (or under `$XCFS_CACHE`): the driver, the wrapper,
-and `store/` with the digests (the newest 64 versions per module are kept) and the module cache used to extract them.
-Deleting the directory makes the next build start over.
+Patches by release line (`KITS` in `../swift_driver.py`): 6.4 — `api-digests-swift-6.4.2.patch` with
+`Package-swift-6.4.resolved`. The `swift-6.4.0`, `6.4.1` and `6.4.2-RELEASE` tags are the same swift-driver commit.
 
 ## Costs and limits
 
@@ -84,6 +90,7 @@ Deleting the directory makes the next build start over.
 ## Files
 
 - `api-digests-swift-6.4.2.patch` — the patch (Apache-2.0, a derivative of swift-driver; see [NOTICE.md](NOTICE.md))
-- `Package.resolved` — the dependency revisions it was built with
-- `build.sh` — clone, patch, build, install
+- `Package-swift-6.4.resolved` — the dependency revisions the 6.4 line is built with
+- `build.sh` — clone, check and apply the patch, build, install, self-test
+- `selftest.py` — the correctness self-test a driver must pass before xcfs uses it
 - `LICENSE.txt` — swift-driver's license

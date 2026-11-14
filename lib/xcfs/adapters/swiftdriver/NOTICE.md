@@ -23,8 +23,8 @@ This directory holds a patch to **swift-driver**, part of the Swift open source 
 Each changed file carries the line "Modified by the xcfs project" below its license header, and every original
 copyright and license header is kept.
 
-`Package.resolved` records the dependency revisions the patched driver was built and measured with (swift-llbuild
+`Package-swift-6.4.resolved` records the dependency revisions the patched driver was built and measured with (swift-llbuild
 and swift-tools-support-core on their `release/6.4.x` branches, swift-argument-parser 1.6.2,
 swift-toolchain-sqlite 1.0.7); those packages keep their own licenses.
 
-`build.sh` and `README.md` are part of xcfs (MIT).
+`build.sh`, `selftest.py` and `README.md` are part of xcfs (MIT).

@@ -964,7 +964,7 @@ def t46_session_can_skip_named_script_phases():
 
 
 @test
-def t47_experimental_swift_driver_auto_only_when_built_for_this_swift():
+def t47_experimental_swift_driver_follows_the_selected_xcode():
     sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
     from xcfs.adapters.xcode import XcodeAdapter
     from xcfs.adapters import swift_driver as sd
@@ -972,36 +972,60 @@ def t47_experimental_swift_driver_auto_only_when_built_for_this_swift():
     for v in ("auto", "native", "api-digests"):
         assert a.validate({"adapter": "xcode", "swiftDriver": v}) == [], v
     assert a.validate({"adapter": "xcode", "swiftDriver": "fast"}), "an unknown swiftDriver value must be refused"
+    v642 = sd.parse_version("swift-driver version: 1.168.6 Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\n")
+    assert v642["swift"] == "6.4.2" and v642["driver"] == "1.168.6" and v642["build"] == "swiftlang-6.4.2.1.9", v642
+    assert sd.kit_for(v642)[0] == "swift-6.4.2-RELEASE"
+    assert sd.parse_version("Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64\n"
+                            "swift-driver version: 1.168.6 ")["driver"] == "1.168.6", "stdout, then stderr"
+    v641 = sd.parse_version("swift-driver version: 1.168.2 Apple Swift version 6.4.1 (swiftlang-6.4.1.2.3 clang-2100.3.1)")
+    assert sd.kit_for(v641) == ("swift-6.4.1-RELEASE", sd.KITS["6.4"]), "a release of the same line uses its line's patch"
+    assert sd.kit_for(sd.parse_version("Apple Swift version 6.5 (swiftlang-6.5.0.1.1 clang-2200)"))[0] is None
+    assert "6.5" in sd.kit_for(sd.parse_version("swift-driver version: 1.170 Apple Swift version 6.5 (swiftlang-6.5.0.1.1 clang-2200)"))[1]
     ctx = lambda **e: type("Ctx", (), {"entry": dict(e, sharedXcodeCaches=False)})
-    have = "Apple Swift version %s (swiftlang-x)" % sd.SWIFT
     started = []
     saved = (os.environ.get("XCFS_CACHE"), os.environ.pop("XCFS_SWIFT_DRIVER", None), sd.start_build)
     os.environ["XCFS_CACHE"] = SB + "/cache-driver"
-    sd.start_build = lambda force=False: started.append(force) or SB + "/build.log"
+    sd.start_build = lambda: started.append(1) or SB + "/build.log"
     try:
-        sd._swift = have
-        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}), "not built yet: Xcode's own driver"
-        assert started == [True], "auto mode starts building the driver for a matching Swift"
-        assert a.swift_driver_decision.startswith("native: building it"), a.swift_driver_decision
-        root = sd.root()
-        os.makedirs(root + "/bin")
-        wrapper = root + "/bin/swiftc"
+        sd._selected = dict(v642, developer_dir="/Applications/XcodeA.app/Contents/Developer")
+        root_a = sd.root()
+        assert "6.4.2-swiftlang-6.4.2.1.9-" in root_a
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and started == [1], "auto builds a missing driver"
+        os.makedirs(root_a + "/bin")
+        wrapper = root_a + "/bin/swiftc"
         open(wrapper, "w").write("#!/bin/sh\n"); os.chmod(wrapper, 0o755)
-        json.dump({"swiftVersion": "swift-driver version: 1.0 " + have}, open(root + "/toolchain.json", "w"))
+        json.dump({"swiftVersion": v642["release"]}, open(root_a + "/toolchain.json", "w"))
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}), "not before its self-test passed"
+        json.dump({"ok": False}, open(root_a + "/selftest.json", "w"))
+        open(root_a + "/build-failed", "w").write("the driver failed its correctness self-test\n")
+        n = len(started)
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and len(started) == n, "a failed self-test: not retried"
+        assert "self-test" in a.swift_driver_decision, a.swift_driver_decision
+        os.remove(root_a + "/build-failed")
+        json.dump({"ok": True}, open(root_a + "/selftest.json", "w"))
         s = a.build_settings(ctx(buildSettings={"OTHER": "1"}), {})
         assert s.get("SWIFT_EXEC") == wrapper and s.get("SWIFT_USE_INTEGRATED_DRIVER") == "NO" and s["OTHER"] == "1", s
-        assert a.swift_driver_decision == "api-digests"
         assert "SWIFT_EXEC" not in a.build_settings(ctx(swiftDriver="native"), {}), "native turns it off"
         os.environ["XCFS_SWIFT_DRIVER"] = "native"
         assert "SWIFT_EXEC" not in a.build_settings(ctx(swiftDriver="api-digests"), {}), "the environment overrides"
         del os.environ["XCFS_SWIFT_DRIVER"]
-        sd._swift = have.replace("swiftlang-x", "swiftlang-y")       # same Swift, another build: rebuild, not use
-        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and len(started) == 2
-        sd._swift = "Apple Swift version 9.9 (swiftlang-z)"          # another release: never built, never used
-        assert "SWIFT_EXEC" not in a.build_settings(ctx(swiftDriver="api-digests"), {}) and len(started) == 2
-        assert "9.9" in a.swift_driver_decision
+        sd._selected = dict(v641, developer_dir="/Applications/XcodeB.app/Contents/Developer")   # another Xcode
+        n = len(started)
+        assert sd.root() != root_a and "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and len(started) == n + 1, \
+            "another Xcode gets its own driver"
+        sd._selected = dict(sd.parse_version("swift-driver version: 1.170 Apple Swift version 6.5 (swiftlang-6.5.0.1.1 x)"),
+                            developer_dir="/Applications/XcodeC.app/Contents/Developer")
+        n = len(started)
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(swiftDriver="api-digests"), {}) and len(started) == n
+        assert "no patch for Swift 6.5" in a.swift_driver_decision, a.swift_driver_decision
+        os.makedirs(sd.root(sd._selected), exist_ok=True)
+        sd._selected = dict(v641, developer_dir="/Applications/XcodeB.app/Contents/Developer")
+        os.makedirs(sd.root(), exist_ok=True)
+        open(sd.root() + "/build-failed", "w").write("the patch does not apply to this release\n")
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and len(started) == n, "no retry within a day"
+        assert "does not apply" in a.swift_driver_decision
     finally:
-        sd._swift, sd.start_build = None, saved[2]
+        sd._selected, sd.start_build = None, saved[2]
         for k, v in (("XCFS_CACHE", saved[0]), ("XCFS_SWIFT_DRIVER", saved[1])):
             if v is None:
                 os.environ.pop(k, None)

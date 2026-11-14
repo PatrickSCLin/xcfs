@@ -165,7 +165,7 @@ module, compilation and SDK stat caches Xcode shares between projects); `skipScr
 outputs, `swiftlint` or `swiftformat --lint` without a fix mode, nothing written to a file, every other line plain
 shell plumbing — are left out, since they cannot change what is built; a list names exactly the phases to leave out,
 for instance a project's localization sync, and `[]` keeps them all; xcfs removes them from a copy of the project
-description, the project itself is untouched, and each build's JSON lists what it skipped and why); `swiftDriver` (`auto` by default: on Swift 6.4.2, build with a patched Swift driver that recompiles only the files a
+description, the project itself is untouched, and each build's JSON lists what it skipped and why); `swiftDriver` (`auto` by default: on an Xcode of the Swift 6.4 line, build with a patched Swift driver that recompiles only the files a
 changed interface really affects, built in the background on first use — see [its notes](lib/xcfs/adapters/swiftdriver/README.md);
 `native` turns it off).
 

@@ -96,7 +96,7 @@ What each automatic decision did, over all six rounds:
 |---|---|---|---|
 | pool slot instead of a new worktree + first build | always | 6 of 6 (checkout 0.2–0.3 s) | — |
 | build session (`"driver": "auto"`) | after a one-time regression check per Xcode | 6 of 6 | 0 |
-| experimental Swift driver (`"swiftDriver": "auto"`) | when the selected Xcode has Swift 6.4.2 | 6 of 6; digests extracted for 282 of 283 module versions (one module had no symbols to describe and kept the stock behavior) | 0 build failures |
+| experimental Swift driver (`"swiftDriver": "auto"`) | when the selected Xcode is of the Swift 6.4 line (built and self-tested per Xcode) | 6 of 6; digests extracted for 282 of 283 module versions (one module had no symbols to describe and kept the stock behavior) | 0 build failures |
 | leave out lint-only script phases (`"skipScripts": "auto"`) | phases that only run a linter | Element X (SwiftLint, SwiftFormat in lint mode), Home Assistant (two SwiftLint phases) | the other projects have none: Wikipedia's SwiftLint phase runs `swiftlint --fix`, which rewrites sources, and is kept |
 | `xcfs check` | always available | every edit of every round | — |
 

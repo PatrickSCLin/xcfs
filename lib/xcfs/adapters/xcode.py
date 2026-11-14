@@ -257,7 +257,7 @@ class XcodeAdapter(Adapter):
             XcodeAdapter.swift_driver_decision = "api-digests"
             return wrapper
         if buildable:
-            log = sd.start_build(force=True)
+            log = sd.start_build()
             if log:
                 why = "building it in the background for %s (log: %s)" % (sd.selected_swift(), log)
         XcodeAdapter.swift_driver_decision = "native: " + why

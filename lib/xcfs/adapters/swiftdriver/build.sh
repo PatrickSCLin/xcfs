@@ -1,48 +1,53 @@
 #!/bin/sh
-# Build the experimental swift-driver with per-name API digests and install it where xcfs looks for it.
+# Build the experimental swift-driver for the selected Xcode, check it, and install it where xcfs looks for it.
 #
-#   lib/xcfs/adapters/swiftdriver/build.sh [--force]   (xcfs runs it by itself when needed)
+#   build.sh <install dir> <swift-driver tag> <patch> <Package.resolved> <driver version>
 #
-# The patch is made for one swift-driver release; the selected Xcode must ship that Swift version, or the script
-# stops. It clones swift-driver at the release tag, applies the patch, builds the driver with Xcode's SwiftPM and
-# installs it into ${XCFS_CACHE:-~/Library/Caches/xcfs}/swift-driver/<swift version>/:
-#   bin/swift-driver   the patched driver
-#   bin/swiftc         the SWIFT_EXEC wrapper xcfs points Xcode at
-#   toolchain.json     the `swiftc --version` of the Xcode it was built for (xcfs compares it before every build)
-#   store/             API digests and the module cache used to extract them (created on use)
-# Nothing outside that directory is touched.
+# xcfs runs this by itself (in the background, on the first build with an Xcode that has no driver yet) and picks
+# the arguments for the selected Xcode: the swift-driver release tag of its Swift, the patch made for that release
+# line, the dependency pins it was built with, and the version its own driver reports. By hand, the same arguments,
+# e.g. build.sh ~/Library/Caches/xcfs/swift-driver/6.4.2-<build>-<xcode> swift-6.4.2-RELEASE \
+#        api-digests-swift-6.4.2.patch Package-swift-6.4.resolved 1.168.6
+#
+# Into the install directory: bin/swift-driver (the patched driver), bin/swiftc (the SWIFT_EXEC wrapper),
+# toolchain.json (what it was built for), selftest.json (the correctness self-test; xcfs uses the driver only when it
+# passed), lib/ and include/ (links to the toolchain), share/ (the toolchain's, with a features file for this driver),
+# store/ (API digests, created on use). Nothing outside that directory is touched.
+#
+# Exit codes: 3 the patch does not apply to that release (no fuzzy applying), 4 the self-test failed.
 set -eu
 
-SWIFT_VERSION=6.4.2
-TAG=swift-6.4.2-RELEASE
+[ $# -eq 5 ] || { echo "usage: build.sh <install dir> <tag> <patch> <Package.resolved> <driver version>" >&2; exit 2; }
 HERE=$(cd "$(dirname "$0")" && pwd)
-PATCH="$HERE/api-digests-swift-$SWIFT_VERSION.patch"
-ROOT="${XCFS_CACHE:-$HOME/Library/Caches/xcfs}/swift-driver/$SWIFT_VERSION"
+ROOT=$1
+TAG=$2
+case "$3" in /*) PATCH=$3 ;; *) PATCH="$HERE/$3" ;; esac
+case "$4" in /*) RESOLVED=$4 ;; *) RESOLVED="$HERE/$4" ;; esac
+DRIVER_VERSION=$5
 SRC="$ROOT/src"
-FORCE=${1:-}
-
 VERSION_LINE=$(/usr/bin/xcrun swiftc --version 2>&1 | head -1)
-case "$VERSION_LINE" in
-  *"Apple Swift version $SWIFT_VERSION "*) ;;
-  *) echo "build.sh: this patch is for Swift $SWIFT_VERSION; the selected Xcode has: $VERSION_LINE" >&2; exit 1 ;;
-esac
 FRONTEND=$(/usr/bin/xcrun -f swift-frontend)
 
-if [ -x "$ROOT/bin/swift-driver" ] && [ "$FORCE" != "--force" ]; then
-  echo "already built: $ROOT/bin/swift-driver (pass --force to rebuild)"
-else
-  rm -rf "$SRC"
-  mkdir -p "$ROOT"
-  git clone -q --depth 1 --branch "$TAG" https://github.com/swiftlang/swift-driver.git "$SRC"
-  git -C "$SRC" apply "$PATCH"
-  # The release's own Package.resolved is out of date (it pins llbuild's main branch while Package.swift asks for
-  # release/6.4.x); use the pins this patch was built and measured with, and do not let SwiftPM move them.
-  cp "$HERE/Package.resolved" "$SRC/Package.resolved"
+rm -rf "$SRC"
+mkdir -p "$ROOT"
+git clone -q --depth 1 --branch "$TAG" https://github.com/swiftlang/swift-driver.git "$SRC"
+if ! git -C "$SRC" apply --check "$PATCH"; then
+  echo "build.sh: $(basename "$PATCH") does not apply to $TAG" >&2
+  exit 3
+fi
+git -C "$SRC" apply "$PATCH"
+# Report the version of the driver this release is, as Xcode's own does (the build service reads that line).
+sed -i '' "s/driverSourceVersion: String = \"1.168.6\"/driverSourceVersion: String = \"$DRIVER_VERSION\"/" \
+  "$SRC/Sources/SwiftDriver/Driver/DriverVersion.swift"
+{
+  # A release's own Package.resolved can be out of date (6.4's pins llbuild's main branch while Package.swift asks
+  # for release/6.4.x); use the pins this patch line was built and measured with, and do not let SwiftPM move them.
+  cp "$RESOLVED" "$SRC/Package.resolved"
   (cd "$SRC" && /usr/bin/xcrun swift build -c release --product swift-driver --force-resolved-versions)
   mkdir -p "$ROOT/bin"
   cp "$SRC/.build/release/swift-driver" "$ROOT/bin/swift-driver.new"
   mv "$ROOT/bin/swift-driver.new" "$ROOT/bin/swift-driver"
-fi
+}
 
 # The build service and the driver find the compiler's resources next to `swiftc`: share/swift/features.json says
 # which options the compiler takes (without it Xcode leaves out -package-name and others), lib/swift holds the
@@ -86,10 +91,17 @@ EOF
 chmod +x "$ROOT/bin/swiftc.new"
 mv "$ROOT/bin/swiftc.new" "$ROOT/bin/swiftc"
 
-python3 - "$ROOT/toolchain.json" "$VERSION_LINE" "$FRONTEND" "$TAG" <<'EOF'
+python3 - "$ROOT/toolchain.json" "$VERSION_LINE" "$FRONTEND" "$TAG" "$(basename "$PATCH")" "$DRIVER_VERSION" <<'EOF'
 import json, sys
-path, version, frontend, tag = sys.argv[1:]
-json.dump({"swiftVersion": version, "frontend": frontend, "swiftDriverTag": tag, "patch": "api-digests"},
-          open(path, "w"), indent=1)
+path, version, frontend, tag, patch, driver = sys.argv[1:]
+json.dump({"swiftVersion": version, "frontend": frontend, "swiftDriverTag": tag, "patch": patch,
+           "driverVersion": driver}, open(path, "w"), indent=1)
 EOF
-echo "installed: $ROOT/bin/swiftc"
+
+# Correctness self-test with this driver; xcfs uses it only if this passes.
+rm -f "$ROOT/selftest.json"
+if ! python3 "$HERE/selftest.py" "$ROOT/bin/swiftc" "$ROOT/selftest.json"; then
+  echo "build.sh: the self-test failed; see $ROOT/selftest.json" >&2
+  exit 4
+fi
+echo "installed and self-tested: $ROOT/bin/swiftc"
