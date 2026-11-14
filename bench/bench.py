@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR] [--phases plain,xcfs,round,round-xcfs]
+"""bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR]
+           [--phases plain,xcfs,round,round-xcfs,round-plain,concurrent,concurrent-plain,overlap]
            [--xcfs PATH] [--reuse-from RESULTS.json]   (sides not in --phases are taken from that earlier run)
 
 Compare N parallel checkouts made the plain way (git worktree + the project's own setup and build) with the same N
@@ -15,7 +16,7 @@ Measured for each side:
 
 Results go to <work>/results-<name>-<time>.json and .md, with paths shortened to placeholders.
 """
-import json, os, re, shutil, subprocess, sys, time
+import json, os, re, shutil, subprocess, sys, threading, time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -43,7 +44,7 @@ for k in ("CLAUDE_CODE_SESSION_ID",):
 # A cache every checkout shares (a build tool's disk cache, say): the profile's commands find it in $XCFS_BENCH_CACHE.
 ENV["XCFS_BENCH_CACHE"] = os.path.realpath(arg("--cache", os.path.join(WORK, "shared-cache")))
 RESULTS = {"profile": PROFILE["name"], "agents": N, "started": STAMP, "machine": {}, "plain": {}, "xcfs": {},
-           "round": {}}
+           "round": {}, "concurrent": {}}
 VARIANTS = PROFILE["xcfs"].get("variants") or {"xcfs": {}}
 
 
@@ -114,16 +115,55 @@ def xcfs(*args, cwd=None, log_name="xcfs"):
     return round(time.time() - t0, 1), r.returncode, f0 - free_kb(), out
 
 
-def processes_for(path):
-    """(pids, RSS in KB) of processes with path (on a boundary) in their command line or as their cwd."""
+def process_table():
+    """{pid: (ppid, rss KB, command)} of every process."""
+    out = {}
+    for l in subprocess.run(["ps", "-axo", "pid=,ppid=,rss=,command="], capture_output=True, text=True).stdout.splitlines():
+        parts = l.strip().split(None, 3)
+        if len(parts) == 4:
+            out[int(parts[0])] = (int(parts[1]), int(parts[2]), parts[3])
+    return out
+
+
+def processes_for(path, table=None, roots=()):
+    """(pids, RSS in KB) of processes with path (on a boundary) in their command line, and of their descendants (a
+    build session's swbuild and compilers do not name the checkout); roots are counted with their descendants too."""
     pat = re.compile(re.escape(path) + r"(?=/|\s|$|\"|')")
-    pids, rss = set(), 0
-    for l in subprocess.run(["ps", "-axo", "pid=,rss=,command="], capture_output=True, text=True).stdout.splitlines():
-        parts = l.strip().split(None, 2)
-        if len(parts) == 3 and pat.search(parts[2]) and int(parts[0]) != os.getpid():
-            pids.add(int(parts[0]))
-            rss += int(parts[1])
-    return sorted(pids), rss
+    table = table or process_table()
+    pids = {p for p, (_, _, cmd) in table.items() if pat.search(cmd) and p != os.getpid()} | set(roots)
+    children = {}
+    for p, (pp, _, _) in table.items():
+        children.setdefault(pp, []).append(p)
+    todo = list(pids)
+    while todo:
+        for c in children.get(todo.pop(), []):
+            if c not in pids:
+                pids.add(c)
+                todo.append(c)
+    return sorted(pids), sum(table[p][1] for p in pids if p in table)
+
+
+class MemorySampler(threading.Thread):
+    """Total resident memory of what this benchmark runs, sampled every second while a phase runs (peak and mean):
+    the processes it started and their descendants (xcodebuild, its build service, compilers), and the processes
+    that name its work directory (xcfs's build sessions, which detach) with theirs. Not the benchmark itself."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.samples, self.done = [], threading.Event()
+
+    def run(self):
+        while not self.done.wait(1.0):
+            table = process_table()
+            pids, kb = processes_for(WORK, table, roots=[p for p, (pp, _, _) in table.items() if pp == os.getpid()])
+            self.samples.append((kb, len(pids)))
+
+    def stop(self):
+        self.done.set()
+        self.join()
+        kbs = [k for k, _ in self.samples] or [0]
+        return {"peak_rss_kb": max(kbs), "mean_rss_kb": int(sum(kbs) / len(kbs)),
+                "peak_processes": max([n for _, n in self.samples] or [0]), "samples": len(self.samples)}
 
 
 def owned_caches(path):
@@ -341,46 +381,59 @@ def round_edits():
     return [edits[i % len(edits)] for i in range(k)] if edits else []
 
 
-def run_round_plain():
-    """A whole task, the plain way: a worktree with the project's setup, a first build, then every edit verified by a
-    build (xcodebuild has no faster way to say whether a change compiles), then removal."""
+CREATE_LOCK = threading.Lock()   # git's own locks make concurrent `git worktree add` in one repository fail
+
+
+def plain_round(agent=""):
+    """One agent's whole task, the plain way: a worktree with the project's setup, a first build, then every edit
+    verified by a build (xcodebuild has no faster way to say whether a change compiles), then removal. Returns
+    (steps, total seconds, caches left behind)."""
     P = PROFILE["plain"]
-    dest = os.path.join(WORK, "%s-wt-round" % os.path.basename(SOURCE))
-    branch = "xcfs-bench/round"
-    steps, t0, f0 = [], time.time(), free_kb()
-    for c in P["create"]:
-        t, code, _ = shell(fmt(c, dest=dest, branch=branch), SOURCE, "round-plain")
-        steps.append(("create", t))
-    t, code, _ = shell(fmt(P["build"], dest=dest), dest, "round-plain")
+    dest = os.path.join(WORK, "%s-wt-round%s" % (os.path.basename(SOURCE), agent))
+    branch, log = "xcfs-bench/round" + agent, "round-plain" + agent
+    steps, t0 = [], time.time()
+    with CREATE_LOCK:
+        for c in P["create"]:
+            t, code, _ = shell(fmt(c, dest=dest, branch=branch), SOURCE, log)
+            steps.append(("create", t))
+    t, code, _ = shell(fmt(P["build"], dest=dest), dest, log)
     steps.append(("first build", t))
-    base = int(time.time() * 1000) % 10 ** 9 * 10
+    base = int(time.time() * 1000) % 10 ** 9 * 10 + int(agent or 0) * 1000
     seen = set()
     for i, e in enumerate(round_edits(), 1):
         if e["name"] in seen:  # the same edit again (5 edits from a shorter list): start that file afresh
             subprocess.run(["git", "-C", dest, "checkout", "--", e["file"]], capture_output=True)
         seen.add(e["name"])
         apply_edit(dest, e, base + i)
-        t, code, _ = shell(fmt(P["build"], dest=dest), dest, "round-plain")
+        t, code, _ = shell(fmt(P["build"], dest=dest), dest, log)
         steps.append(("edit %d + build" % i, t))
-    t, code, _ = shell(fmt(P["remove"], dest=dest, branch=branch), SOURCE, "round-plain")
+    with CREATE_LOCK:
+        t, code, _ = shell(fmt(P["remove"], dest=dest, branch=branch), SOURCE, log)
     steps.append(("remove", t))
     total = round(time.time() - t0, 1)
     time.sleep(3)
-    left = owned_caches(dest)
-    RESULTS["round"]["plain"] = {"total_seconds": total, "steps": steps, "left_kb": du_kb(*left),
-                                 "disk_kb_after": f0 - free_kb()}
-    say("round[plain]: %.1fs total; left behind %s" % (total, gb(du_kb(*left))))
+    return steps, total, owned_caches(dest)
+
+
+def clean_up_plain(left, agent=""):
     for c in left:  # put the machine back (not timed)
         subprocess.run(["chmod", "-R", "u+w", c], capture_output=True)
         shutil.rmtree(c, ignore_errors=True)
-    subprocess.run(["git", "-C", SOURCE, "branch", "-D", branch], capture_output=True)
+    subprocess.run(["git", "-C", SOURCE, "branch", "-D", "xcfs-bench/round" + agent], capture_output=True)
 
 
-def run_round_xcfs(variant, overrides):
-    """A whole task through xcfs: a slot warmed beforehand (not timed), checkout, a first build, every edit verified
-    with `xcfs check`, one full build at the end, release."""
+def run_round_plain():
+    f0 = free_kb()
+    steps, total, left = plain_round()
+    RESULTS["round"]["plain"] = {"total_seconds": total, "steps": steps, "left_kb": du_kb(*left),
+                                 "disk_kb_after": f0 - free_kb()}
+    say("round[plain]: %.1fs total; left behind %s" % (total, gb(du_kb(*left))))
+    clean_up_plain(left)
+
+
+def xcfs_variant_env(d, overrides):
+    """XENV for a variant in its own directory d, with its config written."""
     global XENV
-    d = os.path.join(WORK, "round-xcfs-" + variant)
     link_machine_toolchains(d + "/cache")
     XENV = dict(ENV, XCFS_STATE=d + "/state", XCFS_CACHE=d + "/cache", XCFS_POOL_ROOT=d + "/pool",
                 XDG_CONFIG_HOME=d + "/config")
@@ -391,12 +444,15 @@ def run_round_xcfs(variant, overrides):
     os.makedirs(cfg_dir, exist_ok=True)
     json.dump(cfg, open(os.path.join(cfg_dir, os.path.basename(SOURCE) + ".json"), "w"), indent=1)
     json.dump({"buildTimeout": 6 * 3600, "warmOnRelease": False}, open(os.path.join(cfg_dir, "settings.json"), "w"))
-    t, code, _, out = xcfs("pool", "warm", SOURCE, "--slots", "1", log_name="round-xcfs-%s" % variant)
-    if code != 0:
-        raise SystemExit("round warm-up failed: %s" % out.get("error"))
-    steps, t0, f0 = [], time.time(), free_kb()
-    t, code, _, out = xcfs("checkout", SOURCE, "xcfs-bench/round-" + re.sub(r"[^A-Za-z0-9._-]+", "-", variant),
-                           log_name="round-xcfs-%s" % variant)
+
+
+def xcfs_round(variant, agent=""):
+    """One agent's whole task through xcfs, in a pool warmed beforehand: checkout, a first build, every edit
+    verified with `xcfs check`, one full build at the end, release. Returns (steps, total seconds, decisions)."""
+    log = "round-xcfs-%s%s" % (variant, agent)
+    steps, t0 = [], time.time()
+    t, code, _, out = xcfs("checkout", SOURCE, "xcfs-bench/round-" + re.sub(r"[^A-Za-z0-9._-]+", "-", variant) + agent,
+                           "--wait", "3600", log_name=log)
     if code != 0:
         raise SystemExit("round checkout failed: %s" % out.get("error"))
     wt = out["worktree"]
@@ -407,30 +463,114 @@ def run_round_xcfs(variant, overrides):
         decisions.append({"step": step, "ok": code == 0 and out.get("ok", True) is not False,
                           **{k: out.get(k) for k in ("driver", "swift_driver", "skipped_scripts",
                                                      "skipped_scripts_reason") if out.get(k) is not None}})
-    t, code, _, out = xcfs("build", wt, log_name="round-xcfs-%s" % variant)
+    t, code, _, out = xcfs("build", wt, log_name=log)
     steps.append(("first build", t))
     note("first build", code, out)
-    base = int(time.time() * 1000) % 10 ** 9 * 10
+    base = int(time.time() * 1000) % 10 ** 9 * 10 + int(agent or 0) * 1000
     seen = set()
     for i, e in enumerate(round_edits(), 1):
         if e["name"] in seen:
             subprocess.run(["git", "-C", wt, "checkout", "--", e["file"]], capture_output=True)
         seen.add(e["name"])
         apply_edit(wt, e, base + i)
-        t, code, _, out = xcfs("check", os.path.join(wt, e["file"]), log_name="round-xcfs-%s" % variant)
+        t, code, _, out = xcfs("check", os.path.join(wt, e["file"]), log_name=log)
         steps.append(("edit %d + check" % i, t))
         note("edit %d + check" % i, code, out)
-    t, code, _, out = xcfs("build", wt, log_name="round-xcfs-%s" % variant)
+    t, code, _, out = xcfs("build", wt, log_name=log)
     steps.append(("final build", t))
     note("final build", code, out)
     revert_edits(wt)  # the agent would commit; the benchmark must not leave edits behind
-    t, code, _, out = xcfs("release", wt, "--no-warm", "--prune-branch", log_name="round-xcfs-%s" % variant)
+    t, code, _, out = xcfs("release", wt, "--no-warm", "--prune-branch", log_name=log)
     steps.append(("release", t))
-    total = round(time.time() - t0, 1)
+    return steps, round(time.time() - t0, 1), decisions
+
+
+def run_round_xcfs(variant, overrides):
+    """A whole task through xcfs, from a slot warmed beforehand (the warm-up is not timed)."""
+    global XENV
+    xcfs_variant_env(os.path.join(WORK, "round-xcfs-" + variant), overrides)
+    t, code, _, out = xcfs("pool", "warm", SOURCE, "--slots", "1", log_name="round-xcfs-%s" % variant)
+    if code != 0:
+        raise SystemExit("round warm-up failed: %s" % out.get("error"))
+    f0 = free_kb()
+    steps, total, decisions = xcfs_round(variant)
     RESULTS["round"]["xcfs (%s)" % variant] = {"total_seconds": total, "steps": steps, "left_kb": 0,
                                                "disk_kb_after": f0 - free_kb(), "decisions": decisions}
     say("round[xcfs %s]: %.1fs total" % (variant, total))
     xcfs("pool", "resize", SOURCE, "0", log_name="round-xcfs-%s" % variant)
+    XENV = {}
+
+
+# ------------------------------------------------------------------ agents at the same time
+def concurrently(fn, n):
+    """Run fn(agent) for agents "1".."n" at once; (results in agent order, wall seconds)."""
+    results, t0 = [None] * n, time.time()
+
+    def one(i):
+        try:
+            results[i] = fn(str(i + 1))
+        except BaseException as e:   # noqa: BLE001 - one agent's failure is a result too
+            results[i] = e
+    threads = [threading.Thread(target=one, args=(i,)) for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return results, round(time.time() - t0, 1)
+
+
+def run_concurrent_plain():
+    """N agents do their whole task at the same time, the plain way."""
+    sampler = MemorySampler()
+    sampler.start()
+    results, wall = concurrently(plain_round, N)
+    mem = sampler.stop()
+    agents, left = [], []
+    for i, r in enumerate(results, 1):
+        if isinstance(r, BaseException):
+            agents.append({"agent": i, "failed": str(r)})
+            continue
+        steps, total, l = r
+        agents.append({"agent": i, "total_seconds": total, "steps": steps, "left_kb": du_kb(*l)})
+        left.append((l, str(i)))
+    RESULTS["concurrent"]["plain"] = dict({"wall_seconds": wall, "agents": agents}, **mem)
+    say("concurrent[plain]: %d agents in %.1fs, peak %s of build processes" % (N, wall, gb(mem["peak_rss_kb"])))
+    for l, a in left:
+        clean_up_plain(l, a)
+
+
+def run_concurrent_xcfs(variant, overrides, overlap=False):
+    """N agents do their whole task at the same time through xcfs, each from a slot warmed beforehand (not timed).
+    With overlap, one agent works from the one warmed slot while the pool warms N-1 more slots in the background:
+    what the agent loses to a warm-up running beside it."""
+    global XENV
+    xcfs_variant_env(os.path.join(WORK, ("overlap-xcfs-" if overlap else "concurrent-xcfs-") + variant), overrides)
+    t, code, _, out = xcfs("pool", "warm", SOURCE, "--slots", "1" if overlap else str(N), log_name="concurrent-warm")
+    if code != 0:
+        raise SystemExit("warm-up failed: %s" % out.get("error"))
+    sampler = MemorySampler()
+    sampler.start()
+    if overlap:
+        warm = threading.Thread(target=lambda: xcfs("pool", "warm", SOURCE, "--slots", str(N),
+                                                    log_name="overlap-warm"))
+        warm.start()
+        time.sleep(2)   # the warm-up has started its builds when the agent starts
+        results, wall = concurrently(lambda a: xcfs_round(variant, a), 1)
+        warm.join()
+    else:
+        results, wall = concurrently(lambda a: xcfs_round(variant, a), N)
+    mem = sampler.stop()
+    agents = []
+    for i, r in enumerate(results, 1):
+        if isinstance(r, BaseException):
+            agents.append({"agent": i, "failed": str(r)})
+        else:
+            agents.append({"agent": i, "total_seconds": r[1], "steps": r[0], "decisions": r[2]})
+    key = "xcfs (%s)%s" % (variant, " beside a warm-up of %d slots" % (N - 1) if overlap else "")
+    RESULTS["concurrent"][key] = dict({"wall_seconds": wall, "agents": agents}, **mem)
+    say("concurrent[%s]: %s, peak %s of build processes" % (
+        key, ", ".join("%s s" % a.get("total_seconds", "failed") for a in agents), gb(mem["peak_rss_kb"])))
+    xcfs("pool", "resize", SOURCE, "0", log_name="concurrent-warm")
     XENV = {}
 
 
@@ -501,6 +641,20 @@ def report():
             L.append("| %s | **%.1f s** | %s | %s |" % (side, r["total_seconds"], ", ".join(
                 "%s %.1f s" % (n, t) for n, t in r["steps"]), gb(r["left_kb"])))
         L.append("")
+    if RESULTS.get("concurrent"):
+        L += ["## Agents at the same time", "",
+              "Each agent does the round above, all at once (plain: worktree creation and removal serialized, as git's "
+              "locks would). Memory: resident memory of the processes the benchmark runs (with build services, compilers and xcfs build sessions), sampled every second.", "",
+              "| side | wall time | each agent | peak memory (processes) | mean memory |", "|---|---|---|---|---|"]
+        for side, r in RESULTS["concurrent"].items():
+            if "failed" in r:
+                L.append("| %s | failed | %s | | |" % (side, r["failed"][:200]))
+                continue
+            L.append("| %s | %.1f s | %s | %s (%d) | %s |" % (
+                side, r["wall_seconds"], ", ".join("%.1f s" % a["total_seconds"] if "total_seconds" in a else "failed"
+                                                   for a in r["agents"]),
+                gb(r["peak_rss_kb"]), r["peak_processes"], gb(r["mean_rss_kb"])))
+        L.append("")
     L += ["## Edit loop in the first checkout", "", head, sep]
     steps = []
     for _, d in sides:
@@ -560,6 +714,18 @@ def main():
         for name, overrides in VARIANTS.items():
             if "xcfs" in PHASES or "xcfs:" + name in PHASES:
                 run_xcfs(name, overrides)
+        if "round-plain" in PHASES:
+            run_round_plain()
+        if "concurrent" in PHASES or "concurrent-plain" in PHASES:
+            run_concurrent_plain()
+        for name, overrides in VARIANTS.items():
+            for phase, overlap in (("concurrent", False), ("overlap", True)):
+                if phase in PHASES or "%s:%s" % (phase, name) in PHASES:
+                    try:
+                        run_concurrent_xcfs(name, overrides, overlap)
+                    except SystemExit as e:
+                        RESULTS["concurrent"]["xcfs (%s) %s" % (name, phase)] = {"failed": str(e)}
+                        say("%s[xcfs %s]: FAILED: %s" % (phase, name, e))
         if "round" in PHASES or "round-xcfs" in PHASES:
             if "round" in PHASES:
                 run_round_plain()
@@ -571,6 +737,8 @@ def main():
                     say("round[xcfs %s]: FAILED: %s" % (name, e))
     finally:
         base = os.path.join(WORK, "results-%s-%s" % (re.sub(r"\W+", "-", PROFILE["name"]).lower(), STAMP))
+        while os.path.exists(base + ".json"):   # results are never overwritten
+            base += "-again"
         data = json.dumps(RESULTS, indent=1)
         for a, b in ((WORK, "<work>"), (SOURCE, "<source>"), (os.path.expanduser("~"), "~")):
             data = data.replace(a, b)
