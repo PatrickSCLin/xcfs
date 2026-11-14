@@ -50,7 +50,7 @@ cat > "$ROOT/bin/swiftc.new" <<EOF
 # the frontend of the Xcode it was built for.
 D=\$(cd "\$(dirname "\$0")" && pwd)
 export SWIFT_DRIVER_SWIFT_FRONTEND_EXEC="$FRONTEND"
-export SWIFT_DRIVER_API_DIGEST_DIR="\${SWIFT_DRIVER_API_DIGEST_DIR:-\$D/../store}"
+export SWIFT_DRIVER_API_DIGEST_DIR="\${SWIFT_DRIVER_API_DIGEST_DIR:-\$(cd "\$D/.." && pwd -P)/store}"
 exec "\$D/swift-driver" --driver-mode=swiftc "\$@"
 EOF
 chmod +x "$ROOT/bin/swiftc.new"

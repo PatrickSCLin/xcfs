@@ -20,7 +20,8 @@ fingerprint of their own, so the dependency graph alone cannot tell which declar
 ## What the patch does
 
 After a module is emitted, the patched driver extracts its symbol graph at every access level
-(`swift-symbolgraph-extract`, from the binary module) and stores one digest per dependency key — a top-level name, a
+(`swift-symbolgraph-extract`, from the binary module, in a background process so the build does not wait; a client
+that needs the digests before they are ready waits for them) and stores one digest per dependency key — a top-level name, a
 type, a member of a type, a member name — keyed by a hash of the module's whole dependency graph. A digest covers
 what users of a declaration depend on: its declaration, its USR (which spells out resolved types), its generic
 signature, its conformances, and, transitively, the layout of every same-module type it refers to (stored
@@ -40,7 +41,9 @@ type; a function whose return type changes inside the same module.
 
 Measured on Wikipedia iOS (fresh checkouts, three runs each, see `docs/benchmark.md`): adding a public function to a
 package that ~300 app files import took 33–36 s with the stock driver and 15 s with this one; edits that do not
-change an interface cost the same; the first build of a checkout takes ~8 s longer (one extraction per module).
+change an interface cost the same, and so does the first build of a checkout. On Ice Cubes the same edit took
+25.3–25.6 s and 6.0–6.2 s. A whole agent round (checkout, build, five edits each checked, final build) went from
+38.0 to 16.4 s on Ice Cubes and from 90.4 to 42.4 s on Wikipedia.
 
 ## Use
 
@@ -64,8 +67,9 @@ Deleting the directory turns the feature off until it is built again.
 
 ## Costs and limits
 
-- Each emitted module is extracted once per version: 0.2–2.5 s on the modules measured, plus a one-time build of the
-  Clang modules the extraction needs (tens of seconds the first time on a new machine or SDK).
+- Each emitted module is extracted once per version, in the background: 0.2–2.5 s of CPU on the modules measured,
+  plus a one-time build of the Clang modules the extraction needs (tens of seconds the first time on a new machine or
+  SDK). A build that changes an interface waits for the extraction of the modules it needs.
 - `SWIFT_USE_INTEGRATED_DRIVER=NO` makes Xcode run `swiftc` as a process per target instead of planning compile jobs
   in its own build service; measured, this costs nothing on the projects above.
 - `@inlinable`, `@_transparent` and `@_alwaysEmitIntoClient` bodies are not part of a digest. Measured: when only such

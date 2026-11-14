@@ -91,6 +91,16 @@ def shell(cmd, cwd, log_name, timeout=None, env=None):
 XENV = {}  # the environment of the xcfs variant being measured
 
 
+def link_machine_toolchains(cache):
+    """The experimental Swift driver (toolchains/swift-driver) is built once per machine into the user's xcfs cache;
+    a variant with a cache of its own sees it through a link."""
+    real = os.path.join(os.environ.get("XCFS_CACHE") or os.path.expanduser("~/Library/Caches/xcfs"), "swift-driver")
+    link = os.path.join(cache, "swift-driver")
+    if os.path.isdir(real) and not os.path.lexists(link):
+        os.makedirs(cache, exist_ok=True)
+        os.symlink(real, link)
+
+
 def xcfs(*args, cwd=None, log_name="xcfs"):
     f0, t0 = free_kb(), time.time()
     r = subprocess.run([sys.executable, XCFS, *args, "--json"], capture_output=True, text=True, env=XENV or ENV,
@@ -264,6 +274,7 @@ def run_xcfs(variant, overrides):
     pool and config directories."""
     global XENV
     d = os.path.join(WORK, "xcfs-" + variant)
+    link_machine_toolchains(d + "/cache")
     XENV = dict(ENV, XCFS_STATE=d + "/state", XCFS_CACHE=d + "/cache", XCFS_POOL_ROOT=d + "/pool",
                 XDG_CONFIG_HOME=d + "/config")
     res = RESULTS["xcfs"][variant] = {"overrides": overrides, "warm": {}, "checkouts": [], "edit_loop": [],
@@ -370,6 +381,7 @@ def run_round_xcfs(variant, overrides):
     with `xcfs check`, one full build at the end, release."""
     global XENV
     d = os.path.join(WORK, "round-xcfs-" + variant)
+    link_machine_toolchains(d + "/cache")
     XENV = dict(ENV, XCFS_STATE=d + "/state", XCFS_CACHE=d + "/cache", XCFS_POOL_ROOT=d + "/pool",
                 XDG_CONFIG_HOME=d + "/config")
     cfg = json.loads(json.dumps(PROFILE["xcfs"]["config"]))

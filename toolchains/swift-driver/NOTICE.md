@@ -11,13 +11,14 @@ This directory holds a patch to **swift-driver**, part of the Swift open source 
 
 `api-digests-swift-6.4.2.patch` is a derivative work of swift-driver and is distributed under the same license
 (Apache-2.0), not under the MIT license that covers the rest of xcfs. It adds one file,
-`Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift`, and changes five others:
+`Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift`, and changes six others:
 
 - `Sources/SwiftDriver/Driver/Driver.swift`
 - `Sources/SwiftDriver/Jobs/EmitModuleJob.swift`
 - `Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraph.swift`
 - `Sources/SwiftDriver/IncrementalCompilation/ModuleDependencyGraphParts/Integrator.swift`
 - `Sources/SwiftDriver/IncrementalCompilation/IncrementalCompilationProtectedState.swift`
+- `Sources/swift-driver/main.swift`
 
 Each changed file carries the line "Modified by the xcfs project" below its license header, and every original
 copyright and license header is kept.

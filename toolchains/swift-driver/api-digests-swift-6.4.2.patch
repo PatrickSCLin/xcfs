@@ -36,10 +36,10 @@ index 9b386e9..1ab046e 100644
    private func printBindings(_ job: Job) {
 diff --git a/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift b/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift
 new file mode 100644
-index 0000000..7bed6bc
+index 0000000..34a4fde
 --- /dev/null
 +++ b/Sources/SwiftDriver/IncrementalCompilation/APIDigests.swift
-@@ -0,0 +1,496 @@
+@@ -0,0 +1,578 @@
 +//===----------------------------------------------------------------------===//
 +//
 +// This source file is part of the Swift open source project
@@ -87,14 +87,18 @@ index 0000000..7bed6bc
 +//===----------------------------------------------------------------------===//
 +
 +import Foundation
++#if canImport(Darwin)
++import Darwin
++#endif
 +import class Dispatch.DispatchQueue
 +import protocol TSCBasic.FileSystem
 +import struct TSCBasic.AbsolutePath
++import var TSCBasic.localFileSystem
 +#if canImport(CryptoKit)
 +import CryptoKit
 +#endif
 +
-+@_spi(Testing) public enum APIDigests {
++public enum APIDigests {
 +  static let environmentKey = "SWIFT_DRIVER_API_DIGEST_DIR"
 +  static let symbolGraphDirSuffix = ".api-digest-symbolgraph"
 +
@@ -102,7 +106,8 @@ index 0000000..7bed6bc
 +  static var storeDir: URL? {
 +    #if canImport(CryptoKit)
 +    guard let dir = ProcessInfo.processInfo.environment[environmentKey], !dir.isEmpty else { return nil }
-+    return URL(fileURLWithPath: dir, isDirectory: true)
++    // One spelling of the path: Clang refuses a module cache whose modules it finds under two paths.
++    return URL(fileURLWithPath: dir, isDirectory: true).resolvingSymlinksInPath().standardizedFileURL
 +    #else
 +    return nil
 +    #endif
@@ -175,13 +180,29 @@ index 0000000..7bed6bc
 +      .appendingPathComponent(safe(fingerprint) + ".json")
 +  }
 +
-+  static func load(module: String, fingerprint: String) -> Digests? {
-+    guard let url = fileURL(module: module, fingerprint: fingerprint),
-+          let data = try? Data(contentsOf: url),
++  static func load(module: String, fingerprint: String, waitForJob: Bool = true) -> Digests? {
++    guard let url = fileURL(module: module, fingerprint: fingerprint) else { return nil }
++    if waitForJob { waitForPendingJob(url) }
++    guard let data = try? Data(contentsOf: url),
 +          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
 +    else { return nil }
 +    func map(_ k: String) -> [String: String] { obj[k] as? [String: String] ?? [:] }
 +    return Digests(top: map("top"), type: map("type"), member: map("member"), any: map("any"))
++  }
++
++  /// If a background job is extracting these digests (its marker is younger than five minutes), wait for it,
++  /// at most a minute.
++  static func waitForPendingJob(_ url: URL) {
++    let fm = FileManager.default
++    let pending = url.deletingPathExtension().appendingPathExtension("pending")
++    guard !fm.fileExists(atPath: url.path),
++          let made = (try? fm.attributesOfItem(atPath: pending.path))?[.modificationDate] as? Date,
++          Date().timeIntervalSince(made) < 300
++    else { return }
++    let deadline = Date().addingTimeInterval(60)
++    while Date() < deadline, fm.fileExists(atPath: pending.path), !fm.fileExists(atPath: url.path) {
++      usleep(50_000)
++    }
 +  }
 +
 +  static func store(_ d: Digests, module: String, fingerprint: String) {
@@ -217,26 +238,86 @@ index 0000000..7bed6bc
 +  /// How to load the module this driver emits (search paths, SDK, target, Clang arguments).
 +  nonisolated(unsafe) static var extractionArguments: [String]?
 +
-+  /// Called after a build: store the digests of the emitted module under its graph key, extracting a
-+  /// symbol graph (all access levels) from the binary module if this version has none stored yet.
-+  /// The binary module is used rather than the emit-module job because in Swift 6.4 a private-level
-+  /// symbol graph there queries local variables of bodies that job never type-checks.
++  /// The first argument with which the driver runs a background extraction job instead of compiling.
++  public static let jobFlag = "-api-digests-extract-job"
++
++  /// Called after a build: unless this version of the emitted module already has digests, extract them in a
++  /// background process, so that the build does not wait (a first build emits every module once). A client that
++  /// needs them before the job is done waits for it (see ``load(module:fingerprint:)``).
 +  static func recordEmittedModule(modulePath: String, moduleName: String, fileSystem: FileSystem,
 +                                  frontendPath: String?) {
-+    _ = digestsOfEmittedModule(modulePath: modulePath, moduleName: moduleName, fileSystem: fileSystem,
-+                               frontendPath: frontendPath)
++    let debug = ProcessInfo.processInfo.environment["SWIFT_DRIVER_API_DIGEST_DEBUG"] != nil
++    func say(_ s: String) { if debug { FileHandle.standardError.write(Data("api-digests: \(moduleName): \(s)\n".utf8)) } }
++    guard storeDir != nil else { return say("no store") }
++    guard let loadArgs = extractionArguments else { return say("no extraction arguments (no emit-module job)") }
++    guard let frontend = frontendPath else { return say("no frontend") }
++    guard FileManager.default.fileExists(atPath: modulePath) else { return say("no module at \(modulePath)") }
++    guard let key = moduleGraphKey(modulePath: modulePath, fileSystem: fileSystem) else {
++      return say("no dependency graph in \(modulePath)")
++    }
++    guard let url = fileURL(module: moduleName, fingerprint: key) else { return say("no store path") }
++    guard !FileManager.default.fileExists(atPath: url.path) else { return say("digests exist: \(url.path)") }
++    say("extracting in the background: \(url.path)")
++    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
++    let job = url.deletingPathExtension().appendingPathExtension("job")
++    let pending = url.deletingPathExtension().appendingPathExtension("pending")
++    let spec: [String: Any] = ["modulePath": modulePath, "moduleName": moduleName, "frontend": frontend,
++                               "loadArgs": loadArgs, "key": key]
++    guard let data = try? JSONSerialization.data(withJSONObject: spec),
++          (try? data.write(to: job)) != nil,
++          (try? Data().write(to: pending)) != nil
++    else { return }
++    let me = ProcessInfo.processInfo.arguments[0]
++    var attrs: posix_spawnattr_t? = nil
++    posix_spawnattr_init(&attrs)
++    posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETSID))
++    var actions: posix_spawn_file_actions_t? = nil
++    posix_spawn_file_actions_init(&actions)
++    for fd: Int32 in [0, 1, 2] {
++      posix_spawn_file_actions_addopen(&actions, fd, "/dev/null", fd == 0 ? O_RDONLY : O_WRONLY, 0)
++    }
++    let argv: [UnsafeMutablePointer<CChar>?] = [strdup(me), strdup(jobFlag), strdup(job.path), nil]
++    var pid: pid_t = 0
++    let rc = posix_spawn(&pid, me, &actions, &attrs, argv, environ)
++    for a in argv { free(a) }
++    posix_spawn_file_actions_destroy(&actions)
++    posix_spawnattr_destroy(&attrs)
++    if rc != 0 {
++      try? FileManager.default.removeItem(at: pending)
++      try? FileManager.default.removeItem(at: job)
++    }
++  }
++
++  /// The background job: extract and store the digests a finished build asked for.
++  public static func runJob(_ jobPath: String) -> Int32 {
++    let job = URL(fileURLWithPath: jobPath)
++    defer {
++      try? FileManager.default.removeItem(at: job.deletingPathExtension().appendingPathExtension("pending"))
++      try? FileManager.default.removeItem(at: job)
++    }
++    guard let data = try? Data(contentsOf: job),
++          let spec = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
++          let modulePath = spec["modulePath"] as? String, let moduleName = spec["moduleName"] as? String,
++          let frontend = spec["frontend"] as? String, let loadArgs = spec["loadArgs"] as? [String],
++          let key = spec["key"] as? String
++    else { return 1 }
++    extractionArguments = loadArgs
++    // The digests must describe the version the build emitted; a later build may have replaced it already.
++    return digestsOfEmittedModule(modulePath: modulePath, moduleName: moduleName, fileSystem: localFileSystem,
++                                  frontendPath: frontend, expectedKey: key) == nil ? 1 : 0
 +  }
 +
 +  /// The digests of the module at `modulePath`, from the store or extracted now (and stored).
 +  static func digestsOfEmittedModule(modulePath: String, moduleName: String, fileSystem: FileSystem,
-+                                     frontendPath: String?) -> Digests? {
++                                     frontendPath: String?, expectedKey: String? = nil) -> Digests? {
 +    guard let storeURL = storeDir, let loadArgs = extractionArguments,
 +          FileManager.default.fileExists(atPath: modulePath),
 +          let key = moduleGraphKey(modulePath: modulePath, fileSystem: fileSystem),
++          expectedKey == nil || expectedKey == key,
 +          let url = fileURL(module: moduleName, fingerprint: key)
 +    else { return nil }
 +    let fm = FileManager.default
-+    if let stored = load(module: moduleName, fingerprint: key) { return stored }
++    if let stored = load(module: moduleName, fingerprint: key, waitForJob: expectedKey == nil) { return stored }
 +    guard let frontend = frontendPath else { return nil }
 +    let tool = (frontend as NSString).deletingLastPathComponent + "/swift-symbolgraph-extract"
 +    let outDir = symbolGraphDir(forModuleAt: modulePath)
@@ -279,6 +360,7 @@ index 0000000..7bed6bc
 +      "extract=\(String(format: "%.2f", extracted.timeIntervalSince(started))) bytes=\(bytes)\n" +
 +      (status == 0 && ProcessInfo.processInfo.environment["SWIFT_DRIVER_API_DIGEST_LOG_ARGS"] == nil
 +        ? "" : "\(tool) \(args.joined(separator: " "))\n\(errText)\n")
++    try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
 +    let logURL = url.deletingLastPathComponent().appendingPathComponent("extract.log")
 +    if let h = try? FileHandle(forWritingTo: logURL) {
 +      h.seekToEndOfFile(); h.write(Data(log.utf8)); try? h.close()
@@ -801,3 +883,27 @@ index 30b5c97..97d0438 100644
      try commandLine.appendLast(.checkApiAvailabilityOnly, from: &parsedOptions)
  
      if parsedOptions.hasArgument(.parseAsLibrary, .emitLibrary) {
+diff --git a/Sources/swift-driver/main.swift b/Sources/swift-driver/main.swift
+index d778c44..75dab95 100644
+--- a/Sources/swift-driver/main.swift
++++ b/Sources/swift-driver/main.swift
+@@ -11,6 +11,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ //
+ //===----------------------------------------------------------------------===//
++// Modified by the xcfs project: experimental per-name API digests (see APIDigests.swift).
+ 
+ import SwiftDriverExecution
+ import SwiftDriver
+@@ -60,6 +61,11 @@ func getExitCode(_ code: Int32) -> Int32 {
+   return code
+ }
+ 
++// Modified by the xcfs project: a background job that extracts API digests (see APIDigests.swift).
++if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == APIDigests.jobFlag {
++  exit(APIDigests.runJob(CommandLine.arguments[2]))
++}
++
+ do {
+   #if !os(Windows)
+   signal(SIGINT, SIG_IGN)

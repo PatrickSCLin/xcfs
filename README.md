@@ -322,7 +322,9 @@ how the project is set up, built and edited; the harness knows no project.
 Measured on three public apps. One agent's round of work (a checkout, a build, five edits each checked, a final build,
 cleanup) took 142.7 s with a plain worktree and 37.4 s with xcfs on Ice Cubes, and 254.4 s vs 92.9 s on Wikipedia iOS
 (with `skipScripts` leaving out the project's localization sync); plain worktrees left 1.5–2.8 GB behind each, xcfs
-nothing. An agent waited 75–92 s for a plain worktree of these apps and 2–16 s for a slot. Builds that recompile many
+nothing. With the experimental Swift driver ([toolchains/swift-driver](toolchains/swift-driver/README.md)), which
+recompiles only the files an interface change really affects, the same round took 16.4 s on Ice Cubes and 42.4 s on
+Wikipedia. An agent waited 75–92 s for a plain worktree of these apps and 2–16 s for a slot. Builds that recompile many
 modules take the same time on every side, and on a Bazel app (Telegram-iOS) incremental builds are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
 
 ## Design
