@@ -2,7 +2,9 @@
 import glob, json, os, plistlib, re, subprocess, time
 
 from ..adapter import Adapter
-from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say, trash_and_delete, under, warn
+from .. import state
+from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say, trash_and_delete, under, warn, \
+    write_json
 
 ENTRY_KEYS = {"adapter", "root", "workspace", "project", "package", "scheme", "target", "configurations", "default",
               "warm", "simulator", "packagesDir", "xcodebuildArgs", "buildSettings", "driver", "prepare",
@@ -39,6 +41,24 @@ def first_json_object(text):
             pass
         i = text.find("{", i + 1)
     return None
+
+
+def simulator_record():
+    """The simulators xcfs created: {udid: {name, root, created}}. gc only ever removes simulators listed here."""
+    return os.path.join(state.state_dir(), "simulators.json")
+
+
+def forget_simulator(udid):
+    with state.named_lock("simulators", "record"):
+        record = read_json(simulator_record(), {}) or {}
+        if record.pop(udid, None) is not None:
+            write_json(simulator_record(), record)
+
+
+def delete_simulator(udid):
+    run("xcrun", "simctl", "shutdown", udid, check=False, timeout=120)
+    run("xcrun", "simctl", "delete", udid, check=False, timeout=120)
+    forget_simulator(udid)
 
 
 def parse_diagnostics(lines, limit_warnings=100):
@@ -492,8 +512,12 @@ class XcodeAdapter(Adapter):
         base = self.base_device(ctx.entry.get("simulator"))
         if ctx.kind == "checkout":
             return base["udid"]
-        udid = run("xcrun", "simctl", "create", "xcfs %s" % ctx.name, base["deviceTypeIdentifier"], base["runtime"],
-                   timeout=120).stdout.strip()
+        with state.named_lock("simulators", "record"):
+            udid = run("xcrun", "simctl", "create", "xcfs %s" % ctx.name, base["deviceTypeIdentifier"], base["runtime"],
+                       timeout=120).stdout.strip()
+            record = read_json(simulator_record(), {}) or {}
+            record[udid] = {"name": "xcfs %s" % ctx.name, "root": ctx.root, "created": time.time()}
+            write_json(simulator_record(), record)
         ctx.resources["simulator"] = udid
         say("  created simulator %s (%s) for %s" % (udid, base["name"], ctx.name))
         return udid
@@ -539,8 +563,36 @@ class XcodeAdapter(Adapter):
     def retire(self, ctx):
         self.release(ctx)
         if ctx.resources.get("simulator"):
-            run("xcrun", "simctl", "delete", ctx.resources["simulator"], check=False, timeout=120)
+            delete_simulator(ctx.resources["simulator"])
             ctx.resources.pop("simulator", None)
+
+    def orphans(self, in_use, apply):
+        """Simulators xcfs created (and recorded) for checkouts that are gone: a checkout removed behind xcfs's back,
+        or a process killed between creating a simulator and saving it. Only recorded ones are ever touched, never a
+        simulator xcfs did not create."""
+        held = {r.get("simulator") for r in in_use if isinstance(r, dict)}
+        record = read_json(simulator_record(), {}) or {}
+        if not record:
+            return []
+        try:
+            existing = {d["udid"]: d for d in self.devices()}
+        except Exception:   # noqa: BLE001 - no simulators to look at: nothing to do
+            return []
+        out = []
+        for udid, info in sorted(record.items()):
+            if udid in held:
+                continue
+            d = existing.get(udid)
+            if d is None:   # deleted elsewhere: forget it
+                if apply:
+                    forget_simulator(udid)
+                continue
+            if not d.get("name", "").startswith("xcfs "):
+                continue    # renamed by someone: no longer clearly ours
+            out.append(("simulator of a vanished checkout", "%s (%s)" % (udid, d["name"])))
+            if apply:
+                delete_simulator(udid)
+        return out
 
     # ---------------------------------------------------------------- global DerivedData
     def buckets(self):

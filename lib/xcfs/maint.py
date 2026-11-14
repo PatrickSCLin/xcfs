@@ -38,6 +38,14 @@ def cmd_gc(a):
             if os.path.isdir(rec.get("dir", "")):
                 trash_and_delete(rec["dir"], os.path.join(os.path.dirname(rec["dir"]), worktree.TRASH))
     actions += pool.gc(apply, settings)
+    with state.registry(write=False) as reg:   # what live checkouts hold, by adapter
+        in_use = {}
+        for root, rec in reg["builds"].items():
+            if os.path.isdir(root):
+                for name, res in (rec.get("resources") or {}).items():
+                    in_use.setdefault(name, []).append(res)
+    for ad in all_cache_adapters():
+        actions += ad.orphans(in_use.get(ad.name, []), apply)
     for d, meta in seed.snapshots(max_age_days=days):
         actions.append(("dependency snapshot unused for %d+ days" % days, d))
         if apply:

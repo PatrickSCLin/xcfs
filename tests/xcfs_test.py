@@ -1400,6 +1400,66 @@ def t61_a_slot_warm_up_boots_its_simulator_once():
         xa.run = saved
 
 
+@test
+def t62_gc_reclaims_only_simulators_xcfs_made():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters import xcode as xa
+    os.environ["XCFS_STATE"] = ENV["XCFS_STATE"]
+    from xcfs import state
+    with state.registry():   # exists however the tests are picked
+        pass
+    rec = xa.simulator_record()
+    json.dump({"A": {"name": "xcfs a"}, "B": {"name": "xcfs b"}, "C": {"name": "xcfs c"}, "R": {"name": "xcfs r"}},
+              open(rec, "w"))
+    devs = [{"udid": "A", "name": "xcfs a"}, {"udid": "B", "name": "xcfs b"}, {"udid": "R", "name": "My renamed phone"},
+            {"udid": "U", "name": "iPhone 18 Pro"}]          # C is gone; U is the user's own
+    calls = []
+
+    class Fake(xa.XcodeAdapter):
+        def devices(self): return [d for d in devs if not any(c[-1] == d["udid"] and "delete" in c for c in calls)]
+    saved = xa.run
+    xa.run = lambda *a, **k: calls.append(a) or subprocess.CompletedProcess(a, 0, "", "")
+    try:
+        r = Fake().orphans([{"simulator": "A"}], apply=False)
+        assert [x[1].split()[0] for x in r] == ["B"] and not calls, "dry run: list B only, delete nothing: %s %s" % (r, calls)
+        r = Fake().orphans([{"simulator": "A"}], apply=True)
+        deleted = [c[-1] for c in calls if "delete" in c]
+        assert deleted == ["B"], "only the recorded, unused, still xcfs-named simulator goes: %s" % calls
+        left = json.load(open(rec))
+        assert set(left) == {"A", "R"}, "B (deleted) and C (gone) are forgotten; A (in use) and R (renamed) stay: %s" % left
+    finally:
+        xa.run = saved
+    # gc passes what live checkouts hold to every adapter
+    from xcfs import maint, adapter
+    seen = {}
+
+    class Probe(adapter.Adapter):
+        name = "xcode"
+        def orphans(self, in_use, apply):
+            seen["in_use"], seen["apply"] = in_use, apply
+            return [("simulator of a vanished checkout", "X")]
+    reg_path = SB + "/state/registry.json"
+    reg = json.load(open(reg_path))
+    reg["builds"][SB] = {"dir": SB + "/nowhere", "resources": {"xcode": {"simulator": "LIVE"}}}
+    reg["builds"][SB + "/gone"] = {"dir": SB + "/nowhere2", "resources": {"xcode": {"simulator": "DEAD"}}}
+    json.dump(reg, open(reg_path, "w"))
+    saved_all = maint.all_cache_adapters
+    maint.all_cache_adapters = lambda cfg=None: [Probe()]
+    try:
+        from xcfs.cli import Args
+        from xcfs.util import OUT
+        OUT.json, OUT.result = True, {}
+        maint.cmd_gc(Args(["--json"]))
+        assert seen["in_use"] == [{"simulator": "LIVE"}] and seen["apply"] is False, seen
+        assert ["simulator of a vanished checkout", "X"] in OUT.result["actions"], OUT.result
+    finally:
+        maint.all_cache_adapters = saved_all
+        OUT.json, OUT.result = False, {}
+        reg = json.load(open(reg_path))
+        reg["builds"].pop(SB, None); reg["builds"].pop(SB + "/gone", None)
+        json.dump(reg, open(reg_path, "w"))
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

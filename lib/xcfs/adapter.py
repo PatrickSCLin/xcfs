@@ -27,6 +27,9 @@ Operations and what they return:
     ownedCaches   args {root}                 -> {"paths": [...]}      (caches outside root that belong to root)
     foreignCaches args {owned, staleDays}     -> {"caches": [{"kind", "path", "owner"}]}
     cacheRoots    args {}                     -> {"paths": [...]}      (where those caches live)
+    orphans       args {inUse, apply}         -> {"actions": [[kind, what]]} (resources it created for checkouts
+                                                                        that are gone: inUse is every live
+                                                                        checkout's saved resources)
     ownProcesses  context                     -> {"pids": [...]}       (the checkout's own helpers, e.g. a build
                                                                         server kept between leases: not "in use")
     doctor        args {root, entry}          -> {"checks": [{"ok": bool, "message": str}]}
@@ -111,6 +114,11 @@ class Adapter:
         pass
 
     def owned_caches(self, root):
+        return []
+
+    def orphans(self, in_use, apply):
+        """[(kind, what)] for resources this adapter created for checkouts that no longer exist (removed with
+        --apply). in_use: the saved resources of every checkout that still exists."""
         return []
 
     def foreign_caches(self, owned, stale_days):
@@ -210,6 +218,9 @@ class ExternalAdapter(Adapter):
 
     def foreign_caches(self, owned, stale_days):
         return (self._opt("foreignCaches", owned=owned, staleDays=stale_days, default={}) or {}).get("caches", [])
+
+    def orphans(self, in_use, apply):
+        return [tuple(x) for x in (self._opt("orphans", inUse=in_use, apply=apply, default={}) or {}).get("actions", [])]
 
     def cache_roots(self):
         return (self._opt("cacheRoots", default={}) or {}).get("paths", [])
