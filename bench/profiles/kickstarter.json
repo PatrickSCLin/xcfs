@@ -1,0 +1,67 @@
+{
+ "name": "Kickstarter iOS (arm64, zero-config)",
+ "description": "https://github.com/kickstarter/ios-oss: an .xcodeproj with local Swift packages (KsApi, Library, ...), not seen while xcfs was developed; setup copies the repository's Secrets.swift.example as its Makefile does.",
+ "agents": 3,
+ "plain": {
+  "create": [
+   "git worktree add -q -b {branch} {dest}",
+   "cd {dest} && mkdir -p Frameworks/native-secrets/ios && cp -n Configs/Secrets.swift.example Frameworks/native-secrets/ios/Secrets.swift && cp -n Configs/Secrets.swift.example KsApi/Sources/KsApi/Secrets.swift"
+  ],
+  "build": "xcodebuild build -project Kickstarter.xcodeproj -scheme 'Kickstarter iOS' -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
+  "remove": "git worktree remove --force {dest} && git branch -D {branch}"
+ },
+ "edits": [
+  {
+   "name": "edit a function body in the app target",
+   "file": "Kickstarter-iOS/AppDelegate.swift",
+   "find": "    return BrazeDestination(",
+   "replace": "    _ = {n}\n    return BrazeDestination("
+  },
+  {
+   "name": "edit a function body in a package ~800 files import (KsApi)",
+   "file": "KsApi/Sources/KsApi/Service.swift",
+   "find": "    return self.serverConfig.apiBaseUrl",
+   "replace": "    _ = {n}\n    return self.serverConfig.apiBaseUrl"
+  },
+  {
+   "name": "add a public declaration to that package",
+   "file": "KsApi/Sources/KsApi/Service.swift",
+   "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { {n} }\n"
+  }
+ ],
+ "editRepeats": 2,
+ "roundEdits": 5,
+ "xcfs": {
+  "config": {
+   "version": 1,
+   "carry": [
+    "KsApi/Sources/KsApi/Secrets.swift",
+    "Frameworks/native-secrets/ios/Secrets.swift"
+   ],
+   "toolchains": [
+    {
+     "adapter": "xcode",
+     "project": "Kickstarter.xcodeproj",
+     "scheme": "Kickstarter iOS",
+     "configurations": {
+      "sim-debug": {
+       "configuration": "Debug",
+       "destination": "generic/platform=iOS Simulator"
+      }
+     },
+     "buildSettings": {
+      "CODE_SIGNING_ALLOWED": "NO",
+      "ARCHS": "arm64"
+     }
+    }
+   ]
+  },
+  "variants": {
+   "defaults": {},
+   "defaults-without-driver-patch": {
+    "swiftDriver": "native"
+   }
+  },
+  "measureCheck": true
+ }
+}

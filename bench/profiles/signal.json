@@ -1,0 +1,62 @@
+{
+ "name": "Signal iOS (arm64, zero-config)",
+ "description": "https://github.com/signalapp/Signal-iOS: a workspace with a large app target and frameworks (SignalServiceKit, SignalUI) in Swift and Objective-C, plus Swift packages; not seen while xcfs was developed.",
+ "agents": 3,
+ "plain": {
+  "create": [
+   "git worktree add -q -b {branch} {dest}"
+  ],
+  "build": "xcodebuild build -workspace Signal.xcworkspace -scheme 'Signal' -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
+  "remove": "git worktree remove --force {dest} && git branch -D {branch}"
+ },
+ "edits": [
+  {
+   "name": "edit a function body in the app target",
+   "file": "Signal/Calls/UserInterface/CallControls.swift",
+   "find": "        return CallControlsViewModel.joinButtonLabel(for: call)",
+   "replace": "        _ = {n}\n        return CallControlsViewModel.joinButtonLabel(for: call)"
+  },
+  {
+   "name": "edit a function body in a framework ~800 app files import (SignalServiceKit)",
+   "file": "SignalServiceKit/Calls/RingrtcSvcConfig.swift",
+   "find": "        return remoteConfig.ringrtcSvcMode",
+   "replace": "        _ = {n}\n        return remoteConfig.ringrtcSvcMode"
+  },
+  {
+   "name": "add a public declaration to that framework",
+   "file": "SignalServiceKit/Calls/RingrtcSvcConfig.swift",
+   "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { {n} }\n"
+  }
+ ],
+ "editRepeats": 2,
+ "roundEdits": 5,
+ "xcfs": {
+  "config": {
+   "version": 1,
+   "toolchains": [
+    {
+     "adapter": "xcode",
+     "workspace": "Signal.xcworkspace",
+     "scheme": "Signal",
+     "configurations": {
+      "sim-debug": {
+       "configuration": "Debug",
+       "destination": "generic/platform=iOS Simulator"
+      }
+     },
+     "buildSettings": {
+      "CODE_SIGNING_ALLOWED": "NO",
+      "ARCHS": "arm64"
+     }
+    }
+   ]
+  },
+  "variants": {
+   "defaults": {},
+   "defaults-without-driver-patch": {
+    "swiftDriver": "native"
+   }
+  },
+  "measureCheck": true
+ }
+}

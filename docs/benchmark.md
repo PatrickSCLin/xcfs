@@ -72,6 +72,51 @@ Step by step (Wikipedia, xcfs session + `skipScripts`): checkout 0.3 s, first bu
 `WMFData`: `xcfs check` compiles only the edited file, so the downstream work of an interface change is paid by the next
 check of a file that depends on it — once, not on every check.
 
+## Zero configuration, on projects xcfs was not developed on
+
+Does it carry over? Four apps never built while xcfs was written, plus Ice Cubes and Wikipedia, each with an `.xcfs.json`
+that only names the project, the scheme and the destination (plus the arm64-only and no-signing settings both sides
+use): no `skipScripts`, no `driver`, no `swiftDriver` — every optimization decides by itself. One agent's round
+(checkout, first build, five edits each checked, a final build, release), the edits being a function body in the app
+target, a function body in a widely imported module, and a public declaration added to that module. Plain worktrees
+measured the same day on the same machine.
+
+| project | kind | plain worktree | xcfs, defaults | xcfs, defaults without the experimental Swift driver |
+|---|---|---|---|---|
+| [Kickstarter](https://github.com/kickstarter/ios-oss) | `.xcodeproj` + local Swift packages (KsApi: ~800 importing files) | 312.0 s | **33.2 s** | 73.9 s |
+| [Element X](https://github.com/element-hq/element-x-ios) | XcodeGen-generated, one large app target, Swift packages, a prebuilt Rust SDK | 299.2 s | **57.4 s** | 93.5 s |
+| [Signal](https://github.com/signalapp/Signal-iOS) | workspace, Swift and Objective-C frameworks (SignalServiceKit: ~800 importing files) | 323.8 s | **101.2 s** | 109.6 s |
+| [Home Assistant](https://github.com/home-assistant/iOS) | large app target, a shared framework (~550 importing files), many extensions, SwiftGen and SwiftLint phases | 537.8 s | **98.9 s** | 159.9 s |
+| Ice Cubes (seen) | `.xcodeproj` + 13 local Swift packages | 161.8 s | **17.1 s** | 39.1 s |
+| Wikipedia iOS (seen) | Swift and Objective-C, local packages | 255.6 s | **82.0 s** | 132.3 s |
+
+What each automatic decision did, over all six rounds:
+
+| optimization | default | took effect | fell back / failed |
+|---|---|---|---|
+| pool slot instead of a new worktree + first build | always | 6 of 6 (checkout 0.2–0.3 s) | — |
+| build session (`"driver": "auto"`) | after a one-time regression check per Xcode | 6 of 6 | 0 |
+| experimental Swift driver (`"swiftDriver": "auto"`) | when the selected Xcode has Swift 6.4.2 | 6 of 6; digests extracted for 282 of 283 module versions (one module had no symbols to describe and kept the stock behavior) | 0 build failures |
+| leave out lint-only script phases (`"skipScripts": "auto"`) | phases that only run a linter | Element X (SwiftLint, SwiftFormat in lint mode), Home Assistant (two SwiftLint phases) | the other projects have none: Wikipedia's SwiftLint phase runs `swiftlint --fix`, which rewrites sources, and is kept |
+| `xcfs check` | always available | every edit of every round | — |
+
+Running the defaults on these apps found five defects that Ice Cubes and Wikipedia had not shown, all fixed before
+these numbers: a private submodule the source checkout never had made a checkout fail; the session check did not
+recognize the compile tasks of an external Swift driver, so "auto" fell back to `xcodebuild` everywhere; a failed
+check was trusted forever; the patched driver lacked the version line and the features file through which the build
+service learns what a compiler takes (packages using `package` access did not build); and extensions of
+`Optional`-like types were not matched to their digests, which on Home Assistant turned one added function into 1,271
+recompiled files instead of 10.
+
+Where the experimental driver gains least: Signal (101.2 vs 109.6 s). Its widely imported framework mixes Swift and
+Objective-C; we have not yet traced which part of that rebuild the digests leave in place — a likely candidate is the
+generated `-Swift.h` header and the Objective-C files that import it, which no Swift-level digest can narrow.
+
+Not included: NetNewsWire (its build needs a generated secrets file from a script with credentials), DuckDuckGo
+(its sources did not compile against the Xcode 27.2 SDK), a CocoaPods app (the candidates checked have all moved to
+Swift packages; CocoaPods is covered only by `examples/generic-sample`), and a Tuist project (it needs the Tuist binary).
+Profiles: `bench/profiles/{kickstarter,element-x,signal,home-assistant}.json`.
+
 ## Where the time goes
 
 Why larger projects gain less, and what was tried — each row measured before and after, repeated:

@@ -321,13 +321,12 @@ simulator.
 first build, disk, resident memory, an edit loop, and what removal leaves behind. A profile (`bench/profiles/`) says
 how the project is set up, built and edited; the harness knows no project.
 
-Measured on three public apps. One agent's round of work (a checkout, a build, five edits each checked, a final build,
-cleanup) took 142.7 s with a plain worktree and 37.4 s with xcfs on Ice Cubes, and 254.4 s vs 92.9 s on Wikipedia iOS
-(with `skipScripts` leaving out the project's localization sync); plain worktrees left 1.5–2.8 GB behind each, xcfs
-nothing. With the experimental Swift driver ([docs](lib/xcfs/adapters/swiftdriver/README.md)), which
-recompiles only the files an interface change really affects, the same round took 16.4 s on Ice Cubes and 42.4 s on
-Wikipedia. An agent waited 75–92 s for a plain worktree of these apps and 2–16 s for a slot. Builds that recompile many
-modules take the same time on every side, and on a Bazel app (Telegram-iOS) incremental builds are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
+Measured with the defaults alone — no option set — on six public apps, four of them never built while xcfs was
+developed. One agent's round of work (a checkout, a build, five edits each checked, a final build, cleanup): Kickstarter
+312.0 → 33.2 s, Element X 299.2 → 57.4 s, Signal 323.8 → 101.2 s, Home Assistant 537.8 → 98.9 s, Ice Cubes 161.8 →
+17.1 s, Wikipedia iOS 255.6 → 82.0 s (plain worktree → xcfs). The build session and the experimental Swift driver took
+effect on every project and no build failed; plain worktrees left 1.5–6 GB behind each, xcfs nothing. Builds that recompile many modules
+still take the compiler's time, and on a Bazel app (Telegram-iOS) incremental builds are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
 
 ## Design
 

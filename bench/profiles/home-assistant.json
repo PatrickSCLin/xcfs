@@ -1,0 +1,62 @@
+{
+ "name": "Home Assistant iOS (arm64, zero-config)",
+ "description": "https://github.com/home-assistant/iOS: an .xcodeproj with a large app target, a shared framework (Shared) ~550 app files import, many extensions and Swift packages, and script phases (SwiftGen and others); not seen while xcfs was developed.",
+ "agents": 3,
+ "plain": {
+  "create": [
+   "git worktree add -q -b {branch} {dest}"
+  ],
+  "build": "xcodebuild build -project HomeAssistant.xcodeproj -scheme 'App-Debug' -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
+  "remove": "git worktree remove --force {dest} && git branch -D {branch}"
+ },
+ "edits": [
+  {
+   "name": "edit a function body in the app target",
+   "file": "Sources/App/Frontend/ExternalMessageBus/NFCTagAction.swift",
+   "find": "        L10n.WebView.AddTo.Option.NfcTag.title",
+   "replace": "        _ = {n}\n        return L10n.WebView.AddTo.Option.NfcTag.title"
+  },
+  {
+   "name": "edit a function body in a framework ~550 app files import (Shared)",
+   "file": "Sources/Shared/Settings/SettingsStore.swift",
+   "find": "        Self.integrationDeviceID(from: UUID().uuidString)",
+   "replace": "        _ = {n}\n        return Self.integrationDeviceID(from: UUID().uuidString)"
+  },
+  {
+   "name": "add a public declaration to that framework",
+   "file": "Sources/Shared/Settings/SettingsStore.swift",
+   "append": "\npublic func xcfsBenchDeclaration{n}() -> Int { {n} }\n"
+  }
+ ],
+ "editRepeats": 2,
+ "roundEdits": 5,
+ "xcfs": {
+  "config": {
+   "version": 1,
+   "toolchains": [
+    {
+     "adapter": "xcode",
+     "scheme": "App-Debug",
+     "configurations": {
+      "sim-debug": {
+       "configuration": "Debug",
+       "destination": "generic/platform=iOS Simulator"
+      }
+     },
+     "buildSettings": {
+      "CODE_SIGNING_ALLOWED": "NO",
+      "ARCHS": "arm64"
+     },
+     "project": "HomeAssistant.xcodeproj"
+    }
+   ]
+  },
+  "variants": {
+   "defaults": {},
+   "defaults-without-driver-patch": {
+    "swiftDriver": "native"
+   }
+  },
+  "measureCheck": true
+ }
+}
