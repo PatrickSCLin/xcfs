@@ -99,6 +99,33 @@ def debug_hint(ctx, r):
     return r
 
 
+def shared_schemes(root, container):
+    """[(name, builds an app)] of the shared schemes of a workspace or project (and of the projects next to it)."""
+    paths = glob.glob(os.path.join(root, container, "xcshareddata", "xcschemes", "*.xcscheme"))
+    if container.endswith(".xcworkspace"):
+        paths += glob.glob(os.path.join(root, "*.xcodeproj", "xcshareddata", "xcschemes", "*.xcscheme"))
+    out = []
+    for p in sorted(set(paths)):
+        try:
+            text = open(p, errors="replace").read()
+        except OSError:
+            continue
+        m = re.search(r"<BuildAction\b.*?</BuildAction>", text, re.S)
+        out.append((os.path.splitext(os.path.basename(p))[0], bool(m and re.search(r'BuildableName\s*=\s*"[^"]+\.app"', m.group(0)))))
+    return out
+
+
+def project_sdks(root):
+    """The SDKROOT values of the top-level projects (iphoneos, macosx, ...)."""
+    sdks = set()
+    for p in glob.glob(os.path.join(root, "*.xcodeproj", "project.pbxproj")):
+        try:
+            sdks |= set(re.findall(r"SDKROOT = (\w+);", open(p, errors="replace").read()))
+        except OSError:
+            pass
+    return sdks
+
+
 def simulator_record():
     """The simulators xcfs created: {udid: {name, root, created}}. gc only ever removes simulators listed here."""
     return os.path.join(state.state_dir(), "simulators.json")
@@ -187,6 +214,45 @@ class XcodeAdapter(Adapter):
         if entry.get("compileCache", "off") not in COMPILE_CACHE_MODES:
             p.append("compileCache must be one of %s" % ", ".join('"%s"' % m for m in COMPILE_CACHE_MODES))
         return p
+
+    def suggest(self, root, entry):
+        """What `xcfs init` can tell from the files alone (nothing is built or resolved): the scheme (the one named
+        after the project or workspace, else one that builds an app), the platform (from the projects' SDKROOT), a
+        configuration for it, and git-ignored build settings files the project needs in every checkout."""
+        entry, notes, carry = dict(entry), [], []
+        container = entry.get("workspace") or entry.get("project")
+        if container:
+            schemes = shared_schemes(root, container)
+            if schemes:
+                stem = os.path.splitext(os.path.basename(container))[0]
+                apps = [n for n, builds_app in schemes if builds_app]
+                pick = stem if stem in [n for n, _ in schemes] else (apps[0] if apps else schemes[0][0])
+                entry["scheme"] = pick
+                others = [n for n, _ in schemes if n != pick]
+                notes.append("scheme %s%s" % (pick, " (others: %s)" % ", ".join(others[:8]) if others else ""))
+            else:
+                notes.append("no shared scheme in %s: xcfs will ask xcodebuild for one (or set \"scheme\")" % container)
+        sdks = project_sdks(root)
+        mac = "macosx" in sdks and "iphoneos" not in sdks
+        dest = "platform=macOS" if mac else "generic/platform=iOS Simulator"
+        name = "debug" if mac else "sim-debug"
+        entry.setdefault("configurations", {name: {"configuration": "Debug", "destination": dest}})
+        notes.append("platform %s (from SDKROOT: %s)" % ("macOS" if mac else "iOS Simulator", ", ".join(sorted(sdks)) or "none found"))
+        if not mac:
+            entry.setdefault("buildSettings", {"CODE_SIGNING_ALLOWED": "NO"})
+            notes.append("simulator builds without code signing (CODE_SIGNING_ALLOWED=NO)")
+        ignored = run("git", "-C", root, "ls-files", "-oi", "--exclude-standard", "--", "*.xcconfig",
+                      check=False).stdout.split("\n")
+        seedish = ("Pods/", "Carthage/", "SourcePackages/", "DerivedData/", "build/", ".build/")
+        carry = [f for f in ignored if f and not f.startswith(seedish)]
+        if carry:
+            notes.append("git-ignored settings files carried into every checkout: %s" % ", ".join(carry))
+        for t in glob.glob(os.path.join(root, "*.xcconfig.template")) + glob.glob(os.path.join(root, "*", "*.xcconfig.template")):
+            real = os.path.relpath(t, root)[:-len(".template")]
+            if real not in carry:
+                notes.append("%s is a template: create %s as the project's README says; then add it to \"carry\""
+                             % (os.path.relpath(t, root), real))
+        return entry, carry, notes
 
     def suggest_seed(self, root):
         out = []

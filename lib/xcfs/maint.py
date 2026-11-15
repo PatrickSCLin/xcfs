@@ -135,37 +135,60 @@ def cmd_doctor(a):
         raise Fail("%d problem(s)" % len(probs))
 
 
-def suggest_config(repo):
+def suggest_config(repo, notes=None):
     pairs = adapters_for(repo, {})
-    seed_dirs = []
-    for ad, _ in pairs:
+    seed_dirs, carry, toolchains = [], [], []
+    for ad, entry in pairs:
         for s in ad.suggest_seed(repo):
             if s not in seed_dirs:
                 seed_dirs.append(s)
+        entry, more, said = ad.suggest(repo, entry)
+        toolchains.append(entry)
+        carry += [c for c in more if c not in carry]
+        if notes is not None:
+            notes += ["%s: %s" % (ad.name, n) for n in said]
     cfg = {"version": 1}
     if seed_dirs:
         cfg["seed"] = seed_dirs
-    cfg["toolchains"] = [e for _, e in pairs]
+    if carry:
+        cfg["carry"] = carry
+    cfg["toolchains"] = toolchains
     return cfg
 
 
 def cmd_init(a):
+    """Detect what a repository needs and suggest a config: in the repository (--write: .xcfs.json, to commit for
+    everyone) or for this user only (--user: ~/.config/xcfs/<repo>.json, the repository untouched). An existing
+    config, in either place, is never overwritten without --force."""
     repo = config.toplevel(phys(a.pos[0] if a.pos else "."))
-    cfg = suggest_config(repo)
+    notes = []
+    cfg = suggest_config(repo, notes)
     text = json.dumps(cfg, indent=2) + "\n"
-    path = os.path.join(repo, ".xcfs.json")
-    if a.flag("write"):
-        if os.path.exists(path) and not a.flag("force"):
-            raise Fail("%s exists; pass --force to overwrite it" % path)
+    repo_path, user_path = config.config_paths(repo)
+    path = user_path if a.flag("user") else repo_path
+    existing = [p for p in (repo_path, user_path) if os.path.isfile(p)]
+    say("detected in %s:" % repo)
+    for n in notes or ["nothing"]:
+        say("  " + n)
+    write = a.flag("write") or a.flag("user")
+    if write:
+        if existing and not a.flag("force"):
+            raise Fail("a config exists already: %s; pass --force to write %s anyway" % (", ".join(existing), path))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
             f.write(text)
         say("wrote %s" % path)
     else:
         say(text.rstrip())
-        say("(not written: pass --write to save it as %s)" % path)
+        say("(not written: --write saves it as %s, --user as %s)" % (repo_path, user_path))
+        if existing:
+            say("note: %s exists and is the config in use" % existing[0])
     if not cfg["toolchains"]:
         say("no toolchain recognized this repository; add \"toolchains\" by hand")
-    a.result(config=cfg, written=path if a.flag("write") else None)
+    else:
+        say("next: xcfs doctor %s; xcfs pool warm %s --slots 2 --background; then xcfs checkout %s <branch>"
+            % (repo, repo, repo))
+    a.result(config=cfg, notes=notes, written=path if write else None, existing=existing)
 
 
 def cmd_trust(a):

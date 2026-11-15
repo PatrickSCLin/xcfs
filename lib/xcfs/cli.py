@@ -37,7 +37,9 @@ Maintenance
   xcfs gc [--apply] [--foreign] [--stale-days N]                reclaim what xcfs owns; --foreign also looks at caches
                                                                 it did not create (a toolchain's global caches)
   xcfs doctor [path] [--session-check]                          environment, hygiene and toolchain checks
-  xcfs init [repo] [--write] [--force]                          suggest a config (.xcfs.json) for a repository
+  xcfs init [repo] [--write | --user] [--force]                suggest a config: detected project, scheme, platform,
+                                                                carried files; --write saves .xcfs.json, --user
+                                                                ~/.config/xcfs/<repo>.json
   xcfs trust <repo>                                             approve the commands a repository's config runs
 
 Every command takes --json and then prints exactly one JSON object. Nothing is deleted without --apply.
@@ -63,7 +65,7 @@ class Args:
              "wait"}
     MULTI = {"only"}
     FLAGS = {"apply", "dry-run", "json", "discard-ignored", "foreign", "sizes", "status", "all", "prune-branch",
-             "release", "write", "force", "clean", "fetch", "background", "no-warm", "build", "help", "session-check"}
+             "release", "write", "user", "force", "clean", "fetch", "background", "no-warm", "build", "help", "session-check"}
 
     def __init__(self, argv):
         self.pos, self.opt, self.flags = [], {}, set()

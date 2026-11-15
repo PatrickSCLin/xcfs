@@ -14,6 +14,8 @@ Operations and what they return:
     detect        args {root}                 -> {"entry": {...toolchain entry...} | null}
     validate      args {entry}                -> {"problems": [str]}
     suggestSeed   args {root}                 -> {"seed": [relative dirs]}
+    suggest       args {root, entry}          -> {"entry": {...}, "carry": [...], "notes": [...]}  (xcfs init: fill
+                                                                        in what a detected entry needs)
     version       args {}                     -> {"version": str}      (a change marks build output cold)
     afterSeed     context                     -> {}
     afterSwitch   context                     -> {}                    (after the source set changed revision)
@@ -128,6 +130,10 @@ class Adapter:
         one slot first and the others from what it left."""
         return False
 
+    def suggest(self, root, entry):
+        """For `xcfs init`: (the entry with what it needs filled in, ignored files to carry, notes for the user)."""
+        return entry, [], []
+
     def foreign_caches(self, owned, stale_days):
         return []
 
@@ -231,6 +237,10 @@ class ExternalAdapter(Adapter):
 
     def shares_results(self, entry):
         return bool((self._opt("sharesResults", entry=entry, default={}) or {}).get("shares"))
+
+    def suggest(self, root, entry):
+        out = self._opt("suggest", root=root, entry=entry, default={}) or {}
+        return out.get("entry") or entry, out.get("carry") or [], out.get("notes") or []
 
     def cache_roots(self):
         return (self._opt("cacheRoots", default={}) or {}).get("paths", [])

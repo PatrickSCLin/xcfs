@@ -549,7 +549,9 @@ def t31_init_suggests_a_config():
     repo = mkrepo("r31"); os.makedirs(repo + "/App.xcodeproj"); os.makedirs(repo + "/Pods/X")
     open(repo + "/.gitignore", "a").write("Pods/\n")
     r = xcfs("init", repo); c = r["config"]
-    assert c["toolchains"] == [{"adapter": "xcode", "project": "App.xcodeproj"}] and c["seed"] == ["Pods"], c
+    t = c["toolchains"][0]
+    assert (t["adapter"], t["project"]) == ("xcode", "App.xcodeproj") and c["seed"] == ["Pods"], c
+    assert t["configurations"]["sim-debug"]["configuration"] == "Debug", t
     assert not os.path.exists(repo + "/.xcfs.json")
     assert xcfs("init", repo, "--write")["_code"] == 0 and json.load(open(repo + "/.xcfs.json"))["seed"] == ["Pods"]
     assert xcfs("init", repo, "--write")["_code"] == 1 and xcfs("init", repo, "--write", "--force")["_code"] == 0
@@ -1640,6 +1642,47 @@ def t67_a_shared_cache_warms_one_slot_first():
             os.remove(settings)
         else:
             open(settings, "w").write(saved)
+
+
+@test
+def t68_init_detects_and_never_overwrites():
+    r = SB + "/r68"
+    sch = r + "/Shop.xcodeproj/xcshareddata/xcschemes"
+    os.makedirs(sch)
+    sh("git", "init", "-q", r)
+    open(r + "/Shop.xcodeproj/project.pbxproj", "w").write("SDKROOT = iphoneos;\nSDKROOT = iphoneos;\n")
+    app = '<Scheme><BuildAction><BuildActionEntries><BuildActionEntry><BuildableReference BuildableName = "%s">' \
+          '</BuildableReference></BuildActionEntry></BuildActionEntries></BuildAction></Scheme>'
+    open(sch + "/Widgets.xcscheme", "w").write(app % "Widgets.appex")
+    open(sch + "/Shop.xcscheme", "w").write(app % "Shop.app")
+    open(r + "/.gitignore", "w").write("Local.xcconfig\n")
+    open(r + "/Local.xcconfig", "w").write("DEVELOPMENT_TEAM =\n")
+    open(r + "/Secrets.xcconfig.template", "w").write("API_KEY =\n")
+    sh("git", "-C", r, "add", "-A"); commit(r, "init")
+    out = xcfs("init", r)
+    t = out["config"]["toolchains"][0]
+    assert t["project"] == "Shop.xcodeproj" and t["scheme"] == "Shop", t
+    assert t["configurations"]["sim-debug"]["destination"] == "generic/platform=iOS Simulator", t
+    assert out["config"]["carry"] == ["Local.xcconfig"], out["config"]
+    assert any("Secrets.xcconfig.template" in n for n in out["notes"]), out["notes"]
+    assert not os.path.exists(r + "/.xcfs.json") and out["written"] is None, "nothing is written without --write"
+    w = xcfs("init", r, "--write")
+    assert w["_code"] == 0 and os.path.isfile(r + "/.xcfs.json"), w
+    again = xcfs("init", r, "--user")
+    assert again["_code"] != 0 and "exists already" in again["error"], "an existing config is never overwritten"
+    user = os.path.join(ENV.get("XDG_CONFIG_HOME", SB + "/config"), "xcfs", "r68.json")
+    assert not os.path.exists(user)
+    os.remove(r + "/.xcfs.json")
+    u = xcfs("init", r, "--user")
+    assert u["_code"] == 0 and os.path.isfile(user) and not os.path.exists(r + "/.xcfs.json"), u
+    assert json.load(open(user))["toolchains"][0]["scheme"] == "Shop"
+    assert xcfs("init", r, "--user", "--force")["_code"] == 0, "--force rewrites it"
+    os.remove(user)
+    # a macOS project: no simulator, no signing override
+    open(r + "/Shop.xcodeproj/project.pbxproj", "w").write("SDKROOT = macosx;\n")
+    m = xcfs("init", r)["config"]["toolchains"][0]
+    assert m["configurations"] == {"debug": {"configuration": "Debug", "destination": "platform=macOS"}} and \
+        "buildSettings" not in m, m
 
 
 def main():
