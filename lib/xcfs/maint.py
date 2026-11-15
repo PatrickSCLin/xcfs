@@ -101,6 +101,9 @@ def sizing_advice(settings, mem=None):
                    "mid-size app, plus the agents themselves")
     out.append("each slot needs %d GB free on the volume to be created or warmed (slotDiskGB); measured: 1.5–3 GB of "
                "build output per slot on mid-size apps" % settings["slotDiskGB"])
+    if not settings.get("minFreeGB"):
+        out.append("minFreeGB is off: when the disk fills, slots are refused; set it (say 30) to retire other projects' "
+                   "idle slots, least recently used first, instead")
     return out
 
 

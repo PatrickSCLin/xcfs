@@ -5,6 +5,8 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `minFreeGB` setting: keep space free on the pool's volume by retiring other projects' idle slots, least recently
+  used first, instead of refusing a slot.
 - `xcfs doctor <checkout>` reports what is kept for that checkout: its build session (running or not), whether its
   project description is current, its simulator.
 - Session builds report where their time went (`breakdown`: PIF, session start, planning, tasks, other; compile and

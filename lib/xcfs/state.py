@@ -26,6 +26,8 @@ DEFAULT_SETTINGS = {
     "warmOnRelease": True,    # a released slot is brought back to its baseline and rebuilt in the background
     "buildTimeout": 3600,     # seconds; a build that runs longer is killed (exit 9)
     "warmJobs": 0,            # slots one warm-up builds at the same time; 0: one per 16 GB of memory
+    "minFreeGB": 0,           # keep this much free on the pool's volume: idle slots are retired (oldest use first)
+                              # to make room for a slot being created or warmed; 0: off, a slot is refused instead
     "sessionIdleMinutes": 30,  # a checkout's build session (and what it keeps running) quits after this long unused
 }
 

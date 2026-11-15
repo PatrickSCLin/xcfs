@@ -1985,6 +1985,34 @@ def t79_doctor_looks_at_a_checkout():
     assert msgs == ["build session: not used (driver xcodebuild)"], msgs
 
 
+@test
+def t80_min_free_retires_idle_slots_of_other_projects():
+    cfgdir = SB + "/config80/xcfs"; os.makedirs(cfgdir)
+    E = dict(toy_env(), XDG_CONFIG_HOME=SB + "/config80", XCFS_STATE=SB + "/state80", XCFS_POOL_ROOT=SB + "/pool80")
+    a, b = toy_repo("r80a", slots=1), toy_repo("r80b", slots=1)
+    for r in (a, b):
+        if xcfs("new", r, "probe80", env=E)["_code"] == 3:
+            assert xcfs("trust", r, env=E)["_code"] == 0
+    assert xcfs("pool", "warm", a, env=E)["_code"] == 0
+    slot_a = [x["slot"] for x in xcfs("pool", "status", a, env=E)["slots"]][0]
+    # without minFreeGB a slot that does not fit is refused and nothing else is touched
+    json.dump({"slotDiskGB": 10 ** 6}, open(cfgdir + "/settings.json", "w"))
+    r = xcfs("pool", "warm", b, env=E)
+    assert r["_code"] == 11 and os.path.isdir(slot_a), r
+    # with minFreeGB, idle slots of other projects go first (here that is not enough: still refused, and says so)
+    json.dump({"minFreeGB": 10 ** 6}, open(cfgdir + "/settings.json", "w"))
+    r = xcfs("pool", "warm", b, env=E)
+    assert r["_code"] == 11 and "retired 1 idle slot" in r["error"], r
+    assert wait_for(lambda: not os.path.exists(slot_a)), "the idle slot of the other project is retired"
+    st = xcfs("pool", "status", a, env=E)
+    assert st["slots"] == [] and st["targets"][a] == 0, st
+    # a leased slot is never retired for space
+    json.dump({}, open(cfgdir + "/settings.json", "w"))
+    leased = xcfs("checkout", a, "l80", env=E)["worktree"]
+    json.dump({"minFreeGB": 10 ** 6}, open(cfgdir + "/settings.json", "w"))
+    assert xcfs("pool", "warm", b, env=E)["_code"] == 11 and os.path.isdir(leased)
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

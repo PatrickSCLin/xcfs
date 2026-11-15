@@ -57,12 +57,60 @@ def warm_matches(w, revs, versions):
         (w.get("versions") or {}).get(k) == v for k, v in versions.items() if v))
 
 
-def check_space(settings, where):
+def check_space(settings, where, keep=None, project=None):
+    """Room for a slot: slotDiskGB free on the pool's volume, plus minFreeGB that must stay free. With minFreeGB set,
+    idle slots (any project's; they hold nothing that is not rebuildable) are retired, least recently used first, to
+    make that room; otherwise, or when that is not enough, the slot is refused (exit 11)."""
     from .util import free_bytes
-    need = settings["slotDiskGB"] * GB
+    need = (settings["slotDiskGB"] + (settings.get("minFreeGB") or 0)) * GB
+    if free_bytes(where) >= need:
+        return []
+    retired = make_room(settings, where, need, keep, project) if settings.get("minFreeGB") else []
     if free_bytes(where) < need:
-        raise Fail("less than %d GB free on the pool's volume (%s): not creating or warming a slot"
-                   % (settings["slotDiskGB"], where), NO_SPACE)
+        raise Fail("less than %d GB free on the pool's volume (%s)%s: not creating or warming a slot%s"
+                   % (need // GB, where, " with minFreeGB kept free" if settings.get("minFreeGB") else "",
+                      " (retired %d idle slot(s) first)" % len(retired) if retired else ""), NO_SPACE)
+    return retired
+
+
+def last_used(row):
+    w, l = row.get("warm") or {}, row.get("lease") or {}
+    return max(iso_epoch(x) for x in (w.get("at"), l.get("active"), l.get("at"), row.get("released_at")) if x) \
+        if any((w.get("at"), l.get("active"), l.get("at"), row.get("released_at"))) else 0
+
+
+def make_room(settings, where, need, keep=None, project=None):
+    """Retire idle slots of other projects on where's volume, oldest use first, until need bytes are free (or none is
+    left); a project's own slots are not traded for one another. Waits for their background deletion, since the space
+    comes back only as it runs. The pools they leave keep their smaller size (`xcfs pool resize` grows them again)."""
+    from .util import free_bytes, same_apfs_volume
+    retired = []
+    while free_bytes(where) < need:
+        with state.registry() as reg:
+            cands = sorted(((p, s) for p, s in reg["slots"].items() if s["state"] in ("idle", "cold") and p != keep
+                            and s["project"] != project and same_apfs_volume(p, where)), key=lambda x: last_used(x[1]))
+            if not cands:
+                break
+            slot, row = cands[0]
+            reg["slots"][slot]["state"] = "retiring"
+            row = dict(row)
+        say("  retiring slot %d of %s (idle, least recently used) to keep %d GB free"
+            % (row["index"], os.path.basename(row["project"]), settings["minFreeGB"]))
+        retire_slot(slot, row, config.load_config(row["project"], validate=False) if os.path.isdir(row["project"])
+                    else {}, out=lambda *_: None)
+        with state.registry() as reg:   # the pool keeps its new size: it does not grow back into the space
+            p = reg["pools"].setdefault(row["project"], {})
+            p["slots"] = max(0, len(slots_of(reg, row["project"])))
+        retired.append(slot)
+        t0 = time.time()
+        while free_bytes(where) < need and time.time() - t0 < 120 and trash_busy(slot):
+            time.sleep(1)
+    return retired
+
+
+def trash_busy(slot):
+    t = os.path.join(os.path.dirname(slot), worktree.TRASH)
+    return os.path.isdir(t) and bool(os.listdir(t))
 
 
 def exclude_from_backups(path):
@@ -204,7 +252,7 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
             have = len(slots_of(reg, repo))
         os.makedirs(settings["poolRoot"], exist_ok=True)
         for _ in range(max(0, n - have) if slot_filter is None else 0):
-            check_space(settings, settings["poolRoot"])
+            check_space(settings, settings["poolRoot"], project=repo)
             with state.registry() as reg:
                 slot = reserve(reg, repo, free_index(reg, repo))
             create_slot(repo, cfg, reg["slots"][slot]["index"], settings)
@@ -240,7 +288,7 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
                 code, why = worktree.unsaved_work(row["src"], worktree.repos_of(row, row["src"]), row.get("carried"))
                 if code:
                     raise Fail("slot %d has uncommitted changes (%s): left alone" % (row["index"], why), DIRTY)
-                check_space(settings, slot)
+                check_space(settings, slot, keep=slot, project=repo)
                 revs, changed, stale = bring_to_baseline(slot, row, repo, cfg, fetch)
                 if changed or prev == "cold":
                     after_switch(slot, row, repo, cfg)
@@ -360,7 +408,7 @@ def checkout(repo, branch, start, session, settings, wait=0):
             if len(slots_of(reg, repo)) < max(1, target_slots(repo, cfg, reg, settings)):
                 create = reserve(reg, repo, free_index(reg, repo), {"lease": lease})
         if create:
-            check_space(settings, settings["poolRoot"])
+            check_space(settings, settings["poolRoot"], project=repo)
             os.makedirs(settings["poolRoot"], exist_ok=True)
             with state.registry(write=False) as reg:
                 idx = reg["slots"][create]["index"]
