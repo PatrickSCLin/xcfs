@@ -97,9 +97,20 @@ ln -s ~/src/xcfs/bin/xcfs ~/.local/bin/xcfs     # any directory on PATH
 xcfs --version
 ```
 
+With Homebrew, from the tap (the formula is `packaging/homebrew/xcfs.rb`):
+
+```
+brew install PatrickSCLin/xcfs/xcfs            # the latest release
+brew install --HEAD PatrickSCLin/xcfs/xcfs     # main
+```
+
+Then, in a repository: `xcfs init <repo>` shows what it detects and the config it suggests (`--user` saves it for you
+only, `--write` as `.xcfs.json` in the repository), and `xcfs doctor <repo>` checks the machine.
+
 `bin/xcfs` finds its code in `../lib` (or `../libexec`). To install one file instead (a dotfiles manager, a package
 manager), build it: `scripts/build-single-file.sh` writes `dist/xcfs`, the whole tool as a Python zip application.
-A Homebrew tap is planned.
+A release: tag it (`vX.Y.Z`, matching `lib/xcfs/__init__.py`), then `scripts/homebrew-formula.sh X.Y.Z` fills the
+formula's url and sha256 from the tarball GitHub serves for the tag; copy it into the tap as `Formula/xcfs.rb`.
 
 What runs on its own: on the first build with an Xcode of the Swift 6.4 line, xcfs builds a patched
 [swift-driver](https://github.com/swiftlang/swift-driver) in the background (`git clone` of the release tag — for the

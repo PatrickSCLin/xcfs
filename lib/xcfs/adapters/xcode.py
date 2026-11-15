@@ -116,13 +116,17 @@ def shared_schemes(root, container):
 
 
 def project_sdks(root):
-    """The SDKROOT values of the top-level projects (iphoneos, macosx, ...)."""
+    """The SDKROOT values of the top-level projects (iphoneos, macosx, ...); for a package alone, the platforms its
+    Package.swift declares."""
     sdks = set()
     for p in glob.glob(os.path.join(root, "*.xcodeproj", "project.pbxproj")):
         try:
             sdks |= set(re.findall(r"SDKROOT = (\w+);", open(p, errors="replace").read()))
         except OSError:
             pass
+    if not sdks and os.path.isfile(os.path.join(root, "Package.swift")):
+        text = open(os.path.join(root, "Package.swift"), errors="replace").read()
+        sdks |= {sdk for platform, sdk in ((".iOS(", "iphoneos"), (".macOS(", "macosx")) if platform in text}
     return sdks
 
 

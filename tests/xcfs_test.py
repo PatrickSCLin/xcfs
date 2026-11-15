@@ -1683,6 +1683,11 @@ def t68_init_detects_and_never_overwrites():
     m = xcfs("init", r)["config"]["toolchains"][0]
     assert m["configurations"] == {"debug": {"configuration": "Debug", "destination": "platform=macOS"}} and \
         "buildSettings" not in m, m
+    pkg = SB + "/r68-package"
+    os.makedirs(pkg); sh("git", "init", "-q", pkg)
+    open(pkg + "/Package.swift", "w").write("// swift-tools-version: 5.9\nlet p = Package(name: \"P\", platforms: [.macOS(.v14)])\n")
+    m = xcfs("init", pkg)["config"]["toolchains"][0]
+    assert m["package"] == "." and m["configurations"]["debug"]["destination"] == "platform=macOS", m
 
 
 def main():
