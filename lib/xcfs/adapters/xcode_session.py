@@ -751,7 +751,8 @@ def ensure_daemon(adapter, ctx, cwd, env):
         stop(ctx)
     swb = swbuild_path()
     if not swb:
-        raise Fail("no swbuild in this Xcode")
+        raise Fail("no swbuild in this Xcode", next="build with xcodebuild: set \"driver\": \"xcodebuild\" in the config, "
+                   "or XCFS_DRIVER=xcodebuild")
     code = ("import sys; sys.path.insert(0, %r); from xcfs.adapters.xcode_session import serve; "
             "serve(*sys.argv[1:])" % lib_root())
     log_dir = os.path.join(session_dir(ctx), "logs")
@@ -772,7 +773,9 @@ def ensure_daemon(adapter, ctx, cwd, env):
         if p.poll() is not None:
             break
         time.sleep(0.1)
-    raise Fail("the build session did not start; see %s" % os.path.join(log_dir, "daemon.log"))
+    raise Fail("the build session did not start; see %s" % os.path.join(log_dir, "daemon.log"),
+               next="`xcfs doctor <checkout> --session-check` shows why; meanwhile XCFS_DRIVER=xcodebuild builds without "
+                    "the session")
 
 
 def ping(sp):
@@ -866,7 +869,9 @@ def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None):
                         "configuration": conf.get("configuration", "Debug"), "timeout": timeout, "kind": kind},
                    timeout * 2 + 120)
     except (OSError, ValueError) as e:
-        raise Fail("the build session failed: %s" % e)
+        raise Fail("the build session failed: %s" % e,
+                   next="build again (the session restarts); if it fails again, `xcfs doctor <checkout> --session-check` "
+                        "shows why, and XCFS_DRIVER=xcodebuild builds without the session")
     res = {"ok": out["result"] in ("ok", "succeeded"), "timeout": out["result"] == "timeout",
            "seconds": round(time.time() - t0, 2), "build_seconds": round(out.get("seconds", 0), 2),
            "diagnostics": out.get("diagnostics", []), "derived_data": dd, "configuration": name, "driver": "session",

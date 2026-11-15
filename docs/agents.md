@@ -96,7 +96,9 @@ xcfs reap --older-than 3 --apply --prune-branch
 ## Reading the results
 
 Every command accepts `--json` and then prints exactly one JSON object with `"ok": true|false`; on failure it has an
-`error` string and the exit code says why (see the README). An agent should branch on the exit code:
+`error` string, usually a `next` sentence saying what to do (for a failed build, a specific one when the failure is a
+known kind: a full disk, an out-of-date precompiled module, a simulator that does not boot, code signing, package or
+CocoaPods resolution), and the exit code says why (see the README). An agent should branch on the exit code:
 
 | code | what to do |
 |---|---|

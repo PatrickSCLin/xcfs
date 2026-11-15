@@ -64,7 +64,7 @@ Exit codes: 0 ok · 1 error · 2 usage · 3 config not trusted · 4 not one APFS
 import json, os, sys
 
 from . import VERSION, builds, config, hooks, maint, pool, state, worktree
-from .util import Fail, OUT, USAGE, phys, say
+from .util import Fail, NEXT, OUT, USAGE, phys, say
 
 
 class Args:
@@ -263,6 +263,11 @@ def main(argv):
         OUT.result["traceback"] = traceback.format_exc().splitlines()[-3:]
         if not OUT.json:
             print("error: %s\n%s" % (OUT.result["error"], traceback.format_exc()), file=sys.stderr)
+    nxt = OUT.result.get("next") or (NEXT.get(code) if code else None)
+    if nxt:
+        OUT.result["next"] = nxt
+        if not OUT.json and not OUT.quiet:
+            print("next: %s" % nxt, file=sys.stderr)
     if OUT.json:
         OUT.result["ok"] = code == 0
         print(json.dumps(OUT.result, ensure_ascii=False))

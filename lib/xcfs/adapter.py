@@ -135,6 +135,10 @@ class Adapter:
         """For `xcfs init`: (the entry with what it needs filled in, ignored files to carry, notes for the user)."""
         return entry, [], []
 
+    def advise(self, result):
+        """For a failed build, check or test: what to do next when the failure is a known one, else None."""
+        return None
+
     def suggest_seed_key(self, root):
         """For `xcfs init`: tracked files (lock files, project generator specs) whose content decides the seeded layer."""
         return []
@@ -247,6 +251,9 @@ class ExternalAdapter(Adapter):
 
     def shares_results(self, entry):
         return bool((self._opt("sharesResults", entry=entry, default={}) or {}).get("shares"))
+
+    def advise(self, result):
+        return None   # an external adapter puts "next" in its result itself
 
     def suggest_seed_key(self, root):
         return (self._opt("suggestSeedKey", root=root, default={}) or {}).get("seedKey", [])

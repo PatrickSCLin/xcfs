@@ -4,6 +4,22 @@ import calendar, ctypes, hashlib, json, os, re, shutil, signal, subprocess, sys,
 # Exit codes. They are part of the interface: agents branch on them.
 OK, ERROR, USAGE, UNTRUSTED, VOLUME, DIRTY, IN_USE, IGNORED_CHANGED, BUILD_FAILED, TIMEOUT, POOL_FULL, NO_SPACE = range(12)
 
+# What to do after each refusal: in every --json result as "next" (unless something more specific said so), and on
+# stderr for people. Written for agents as much as for people.
+NEXT = {
+    UNTRUSTED: "review the commands the config runs, then approve them with `xcfs trust <repo>`",
+    VOLUME: "put the destination (or poolRoot) on the repository's APFS volume",
+    DIRTY: "commit the work (or ask whoever owns it), then run the command again; xcfs never stashes or discards it",
+    IN_USE: "stop what runs inside the checkout (a build, a shell, an editor), then run the command again",
+    IGNORED_CHANGED: "the carried files changed; copy what is needed out first, then pass --discard-ignored",
+    BUILD_FAILED: "fix what `diagnostics` lists (for tests, `failed`), then build again",
+    TIMEOUT: "run it once more; if it times out again, raise buildTimeout or --timeout, or report it",
+    POOL_FULL: "retry with --wait 600, release a slot (`xcfs release`), grow the pool (`xcfs pool resize`), or use "
+               "`xcfs new` for a plain worktree",
+    NO_SPACE: "`xcfs gc --apply` removes what xcfs no longer needs; `xcfs pool resize <repo> N` with a smaller N "
+              "retires idle slots; do not delete other files to make room without asking",
+}
+
 
 class Fail(Exception):
     def __init__(self, msg, code=ERROR, **extra):

@@ -172,6 +172,48 @@ def delete_simulator(udid):
     forget_simulator(udid)
 
 
+# Known failures and what to do about them (XcodeAdapter.advise): (pattern over the diagnostics and the log's end, advice)
+KNOWN_FAILURES = [
+    (r"No space left on device",
+     "the volume is full: `xcfs gc --apply` removes what xcfs no longer needs, `xcfs pool resize <repo> N` with a "
+     "smaller N retires idle slots; then build again"),
+    (r"has been modified since the module file was built|module file .{0,200} is out of date",
+     "a precompiled module is older than what it was built from: delete Build/Intermediates.noindex/"
+     "SwiftExplicitPrecompiledModules in this checkout's build output%s and build again; a retry alone does not heal it"),
+    (r"Unable to boot|Unable to find a destination matching|Invalid device|CoreSimulatorService|"
+     r"is not available because the runtime",
+     "the simulator is missing or does not boot: `xcrun simctl list devices` shows it, and the iOS Simulator runtime "
+     "must be installed (Xcode > Settings > Components); `xcfs doctor <checkout>` checks the rest"),
+    (r"requires a development team|No profiles for|Signing for .{0,80} requires",
+     "code signing: a simulator build needs none, so set \"buildSettings\": {\"CODE_SIGNING_ALLOWED\": \"NO\"} in the "
+     "config's toolchain entry (`xcfs init` suggests it for simulator configurations)"),
+    (r"Could not resolve package dependencies|Failed to resolve dependencies|package resolution failed",
+     "Swift package resolution failed: check the network and Package.resolved; checkouts get their packages from the "
+     "source checkout's seeded layer, so resolve there once (`xcodebuild -resolvePackageDependencies`, or open it in "
+     "Xcode) and create the checkout again"),
+    (r"The sandbox is not in sync with the Podfile\.lock",
+     "CocoaPods: Pods does not match Podfile.lock; run `pod install` in the source checkout so the seeded layer "
+     "matches, then create the checkout again (or add \"pod install\" to the config's afterSeed)"),
+]
+
+
+def advise_failure(texts, build_output=None):
+    blob = "\n".join(t for t in texts if t)
+    for pattern, advice in KNOWN_FAILURES:
+        if re.search(pattern, blob):
+            return advice % ((" (%s)" % build_output) if build_output else "") if "%s" in advice else advice
+    return None
+
+
+def log_tail(path, size=65536):
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, os.path.getsize(path) - size))
+            return f.read().decode("utf-8", "replace")
+    except (OSError, TypeError):
+        return ""
+
+
 def parse_diagnostics(lines, limit_warnings=100):
     seen, out, warnings = set(), [], 0
     for line in lines:
@@ -837,6 +879,11 @@ class XcodeAdapter(Adapter):
         return out
 
     # ---------------------------------------------------------------- doctor
+    def advise(self, result):
+        texts = [d.get("message", "") for d in result.get("diagnostics") or []] + [str(result.get("error") or "")]
+        texts.append(log_tail(result.get("log")))
+        return advise_failure(texts, result.get("derived_data"))
+
     def doctor(self, root, entry):
         checks = []
         dev = developer_dir()

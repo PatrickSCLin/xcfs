@@ -5,6 +5,8 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- Refusals and failures carry `next`: what to do, by exit code, and for known Xcode build failures (full disk,
+  out-of-date precompiled module, simulator, signing, package or CocoaPods resolution, the build session).
 - `xcfs pool status --watch`: a warm-up's step, elapsed time and an estimate from the last one, until it is done.
 - `xcfs init` recognizes XcodeGen and Tuist projects (the generated project is seeded, keyed by its spec) and suggests
   `seedKey` from the tracked lock files.

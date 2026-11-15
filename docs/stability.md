@@ -14,6 +14,7 @@ Agents and scripts depend on xcfs's output, so this is what a release keeps, and
     for tests also `tests`, `failures` and `failed` (the names of the failed tests); `check` says what it compiled
     against in `against`. A project with several toolchains gets one such object per toolchain under `results`.
   - `reap`: what was left because it holds unsaved work, under `left`.
+  - On a refusal or a failure: `next`, one sentence on what to do (its presence is stable, its wording is not).
 - **Exit codes** 0–11, as the README lists them; `reap` exits 0 when it leaves something, so that a hook does not fail.
 - **The config** (`.xcfs.json`, `~/.config/xcfs/<repo>.json`): `version: 1` and its keys. A key is not renamed or
   given another meaning within a version; unknown keys are an error, so a config written for a later release fails

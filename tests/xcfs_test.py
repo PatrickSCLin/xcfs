@@ -1906,6 +1906,31 @@ def t75_pool_status_shows_a_warm_up_under_way():
     assert row["state"] == "idle" and "step" not in row and row["warm"], row
 
 
+@test
+def t76_failures_say_what_to_do_next():
+    E = toy_env(); repo = toy_repo("r76", slots=1)
+    s = xcfs("checkout", repo, "n76", env=E)
+    r = xcfs("checkout", repo, "n76b", env=E)
+    assert r["_code"] == 10 and "--wait" in r["next"], r
+    open(s["worktree"] + "/toy.txt", "w").write("BROKEN\n")
+    r = xcfs("release", s["worktree"], env=E)
+    assert r["_code"] == 5 and "never stashes" in r["next"], r
+    h = subprocess.run([PY, XCFS, "release", s["worktree"]], env=E, capture_output=True, text=True)
+    assert h.returncode == 5 and "next: commit the work" in h.stderr, h.stderr
+    assert "next" not in xcfs("pool", "status", repo, env=E), "nothing to advise on success"
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode import XcodeAdapter
+    ad = XcodeAdapter()
+    log = SB + "/x76.log"
+    open(log, "w").write("...\nerror: module file '/dd/X.pcm' is out of date and needs to be rebuilt\n")
+    assert "SwiftExplicitPrecompiledModules" in ad.advise({"ok": False, "log": log, "derived_data": "/dd"})
+    assert "/dd" in ad.advise({"ok": False, "log": log, "derived_data": "/dd"})
+    assert "CODE_SIGNING_ALLOWED" in ad.advise({"ok": False, "diagnostics": [
+        {"message": "Signing for \"App\" requires a development team."}]})
+    assert "simctl" in ad.advise({"ok": False, "error": "Unable to boot the Simulator."})
+    assert ad.advise({"ok": False, "diagnostics": [{"message": "cannot find 'x' in scope"}]}) is None
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

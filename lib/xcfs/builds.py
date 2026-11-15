@@ -98,6 +98,10 @@ def operate(op, path, args, toolchain=None):
                     continue  # this toolchain has no such operation; the others answer
                 raise
             r = dict(r, toolchain=a.name)
+            if not r.get("ok") and not r.get("next"):
+                hint = a.advise(r)
+                if hint:
+                    r["next"] = hint
             results.append(r)
             save(ctx, a, built=op in ("build", "warm", "test", "run") and r.get("ok"), version=v)
             if not r.get("ok"):
@@ -105,6 +109,9 @@ def operate(op, path, args, toolchain=None):
     if not results:
         raise Fail("no toolchain of %s supports %s" % (loc["root"], op), USAGE)
     out = results[0] if len(results) == 1 else {"ok": all(r.get("ok") for r in results), "results": results}
+    hints = [r["next"] for r in results if r.get("next")]
+    if hints:
+        out["next"] = hints[0]
     out.update(root=loc["root"], kind=loc["kind"])
     return out
 
