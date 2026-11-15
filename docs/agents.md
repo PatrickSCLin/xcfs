@@ -73,7 +73,11 @@ xcfs hook worktree-remove    # stdin: {"worktree_path", ...}; exit 0 when it is 
 
 Checked with Claude Code 2.1.325: `claude -w <name>` in a repository with these hooks starts the session in the xcfs
 worktree on `worktree-<name>`; the hook's `cwd` is the directory Claude Code was started in. A non-interactive run
-(`claude -p`) leaves its worktree in place when it exits; the session-end hook returns it.
+(`claude -p`) leaves its worktree in place when it exits; the session-end hook returns it. Checked again with the
+plugin (`claude -p --plugin-dir plugins/xcfs -w <name>`): the worktree came from xcfs and the session's end removed it
+and its branch. When Claude Code runs the remove or session-end hook, its own processes (and anything it started)
+still have their working directory in the worktree; xcfs leaves those out when it decides whether the worktree is in
+use (the tool asked for the removal), and still refuses for any other process and for unsaved work.
 
 Install for Claude Code: `xcfs hook install --apply` adds both worktree hooks and the session-end hook to
 `~/.claude/settings.json` (every project); `xcfs hook install <repo> --apply` to a repository's

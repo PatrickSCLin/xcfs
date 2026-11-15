@@ -2096,6 +2096,28 @@ def t84_plugin_hooks_match_what_hook_install_writes():
     assert open(root + "/examples/agent-instructions/xcfs.md").read() in open(root + "/plugins/xcfs/skills/xcfs/SKILL.md").read()
 
 
+@test
+def t85_the_agent_tools_own_processes_do_not_keep_its_worktree():
+    E = toy_env(); repo = toy_repo("r85", slots=1)
+    wt = xcfs("new", repo, "t85", env=E)["worktree"]
+    # the "agent tool": a process whose child (its shell, say) has its cwd in the worktree
+    tool = subprocess.Popen(["sh", "-c", "cd \"$0\" && sleep 60 & wait", wt])
+    try:
+        time.sleep(0.5)
+        r = xcfs("rm", wt, "--apply", env=E)
+        assert r["_code"] == 6 and os.path.isdir(wt), "anyone else's process keeps it: %s" % r
+        r = xcfs("rm", wt, "--apply", env=dict(E, XCFS_TOOL_PID=str(tool.pid)))
+        assert r["_code"] == 0 and not os.path.exists(wt), r
+    finally:
+        tool.kill()
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs import hooks
+    probe = subprocess.run(["sh", "-c", "%s -c 'import sys; sys.path.insert(0, sys.argv[1]); from xcfs import hooks; "
+                            "print(hooks.tool_pid())' %s" % (PY, os.path.join(os.path.dirname(HERE), "lib"))],
+                           capture_output=True, text=True)
+    assert probe.stdout.strip() == str(os.getpid()), "the tool is above the shell the hook ran in: %s" % probe.stdout
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

@@ -167,10 +167,30 @@ def ancestors():
     return out
 
 
+def process_tree(pid):
+    """pid and every process below it."""
+    kids = {}
+    for l in run("ps", "-axo", "pid=,ppid=", cwd="/").stdout.splitlines():
+        p = l.split()
+        if len(p) == 2:
+            kids.setdefault(p[1], []).append(p[0])
+    out, todo = set(), [str(pid)]
+    while todo:
+        p = todo.pop()
+        if p not in out:
+            out.add(p)
+            todo += kids.get(p, [])
+    return out
+
+
 def users_of(root, skip_pids=()):
     """Processes working inside root (its path in their command line, or as their cwd). A process elsewhere on the
-    machine is never a reason to refuse."""
+    machine is never a reason to refuse. XCFS_TOOL_PID (set by `xcfs hook` for the agent tool that asked for the
+    removal, at its session's end or for its own worktree) leaves out that tool and every process it started: their
+    working directory is the checkout because the tool put them there, and the tool is done with it."""
     skip = ancestors() | set(str(p) for p in skip_pids)
+    if os.environ.get("XCFS_TOOL_PID", "").isdigit():
+        skip |= process_tree(os.environ["XCFS_TOOL_PID"])
     hits = []
     # Our own helpers run from "/": a hook started with its cwd inside the worktree must not count itself.
     for l in run("ps", "-axo", "pid=,command=", cwd="/").stdout.splitlines():

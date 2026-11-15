@@ -5,6 +5,8 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- Fix: the remove and session-end hooks no longer refuse because the agent tool's own processes still have their
+  working directory in the worktree (found running the plugin in a live session).
 - A Claude Code plugin (`plugins/xcfs`, marketplace in `.claude-plugin/marketplace.json`): the three hooks and a skill
   with the agent's instructions.
 - The SessionEnd hook gets a 60 s timeout (Claude Code gives SessionEnd hooks 1.5 s in all by default);

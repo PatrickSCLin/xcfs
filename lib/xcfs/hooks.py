@@ -24,9 +24,26 @@ def log(msg):
     print("xcfs hook: " + msg, file=sys.stderr, flush=True)
 
 
-def call(*args):
-    """Run this xcfs with --json; (exit code, result)."""
-    r = subprocess.run(self_argv() + list(args) + ["--json"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+SHELLS = {"sh", "bash", "zsh", "dash", "fish"}
+
+
+def tool_pid():
+    """The agent tool that ran this hook: the parent, above any shell the hook command was started through."""
+    pid = os.getppid()
+    for _ in range(4):
+        r = run("ps", "-o", "ppid=,comm=", "-p", str(pid), check=False, cwd="/").stdout.split(None, 1)
+        if len(r) < 2 or os.path.basename(r[1].strip()).lstrip("-") not in SHELLS:
+            break
+        pid = int(r[0])
+    return pid
+
+
+def call(*args, tool=False):
+    """Run this xcfs with --json; (exit code, result). tool: on behalf of the agent tool that ran the hook, whose own
+    processes do not keep a checkout in use (XCFS_TOOL_PID)."""
+    env = dict(os.environ, XCFS_TOOL_PID=str(tool_pid())) if tool else None
+    r = subprocess.run(self_argv() + list(args) + ["--json"], capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                       env=env, cwd="/")
     try:
         out = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
@@ -95,9 +112,9 @@ def remove(data):
         slot = any(path == s.get("src") or path.startswith(p + os.sep) or path == p for p, s in reg["slots"].items())
         managed = path in reg["worktrees"]
     if slot:
-        code, out = call("release", path, "--prune-branch")
+        code, out = call("release", path, "--prune-branch", tool=True)
     elif managed:
-        code, out = call("rm", path, "--apply", "--prune-branch")
+        code, out = call("rm", path, "--apply", "--prune-branch", tool=True)
     else:   # not made by xcfs: what git would do, never forcing
         r = run("git", "-C", path, "worktree", "remove", path, check=False)
         code, out = r.returncode, {"error": r.stderr.strip()}
@@ -112,7 +129,7 @@ def session_end(data):
     sid = str(data.get("session_id") or "")
     if not sid:
         return
-    code, out = call("reap", "--session", sid, "--apply", "--prune-branch")
+    code, out = call("reap", "--session", sid, "--apply", "--prune-branch", tool=True)
     try:
         write_json(os.path.join(state.state_dir(), "last-reap.json"), dict(out, session=sid))
     except OSError as e:
