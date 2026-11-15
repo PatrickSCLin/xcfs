@@ -15,8 +15,9 @@ no kernel extension, Xcode unmodified. **v0.2.0**, Python 3 standard library onl
 
 ## The problems it solves
 
-Measured on public apps, three agents at once unless noted ([docs/benchmark.md](docs/benchmark.md), raw results in
-[bench/results](bench/results/README.md)):
+Measured on public apps, three agents at once unless noted, on one machine: **MacBook Pro, Apple M1 Max (10 cores),
+64 GB, macOS 27.2, Xcode 27.2** ([docs/benchmark.md](docs/benchmark.md), raw results in
+[bench/results](bench/results/README.md)). Other machines will differ; slower disks and less memory change the numbers.
 
 | when several agents each get a worktree | plain `git worktree` + `xcodebuild` | xcfs |
 |---|---|---|
@@ -30,6 +31,8 @@ Measured on public apps, three agents at once unless noted ([docs/benchmark.md](
 | cleanup scripts guess by path or age | `rm -rf` and hope | a registry: nothing with unsaved work, nothing xcfs did not create, is deleted |
 
 ## Benchmarks
+
+All charts: MacBook Pro, Apple M1 Max (10 cores), 64 GB, macOS 27.2, Xcode 27.2, building for one architecture.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/agents-wall-time-dark.svg">
