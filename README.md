@@ -13,7 +13,7 @@ It plugs into Claude Code's worktree and session hooks (one command, or the Clau
 agent tools (Codex, Cursor, Gemini CLI, Aider, …) drive the same commands through `--json`.
 
 `xcfs` is the tool's name, not a kernel file system: git worktrees, APFS clones and Xcode's own build service; no root,
-no kernel extension, Xcode unmodified. **v0.3.0**, Python 3 standard library only (3.9 or later), MIT;
+no kernel extension, Xcode unmodified. **v0.3.1**, Python 3 standard library only (3.9 or later), MIT;
 [docs/design.md](docs/design.md) says what is measured, what is planned and what is not verified.
 
 ## The problems it solves

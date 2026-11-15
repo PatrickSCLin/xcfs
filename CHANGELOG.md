@@ -3,7 +3,7 @@
 What changed for people and scripts that use xcfs. The interface that is kept stable is listed in
 [docs/stability.md](docs/stability.md).
 
-## Unreleased
+## 0.3.1 — 2026-11-16
 
 ### Security
 

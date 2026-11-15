@@ -4,4 +4,4 @@ The core (every module directly in this package) knows no toolchain and no proje
 adapters (xcfs.adapters.*, or external `xcfs-adapter-<name>` executables); project knowledge lives in the project's
 config.
 """
-VERSION = "0.3.0"
+VERSION = "0.3.1"
