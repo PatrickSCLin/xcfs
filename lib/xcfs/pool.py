@@ -401,9 +401,16 @@ def checkout(repo, branch, start, session, settings, wait=0):
     warm_state = "warm at baseline" if at_base else \
         "warm at an older baseline" if w.get("ok") else "cold (first build is a full build)"
     say("slot %d: %s  [%s, %s]" % (row["index"], src, branch, warm_state))
+    hint = None
+    if not w.get("ok"):
+        with state.registry(write=False) as reg:
+            n = max(1, target_slots(repo, cfg, reg, settings))
+        hint = ("this slot was never built, so its first build is a full one. Slots are kept built by "
+                "`xcfs pool warm %s --slots %d --background` (once; a returned slot is rebuilt by itself)" % (repo, n))
+        say("  " + hint)
     return {"slot": slot, "worktree": src, "branch": branch, "index": row["index"], "made_branch": made,
             "warm": w.get("ok", False), "warm_at_baseline": at_base,
-            "session": session}
+            "session": session, "hint": hint}
 
 
 def release(slot, row, settings, prune_branch=False, discard_ignored=False, rewarm=True, out=say):

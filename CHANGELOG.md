@@ -5,6 +5,10 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs init` recognizes XcodeGen and Tuist projects (the generated project is seeded, keyed by its spec) and suggests
+  `seedKey` from the tracked lock files.
+- `xcfs checkout` of a slot that was never built says how to keep slots built (`hint` in the JSON).
+- `xcfs doctor` advises slot counts and parallel warm-ups for the machine's memory (`advice` in the JSON).
 - `docs/index.md`, `docs/llms.txt` and `docs/_config.yml`: a GitHub Pages site from `docs/`, and an index for
   language models.
 - `xcfs uninstall [--apply]`: list everything xcfs made on the machine and remove it; what holds unsaved work is

@@ -14,6 +14,7 @@ Operations and what they return:
     detect        args {root}                 -> {"entry": {...toolchain entry...} | null}
     validate      args {entry}                -> {"problems": [str]}
     suggestSeed   args {root}                 -> {"seed": [relative dirs]}
+    suggestSeedKey args {root}                -> {"seedKey": [tracked files whose content keys the seeded layer]}
     suggest       args {root, entry}          -> {"entry": {...}, "carry": [...], "notes": [...]}  (xcfs init: fill
                                                                         in what a detected entry needs)
     version       args {}                     -> {"version": str}      (a change marks build output cold)
@@ -134,6 +135,15 @@ class Adapter:
         """For `xcfs init`: (the entry with what it needs filled in, ignored files to carry, notes for the user)."""
         return entry, [], []
 
+    def suggest_seed_key(self, root):
+        """For `xcfs init`: tracked files (lock files, project generator specs) whose content decides the seeded layer."""
+        return []
+
+    def undetected(self, root):
+        """For `xcfs init` when this adapter did not recognize the repository: notes on what would make it (a project
+        that has to be generated first, say)."""
+        return []
+
     def foreign_caches(self, owned, stale_days):
         return []
 
@@ -237,6 +247,9 @@ class ExternalAdapter(Adapter):
 
     def shares_results(self, entry):
         return bool((self._opt("sharesResults", entry=entry, default={}) or {}).get("shares"))
+
+    def suggest_seed_key(self, root):
+        return (self._opt("suggestSeedKey", root=root, default={}) or {}).get("seedKey", [])
 
     def suggest(self, root, entry):
         out = self._opt("suggest", root=root, entry=entry, default={}) or {}

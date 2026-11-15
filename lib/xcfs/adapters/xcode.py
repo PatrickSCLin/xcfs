@@ -99,6 +99,30 @@ def debug_hint(ctx, r):
     return r
 
 
+LOCK_FILES = ("Podfile.lock", "Cartfile.resolved", "Gemfile.lock", "Package.resolved", "Tuist/Package.resolved")
+
+
+def project_generator(root):
+    """(name, its spec files, the command that generates the project) for an XcodeGen or Tuist repository, else None."""
+    xg = [f for f in ("project.yml", "project.json") if os.path.isfile(os.path.join(root, f))]
+    if xg:
+        return ("XcodeGen", xg, "xcodegen generate")
+    tu = [f for f in ("Workspace.swift", "Project.swift", "Tuist.swift", "Tuist/Config.swift")
+          if os.path.isfile(os.path.join(root, f))]
+    if tu:
+        return ("Tuist", tu, "tuist generate --no-open")
+    return None
+
+
+def generated_containers(root):
+    """The git-ignored projects and workspaces at the top of the repository (what a generator wrote)."""
+    try:
+        names = sorted(os.listdir(root))
+    except OSError:
+        return []
+    return [n for n in names if n.endswith((".xcodeproj", ".xcworkspace")) and git_ok(root, "check-ignore", "-q", n)]
+
+
 def shared_schemes(root, container):
     """[(name, builds an app)] of the shared schemes of a workspace or project (and of the projects next to it)."""
     paths = glob.glob(os.path.join(root, container, "xcshareddata", "xcschemes", "*.xcscheme"))
@@ -251,6 +275,13 @@ class XcodeAdapter(Adapter):
         carry = [f for f in ignored if f and not f.startswith(seedish)]
         if carry:
             notes.append("git-ignored settings files carried into every checkout: %s" % ", ".join(carry))
+        gen = project_generator(root)
+        if gen:
+            made = generated_containers(root)
+            notes.append("%s project: %s %s generated from %s and git-ignored, so it is seeded into every checkout "
+                         "(keyed by %s). If checkouts change %s, add `\"afterSeed\": [\"%s\"]` (then `xcfs trust`)"
+                         % (gen[0], ", ".join(made), "is" if len(made) == 1 else "are", ", ".join(gen[1]),
+                            ", ".join(gen[1]), gen[1][0], gen[2]))
         for t in glob.glob(os.path.join(root, "*.xcconfig.template")) + glob.glob(os.path.join(root, "*", "*.xcconfig.template")):
             real = os.path.relpath(t, root)[:-len(".template")]
             if real not in carry:
@@ -263,7 +294,27 @@ class XcodeAdapter(Adapter):
         for d in ("Pods", ".spm_cache", "SourcePackages", "Carthage/Build", "vendor/bundle"):
             if os.path.isdir(os.path.join(root, d)) and git_ok(root, "check-ignore", "-q", d):
                 out.append(d)
+        gen = project_generator(root)
+        if gen:   # the generated project and workspace are part of the layer every checkout gets
+            out += [n for n in generated_containers(root) if n not in out]
         return out
+
+    def suggest_seed_key(self, root):
+        tracked = set(run("git", "-C", root, "ls-files", check=False).stdout.split("\n"))
+        keys = [f for f in LOCK_FILES if f in tracked]
+        keys += sorted(f for f in tracked if f.endswith(".xcworkspace/xcshareddata/swiftpm/Package.resolved")
+                       and f.count("/") == 3)
+        gen = project_generator(root)
+        if gen:
+            keys += [f for f in gen[1] if f in tracked and f not in keys]
+        return keys
+
+    def undetected(self, root):
+        gen = project_generator(root)
+        if gen and not generated_containers(root):
+            return ["%s project (%s) not generated yet: run `%s` in %s, then `xcfs init` again"
+                    % (gen[0], ", ".join(gen[1]), gen[2], root)]
+        return []
 
     _version = None
 

@@ -1837,6 +1837,53 @@ def t72_uninstall_lists_then_removes_everything_but_unsaved_work():
     assert not maint.own_dir(os.path.dirname(os.path.expanduser("~")))
 
 
+@test
+def t73_first_use_hints_and_sizing_advice():
+    E = toy_env(); repo = toy_repo("r73", slots=1)
+    r = xcfs("checkout", repo, "h73", env=E)
+    assert r["_code"] == 0 and not r["warm"] and "pool warm" in r["hint"] and "--slots 1" in r["hint"], r
+    assert xcfs("release", r["worktree"], "--no-warm", env=E)["_code"] == 0
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0
+    r = xcfs("checkout", repo, "h73b", env=E)
+    assert r["_code"] == 0 and r["warm"] and r["hint"] is None, r
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs import maint, state
+    st = dict(state.DEFAULT_SETTINGS)
+    small, big = maint.sizing_advice(st, mem=16), maint.sizing_advice(st, mem=64)
+    assert "1 slot(s) at a time" in small[0] and any("less than 32 GB" in l for l in small), small
+    assert "4 slot(s) at a time" in big[0] and not any("less than 32 GB" in l for l in big), big
+    assert "2 slot(s) at a time" in maint.sizing_advice(dict(st, warmJobs=2), mem=16)[0]
+    assert "advice" in xcfs("doctor", env=E)
+
+
+@test
+def t74_init_knows_generated_projects():
+    r = SB + "/r74"; os.makedirs(r); sh("git", "init", "-q", r)
+    open(r + "/project.yml", "w").write("name: Gen\n")
+    open(r + "/Podfile.lock", "w").write("PODFILE CHECKSUM: 1\n")
+    open(r + "/.gitignore", "w").write("*.xcodeproj\n*.xcworkspace\nPods/\n")
+    sh("git", "-C", r, "add", "-A"); commit(r, "init")
+    out = xcfs("init", r)   # not generated yet: nothing to detect, and a note saying what to run
+    assert out["config"]["toolchains"] == [] and any("xcodegen generate" in n for n in out["notes"]), out
+    for d in ("Gen.xcodeproj", "Gen.xcworkspace", "Pods"):
+        os.makedirs(r + "/" + d)
+    open(r + "/Gen.xcodeproj/project.pbxproj", "w").write("SDKROOT = iphoneos;\n")
+    cfg = xcfs("init", r)
+    c = cfg["config"]
+    assert c["toolchains"][0]["workspace"] == "Gen.xcworkspace", c
+    assert c["seed"] == ["Pods", "Gen.xcodeproj", "Gen.xcworkspace"] and c["seedKey"] == ["Podfile.lock", "project.yml"], c
+    assert any("XcodeGen" in n and "afterSeed" in n for n in cfg["notes"]), cfg["notes"]
+    t = SB + "/r74t"; os.makedirs(t + "/Tuist"); sh("git", "init", "-q", t)
+    open(t + "/Project.swift", "w").write("import ProjectDescription\n")
+    open(t + "/Tuist/Package.resolved", "w").write("{}\n")
+    open(t + "/.gitignore", "w").write("*.xcodeproj\n*.xcworkspace\n")
+    sh("git", "-C", t, "add", "-A"); commit(t, "init")
+    assert any("tuist generate" in n for n in xcfs("init", t)["notes"])
+    os.makedirs(t + "/App.xcodeproj")
+    c = xcfs("init", t)["config"]
+    assert c["seed"] == ["App.xcodeproj"] and c["seedKey"] == ["Tuist/Package.resolved", "Project.swift"], c
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

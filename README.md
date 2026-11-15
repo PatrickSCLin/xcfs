@@ -241,7 +241,7 @@ through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
 | **maintenance** | |
 | `xcfs gc [--apply] [--foreign] [--stale-days N]` | Repair interrupted operations, return clean slots whose lease went stale, drop unused dependency snapshots and the build output of vanished checkouts. `--foreign` also reports (with `--apply`, removes) orphaned or stale global DerivedData xcfs did not create. |
 | `xcfs doctor [path] [--session-check]` | Environment, hygiene and toolchain checks; `--session-check` runs the build-session regression check. |
-| `xcfs init [repo] [--write \| --user] [--force]` | Detect what the repository needs and suggest a config: the project or workspace, the scheme (the one named after it, else one that builds an app), the platform and a configuration for it, git-ignored settings files to carry, dependency directories to seed. Prints what it found and the next commands. `--write` saves `.xcfs.json` in the repository, `--user` saves `~/.config/xcfs/<repo>.json` and leaves the repository untouched; an existing config is never overwritten without `--force`. |
+| `xcfs init [repo] [--write \| --user] [--force]` | Detect what the repository needs and suggest a config: the project or workspace, the scheme (the one named after it, else one that builds an app), the platform and a configuration for it, git-ignored settings files to carry, dependency directories to seed and the lock files that key them; an XcodeGen or Tuist project's generated project and workspace are seeded too (or, when not generated yet, it says what to run). Prints what it found and the next commands. `--write` saves `.xcfs.json` in the repository, `--user` saves `~/.config/xcfs/<repo>.json` and leaves the repository untouched; an existing config is never overwritten without `--force`. |
 | `xcfs trust <repo>` | Approve the commands a repository's config runs. |
 | `xcfs uninstall [--apply]` | List everything xcfs made on this machine — worktrees, pools, build output, dependency snapshots, the experimental driver's cache, simulators, its hooks in Claude Code's settings, its state — and with `--apply` remove it. A worktree or slot with unsaved work is kept, with the state that knows about it (exit 5). Configs and the program itself are left. |
 
@@ -358,7 +358,7 @@ state, from one lease to the next; returning a slot keeps its server (and the an
 | `leaseHours` | 24 | a leased slot idle this long is flagged; `gc --apply` returns it if clean |
 | `warmOnRelease` | true | rebuild a returned slot at the baseline in the background |
 | `buildTimeout` | 3600 | seconds before a build is killed (exit 9) |
-| `warmJobs` | 0 | slots one warm-up builds side by side; 0 means one per 16 GB of memory (a 64 GB machine warms 3 at a time) |
+| `warmJobs` | 0 | slots one warm-up builds side by side; 0 means one per 16 GB of memory (a 64 GB machine warms up to 4 at a time) |
 | `sessionIdleMinutes` | 30 | a checkout's build session (and its `swbuild` and build service, ≈0.7 GB resident) quits after this long unused; the next build starts it again |
 
 | variable | |
@@ -459,7 +459,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 72 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 74 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

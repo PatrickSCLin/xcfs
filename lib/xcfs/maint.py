@@ -84,6 +84,26 @@ def cmd_gc(a):
     a.result(actions=[list(x) for x in actions], foreign=[[c["kind"], c["path"]] for c in foreign], applied=apply)
 
 
+def sizing_advice(settings, mem=None):
+    """How many slots and parallel warm-ups suit this machine's memory. Measured on mid-size apps: one agent building
+    in a slot peaks at about 3–4 GB, a slot's warm-up (a full build) at about 8 GB; xcfs warms one slot per 16 GB at a
+    time by default."""
+    mem = pool.memory_gb() if mem is None else mem
+    if not mem:
+        return []
+    jobs = int(settings.get("warmJobs") or 0) or max(1, mem // 16)
+    out = ["%d GB of memory: a warm-up builds %d slot(s) at a time (warmJobs %s); pools have %d slot(s) unless a "
+           "project says otherwise (slots)" % (mem, jobs, settings.get("warmJobs") or "0 = one per 16 GB",
+                                                 settings["slots"])]
+    if mem < 32:
+        out.append("with less than 32 GB, keep pools at 1–2 slots and warmJobs at 1 (settings.json), and run at most "
+                   "two agents that build at the same time; three building agents peaked at 8–12 GB with xcfs on a "
+                   "mid-size app, plus the agents themselves")
+    out.append("each slot needs %d GB free on the volume to be created or warmed (slotDiskGB); measured: 1.5–3 GB of "
+               "build output per slot on mid-size apps" % settings["slotDiskGB"])
+    return out
+
+
 def cmd_doctor(a):
     probs = []
 
@@ -130,18 +150,25 @@ def cmd_doctor(a):
                [s["src"] for s in reg["slots"].values() if not os.path.isdir(s["src"]) and s["state"] != "creating"]
     check(not gone, "registry matches disk" + (" (%d row(s) point nowhere: run `xcfs gc --apply`)" % len(gone) if gone
                                                else ""))
-    a.result(problems=probs)
+    advice = sizing_advice(settings) if settings else []
+    for line in advice:
+        say("  note " + line)
+    a.result(problems=probs, advice=advice)
     if probs:
         raise Fail("%d problem(s)" % len(probs))
 
 
 def suggest_config(repo, notes=None):
     pairs = adapters_for(repo, {})
-    seed_dirs, carry, toolchains = [], [], []
+    seed_dirs, seed_key, carry, toolchains = [], [], [], []
+    if not pairs and notes is not None:
+        for name, ad in builtin_adapters().items():
+            notes += ["%s: %s" % (name, n) for n in ad.undetected(repo)]
     for ad, entry in pairs:
         for s in ad.suggest_seed(repo):
             if s not in seed_dirs:
                 seed_dirs.append(s)
+        seed_key += [k for k in ad.suggest_seed_key(repo) if k not in seed_key]
         entry, more, said = ad.suggest(repo, entry)
         toolchains.append(entry)
         carry += [c for c in more if c not in carry]
@@ -150,6 +177,8 @@ def suggest_config(repo, notes=None):
     cfg = {"version": 1}
     if seed_dirs:
         cfg["seed"] = seed_dirs
+        if seed_key:
+            cfg["seedKey"] = seed_key
     if carry:
         cfg["carry"] = carry
     cfg["toolchains"] = toolchains
