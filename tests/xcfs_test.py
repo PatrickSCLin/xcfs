@@ -1007,7 +1007,7 @@ def t47_experimental_swift_driver_follows_the_selected_xcode():
     from xcfs.adapters.xcode import XcodeAdapter
     from xcfs.adapters import swift_driver as sd
     a = XcodeAdapter()
-    for v in ("auto", "native", "api-digests"):
+    for v in ("auto", "native", "patched", "api-digests"):
         assert a.validate({"adapter": "xcode", "swiftDriver": v}) == [], v
     assert a.validate({"adapter": "xcode", "swiftDriver": "fast"}), "an unknown swiftDriver value must be refused"
     v642 = sd.parse_version("swift-driver version: 1.168.6 Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\n")
@@ -1019,7 +1019,8 @@ def t47_experimental_swift_driver_follows_the_selected_xcode():
     assert sd.kit_for(v641) == ("swift-6.4.1-RELEASE", sd.KITS["6.4"]), "a release of the same line uses its line's patch"
     assert sd.kit_for(sd.parse_version("Apple Swift version 6.5 (swiftlang-6.5.0.1.1 clang-2200)"))[0] is None
     assert "6.5" in sd.kit_for(sd.parse_version("swift-driver version: 1.170 Apple Swift version 6.5 (swiftlang-6.5.0.1.1 clang-2200)"))[1]
-    ctx = lambda **e: type("Ctx", (), {"entry": dict(e, sharedXcodeCaches=False)})
+    plain = lambda **e: type("Ctx", (), {"entry": dict(e, sharedXcodeCaches=False)})
+    ctx = lambda **e: plain(**dict({"swiftDriver": "patched"}, **e))   # the experimental driver is asked for
     started = []
     saved = (os.environ.get("XCFS_CACHE"), os.environ.pop("XCFS_SWIFT_DRIVER", None), sd.start_build)
     os.environ["XCFS_CACHE"] = SB + "/cache-driver"
@@ -1028,7 +1029,10 @@ def t47_experimental_swift_driver_follows_the_selected_xcode():
         sd._selected = dict(v642, developer_dir="/Applications/XcodeA.app/Contents/Developer")
         root_a = sd.root()
         assert "6.4.2-swiftlang-6.4.2.1.9-" in root_a
-        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and started == [1], "auto builds a missing driver"
+        for e in ({}, {"swiftDriver": "native"}, {"swiftDriver": "auto"}):   # opt-in since 0.3
+            assert "SWIFT_EXEC" not in a.build_settings(plain(**e), {}) and started == [], "nothing is built unless asked: %s" % e
+            assert a.swift_driver_decision.startswith("native"), a.swift_driver_decision
+        assert "SWIFT_EXEC" not in a.build_settings(ctx(), {}) and started == [1], "patched builds a missing driver"
         os.makedirs(root_a + "/bin")
         wrapper = root_a + "/bin/swiftc"
         open(wrapper, "w").write("#!/bin/sh\n"); os.chmod(wrapper, 0o755)
@@ -1611,7 +1615,7 @@ def t66_compile_cache_settings():
     assert full["OTHER_SWIFT_FLAGS"].startswith("$(inherited) ") and "%s=/^checkout" % c.root in full["OTHER_SWIFT_FLAGS"]
     # the experimental driver cannot use the cache: Xcode's own driver, said so
     a = xa.XcodeAdapter()
-    assert a.swift_driver(dict(entry, compileCache="all")) is None and "compilation cache" in a.swift_driver_decision
+    assert a.swift_driver(dict(entry, compileCache="all", swiftDriver="patched")) is None and "compilation cache" in a.swift_driver_decision
     assert "compileCache must be" in " ".join(a.validate(dict(entry, compileCache="yes")))
     assert not [p for p in a.validate(dict(entry, compileCache="dependencies")) if "compileCache" in p]
     # a test failure's #filePath in the mapped form points back into the checkout

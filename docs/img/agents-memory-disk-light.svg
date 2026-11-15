@@ -4,16 +4,16 @@
 <rect x="190.0" y="34" width="263.2" height="18" rx="2" fill="#8c959f"/>
 <path d="M444.9 43.0 H461.4 M444.9 38.0 V48.0 M461.4 38.0 V48.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
 <text x="467.4" y="48" fill="#1f2328">23.9–25.4 GB</text>
-<rect x="190.0" y="58" width="104.7" height="18" rx="2" fill="#0969da"/>
-<path d="M274.0 67.0 H315.4 M274.0 62.0 V72.0 M315.4 62.0 V72.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="321.4" y="72" fill="#1f2328">7.9–11.8 GB</text>
+<rect x="190.0" y="58" width="106.8" height="18" rx="2" fill="#0969da"/>
+<path d="M278.0 67.0 H315.6 M278.0 62.0 V72.0 M315.6 62.0 V72.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="321.6" y="72" fill="#1f2328">8.3–11.8 GB</text>
 <text x="0" y="114" fill="#1f2328" font-weight="600">Wikipedia iOS, memory</text>
 <rect x="190.0" y="100" width="165.6" height="18" rx="2" fill="#8c959f"/>
 <path d="M353.2 109.0 H357.9 M353.2 104.0 V114.0 M357.9 104.0 V114.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
 <text x="363.9" y="114" fill="#1f2328">15.3–15.7 GB</text>
-<rect x="190.0" y="124" width="72.6" height="18" rx="2" fill="#0969da"/>
+<rect x="190.0" y="124" width="72.6" height="18" rx="2" fill="#8250df"/>
 <path d="M247.2 133.0 H278.0 M247.2 128.0 V138.0 M278.0 128.0 V138.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="284.0" y="138" fill="#1f2328">5.4–8.2 GB</text>
+<text x="284.0" y="138" fill="#1f2328">5.4–8.2 GB with the experimental driver</text>
 <text x="0" y="180" fill="#1f2328" font-weight="600">Ice Cubes, left on disk</text>
 <rect x="190.0" y="166" width="49.5" height="18" rx="2" fill="#8c959f"/>
 <path d="M239.5 175.0 H239.5 M239.5 170.0 V180.0 M239.5 170.0 V180.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
@@ -30,4 +30,6 @@
 <text x="17" y="310" fill="#59636e">plain git worktrees</text>
 <rect x="172" y="300" width="12" height="12" rx="2" fill="#0969da"/>
 <text x="189" y="310" fill="#59636e">xcfs</text>
+<rect x="239" y="300" width="12" height="12" rx="2" fill="#8250df"/>
+<text x="256" y="310" fill="#59636e">xcfs + experimental driver (opt-in)</text>
 </svg>

@@ -123,6 +123,16 @@ def generated_containers(root):
     return [n for n in names if n.endswith((".xcodeproj", ".xcworkspace")) and git_ok(root, "check-ignore", "-q", n)]
 
 
+# "swiftDriver": "native" (the default) or "patched"; "api-digests" is patched's earlier name, "auto" the default
+# before 0.3, which now means native: the experimental driver is never fetched or built unless asked for.
+DRIVER_MODES = ("native", "patched", "api-digests", "auto")
+
+
+def driver_mode(entry):
+    m = os.environ.get("XCFS_SWIFT_DRIVER") or entry.get("swiftDriver", "native")
+    return "patched" if m in ("patched", "api-digests") else "native"
+
+
 def shared_schemes(root, container):
     """[(name, builds an app)] of the shared schemes of a workspace or project (and of the projects next to it)."""
     paths = glob.glob(os.path.join(root, container, "xcshareddata", "xcschemes", "*.xcscheme"))
@@ -277,8 +287,8 @@ class XcodeAdapter(Adapter):
         if "skipScripts" in entry and entry["skipScripts"] != "auto" and not (
                 isinstance(entry["skipScripts"], list) and all(isinstance(x, str) for x in entry["skipScripts"])):
             p.append("skipScripts must be \"auto\" or a list of script phase names")
-        if entry.get("swiftDriver", "auto") not in ("auto", "native", "api-digests"):
-            p.append("swiftDriver must be \"auto\", \"native\" or \"api-digests\"")
+        if entry.get("swiftDriver", "native") not in DRIVER_MODES:
+            p.append("swiftDriver must be \"native\" (the default) or \"patched\" (the experimental Swift driver)")
         if entry.get("driver", "auto") not in ("xcodebuild", "session", "auto"):
             p.append("driver must be \"xcodebuild\", \"session\" or \"auto\"")
         if entry.get("compileCache", "off") not in COMPILE_CACHE_MODES:
@@ -493,14 +503,15 @@ class XcodeAdapter(Adapter):
     _driver_noted = set()
 
     def swift_driver(self, entry):
-        """The experimental Swift driver's SWIFT_EXEC wrapper when the entry allows it ("swiftDriver": "auto", the
-        default, or "api-digests"; $XCFS_SWIFT_DRIVER overrides) and it is built for the selected Xcode's Swift.
-        In auto mode a missing driver is built in the background; until then, and for any other Swift, builds use
-        Xcode's own driver."""
+        """The experimental Swift driver's SWIFT_EXEC wrapper, only when asked for ("swiftDriver": "patched", or its
+        earlier name "api-digests"; $XCFS_SWIFT_DRIVER overrides the config) and built for the selected Xcode's Swift.
+        A missing driver is then built in the background; until then, and for any other Swift, builds use Xcode's own
+        driver. The default, "native", never fetches or builds anything; "auto" (the default before 0.3) means the same."""
         from . import swift_driver as sd
-        mode = os.environ.get("XCFS_SWIFT_DRIVER") or entry.get("swiftDriver", "auto")
-        if mode == "native":
-            XcodeAdapter.swift_driver_decision = "native (configured)"
+        mode = driver_mode(entry)
+        if mode != "patched":
+            XcodeAdapter.swift_driver_decision = "native (%s)" % ("default" if mode == "native" else
+                                                                  "\"auto\" means \"native\" since 0.3")
             return None
         if compile_cache_mode(entry) != "off":
             XcodeAdapter.swift_driver_decision = "native: the compilation cache (compileCache) needs Xcode's own driver"
@@ -514,7 +525,7 @@ class XcodeAdapter(Adapter):
             if log:
                 why = "building it in the background for %s (log: %s)" % (sd.selected_swift(), log)
         XcodeAdapter.swift_driver_decision = "native: " + why
-        if why not in XcodeAdapter._driver_noted and (mode == "api-digests" or buildable):
+        if why not in XcodeAdapter._driver_noted:
             from ..util import warn
             warn("experimental Swift driver: %s; this build uses Xcode's own driver" % why)
             XcodeAdapter._driver_noted.add(why)
@@ -960,11 +971,16 @@ class XcodeAdapter(Adapter):
         checks.append({"ok": not bad, "message": "no build output inside local package directories" +
                        "".join("\n         " + b for b in bad)})
         from . import swift_driver as sd
-        mode = os.environ.get("XCFS_SWIFT_DRIVER") or entry.get("swiftDriver", "auto")
-        wrapper, why, buildable = sd.status()
-        checks.append({"ok": True, "message": "experimental Swift driver (%s): %s" % (
-            mode, "off" if mode == "native" else wrapper if wrapper else
-            why + ("; the next build starts building it" if buildable else "") + "; builds use Xcode's own driver")})
+        mode, said = driver_mode(entry), os.environ.get("XCFS_SWIFT_DRIVER") or entry.get("swiftDriver", "native")
+        if mode != "patched":
+            checks.append({"ok": True, "message": "experimental Swift driver: off (%s); \"swiftDriver\": \"patched\" turns "
+                           "it on (Xcode 27.x, Swift 6.4 only)" % ("default" if said == "native" else
+                                                                 "\"%s\" means \"native\" since 0.3" % said)})
+        else:
+            wrapper, why, buildable = sd.status()
+            checks.append({"ok": True, "message": "experimental Swift driver (patched): %s" % (
+                wrapper if wrapper else why + ("; the next build starts building it" if buildable else "") +
+                "; builds use Xcode's own driver")})
         from . import xcode_session
         checks += xcode_session.doctor(self, root, entry)
         return checks

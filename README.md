@@ -12,7 +12,7 @@ It plugs into Claude Code's worktree and session hooks, so `claude --worktree` a
 get xcfs checkouts with no change in how anyone works.
 
 `xcfs` is the tool's name, not a kernel file system: git worktrees, APFS clones and Xcode's own build service; no root,
-no kernel extension, Xcode unmodified. **v0.2.0**, Python 3 standard library only (3.9 or later), MIT;
+no kernel extension, Xcode unmodified. **v0.3.0**, Python 3 standard library only (3.9 or later), MIT;
 [docs/design.md](docs/design.md) says what is measured, what is planned and what is not verified.
 
 ## The problems it solves
@@ -23,13 +23,13 @@ Measured on public apps, three agents at once unless noted, on one machine: **Ma
 
 | when several agents each get a worktree | plain `git worktree` + `xcodebuild` | xcfs |
 |---|---|---|
-| every new worktree builds from nothing | every batch waits for cold builds: 284–302 s on Ice Cubes, 375–387 s on Wikipedia | slots stay built; the next batch on a pool: 111–121 s, 187–203 s |
+| every new worktree builds from nothing | every batch waits for cold builds: 284–302 s on Ice Cubes, 375–387 s on Wikipedia | slots stay built; the next batch on a pool: 138–151 s on Ice Cubes (111–121 s with the opt-in experimental driver; Wikipedia, measured with it only: 187–203 s) |
 | DerivedData outlives the worktree | 1.5 GB per worktree left in the global DerivedData (Ice Cubes), 2.9 GB (Wikipedia) | build output lives with the checkout and goes with it: nothing left |
-| memory | 24–25 GB, 15–16 GB at the peak | 8–12 GB, 5–8 GB |
+| memory | 24–25 GB, 15–16 GB at the peak | 8–12 GB; 5–8 GB (with the experimental driver) |
 | agents test on the simulator they all name | a test run killed by another agent's: 1 of 6 runs (Ice Cubes), 2 of 6 (Wikipedia) | one simulator per checkout: none |
 | dependencies resolved and fetched again for every worktree | each worktree resolves its packages, installs its pods | the dependency layer is cloned in (APFS clonefile, blocks shared) |
 | `xcodebuild`'s fixed cost on every build | a no-op build: 5.9 s (Ice Cubes, one agent) | a persistent build session: 0.9 s; `xcfs check` compiles one file in 1–4 s |
-| a public declaration in a widely imported module recompiles everything that imports it | 25 s (Ice Cubes), 35 s (Wikipedia) | 6 s, 15 s with the optional experimental Swift driver |
+| a public declaration in a widely imported module recompiles everything that imports it | 25 s (Ice Cubes), 35 s (Wikipedia) | the same by default; 6 s, 15 s with the experimental Swift driver, opt-in (`"swiftDriver": "patched"`) |
 | cleanup scripts guess by path or age | `rm -rf` and hope | a registry: nothing with unsaved work, nothing xcfs did not create, is deleted |
 
 ## Benchmarks
@@ -42,9 +42,11 @@ All charts: MacBook Pro, Apple M1 Max (10 cores), 64 GB, macOS 27.2, Xcode 27.2,
 </picture>
 
 Three agents start at once, each with a task defined in advance: add a function, get a compile error, fix it, add a
-unit test, run it, build the app. The pool pays its warm-up once (three slots: 280–301 s on Ice Cubes, 278–279 s on
-Wikipedia), so the first batch on a fresh pool is slower than plain worktrees; every later batch is 1.8–2.7× faster.
-MacBook Pro, M1 Max, 64 GB, macOS 27.2, Xcode 27.2, one architecture; whiskers are the range over two runs.
+unit test, run it, build the app. The pool pays its warm-up once (three Ice Cubes slots: 214–226 s), so the first
+batch on a fresh pool is slower than plain worktrees; every later batch is 1.9–2.2× faster. The purple bars are the
+experimental Swift driver, opt-in: later batches faster still (2.3–2.7×), the warm-up longer; Wikipedia was measured
+with it only. MacBook Pro, M1 Max, 64 GB, macOS 27.2, Xcode 27.2, one architecture; whiskers are the range over two
+or three runs.
 [Tables and method](docs/benchmark.md#three-agents-real-tasks-at-the-same-time).
 
 <picture>
@@ -62,8 +64,8 @@ side by side; `warmJobs` builds fewer at once (a smaller machine; not measured o
 
 Six public apps, four of them never built while xcfs was developed, each with a config that only names the project, the
 scheme and the destination. One agent's round: checkout, build, five edits each checked, a final build, cleanup. Plain:
-three runs each; xcfs: the run after the fixes those apps led to (two on Ice Cubes). 3–10× less time, no build
-failed, and plain worktrees left 1.5–6 GB behind each, xcfs nothing.
+three runs each; xcfs: the run after the fixes those apps led to (two on Ice Cubes). 2–4× less time (3–10× with the
+experimental driver), no build failed, and plain worktrees left 1.5–6 GB behind each, xcfs nothing.
 [Table](docs/benchmark.md#zero-configuration-on-projects-xcfs-was-not-developed-on).
 
 A pool at rest (three Ice Cubes slots): 2.3 GB resident and no CPU while idle; after 30 minutes without a build each
@@ -151,8 +153,8 @@ hooks above and let the agent tool do it.
 - Xcode for the Xcode adapter; the persistent build session uses the `swbuild` tool inside Xcode
   ([Build session](#build-session)).
 - A repository, its worktrees and its pool on one APFS volume; `xcfs` refuses rather than silently copying in full.
-- Optional: the experimental Swift driver applies to Xcode 27.x (Swift 6.4) only; elsewhere builds use Xcode's own
-  driver. [docs/xcode-versions.md](docs/xcode-versions.md) lists what was run on which Xcode version and what happens
+- Optional, off unless asked for: the experimental Swift driver applies to Xcode 27.x (Swift 6.4) only; elsewhere
+  builds use Xcode's own driver. [docs/xcode-versions.md](docs/xcode-versions.md) lists what was run on which Xcode version and what happens
   on one that does not fit.
 
 ## Correctness
@@ -185,13 +187,14 @@ To install one file instead (a dotfiles manager, a package manager), build it: `
 then `scripts/homebrew-formula.sh X.Y.Z` fills the formula's url and sha256 from the tarball GitHub serves for the tag;
 copy it into the tap as `Formula/xcfs.rb`.
 
-What runs on its own: on the first build with an Xcode of the Swift 6.4 line, xcfs builds a patched
-[swift-driver](https://github.com/swiftlang/swift-driver) in the background (`git clone` of the release tag — for the
-releases the patch was made on, only if the tag points at the known commit; `git apply`; `swift build`; a correctness
-self-test; one to two minutes, about 400 MB in `~/Library/Caches/xcfs/swift-driver`, plus the per-module digests it
-keeps there), and uses it for Swift compilation once the self-test has passed. Until then, and whenever anything does
-not fit, builds use Xcode's own driver. `"swiftDriver": "native"` in a configuration (or `XCFS_SWIFT_DRIVER=native`)
-turns it off; `xcfs doctor` shows its state.
+Nothing is fetched or built on its own: by default builds use Xcode's own Swift driver. Only with
+`"swiftDriver": "patched"` in a project's toolchain entry (or `XCFS_SWIFT_DRIVER=patched`) does xcfs build a patched
+[swift-driver](https://github.com/swiftlang/swift-driver), on the first build with an Xcode of the Swift 6.4 line, in
+the background (`git clone` of the release tag — for the releases the patch was made on, only if the tag points at the
+known commit; `git apply`; `swift build`; a correctness self-test; one to two minutes, about 400 MB in
+`~/Library/Caches/xcfs/swift-driver`, plus the per-module digests it keeps there), and use it for Swift compilation
+once the self-test has passed. Until then, and whenever anything does not fit, builds use Xcode's own driver;
+`xcfs doctor` shows its state.
 
 **Removing it.** `xcfs uninstall` lists everything xcfs made on the machine — its worktrees, pools, build output,
 dependency snapshots, the experimental driver's cache, simulators, its hooks in Claude Code's settings and its state —
@@ -209,11 +212,12 @@ run it again); your configs stay. Then `brew uninstall xcfs`.
 | simulators | one per checkout, created and first booted during the slot's warm-up, deleted with the checkout |
 | cleanup | a registry of what xcfs created; nothing is deleted that holds unsaved work or is not provably its own |
 
-**The experimental Swift driver.** On Xcode 27.x (Swift 6.4), xcfs builds a patched swift-driver in the background
-and uses it once it passes its self-test: after a public declaration is added to a widely imported module, it
-recompiles only the files that use what changed (Ice Cubes 25 → 6 s, Wikipedia 35 → 15 s). It is on by default where it
-applies and off everywhere else. In the three-agent tasks it made the next batches faster (111–121 vs 138–151 s) and
-the fresh pool's warm-up slower (408–419 vs 354–376 s, warm-up included). See
+**The experimental Swift driver (opt-in).** With `"swiftDriver": "patched"`, on Xcode 27.x (Swift 6.4), xcfs builds a
+patched swift-driver in the background and uses it once it passes its self-test: after a public declaration is added
+to a widely imported module, it recompiles only the files that use what changed (Ice Cubes 25 → 6 s, Wikipedia
+35 → 15 s). It is off by default: it means building and running a compiler driver that is not Apple's. In the
+three-agent tasks it made the next batches faster (111–121 vs 138–151 s) and the fresh pool slower (408–419 vs
+354–376 s, warm-up included). See
 [its notes](lib/xcfs/adapters/swiftdriver/README.md) and [docs/incremental-swift.md](docs/incremental-swift.md).
 
 Measured on a large app (≈1,800 targets) with prototypes of the same mechanisms: a no-op build 34–36 s → ≈4 s, a
@@ -334,9 +338,9 @@ module, compilation and SDK stat caches Xcode shares between projects); `skipScr
 outputs, `swiftlint` or `swiftformat --lint` without a fix mode, nothing written to a file, every other line plain
 shell plumbing — are left out, since they cannot change what is built; a list names exactly the phases to leave out,
 for instance a project's localization sync, and `[]` keeps them all; xcfs removes them from a copy of the project
-description, the project itself is untouched, and each build's JSON lists what it skipped and why); `swiftDriver` (`auto` by default: on an Xcode of the Swift 6.4 line, build with a patched Swift driver that recompiles only the files a
-changed interface really affects, built in the background on first use — see [its notes](lib/xcfs/adapters/swiftdriver/README.md);
-`native` turns it off); `compileCache` (`off` by default; experimental: Xcode's compilation cache shared by every
+description, the project itself is untouched, and each build's JSON lists what it skipped and why); `swiftDriver` (`native` by default: Xcode's own driver; `patched`: on an Xcode of the Swift 6.4 line, build with a
+patched Swift driver that recompiles only the files a changed interface really affects, built in the background on
+first use — see [its notes](lib/xcfs/adapters/swiftdriver/README.md); `auto`, the default before 0.3, now means `native`); `compileCache` (`off` by default; experimental: Xcode's compilation cache shared by every
 checkout, with each checkout's own paths kept out of its keys so a slot replays what another compiled. `"dependencies"`
 keeps the checkout's sources at their real paths and shares what lies outside them (packages, Clang modules);
 `"all"` maps the whole checkout, so every compile job is shared, but `#filePath` at run time reads `/^checkout/…`,

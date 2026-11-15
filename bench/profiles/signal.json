@@ -53,8 +53,8 @@
   },
   "variants": {
    "defaults": {},
-   "defaults-without-driver-patch": {
-    "swiftDriver": "native"
+   "experimental-driver": {
+    "swiftDriver": "patched"
    }
   },
   "measureCheck": true

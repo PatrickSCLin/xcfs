@@ -1,7 +1,8 @@
 # Experimental: a Swift driver that rebuilds only what an API change touches
 
-**Status: experimental, on by default where it applies.** For the Swift 6.4 release line (Xcode 27.x); with an Xcode
-of another line, and until it is built, xcfs builds with Xcode's own driver and says so.
+**Status: experimental, opt-in** (`"swiftDriver": "patched"`; it was on by default before xcfs 0.3). For the Swift 6.4
+release line (Xcode 27.x); with an Xcode of another line, and until it is built, xcfs builds with Xcode's own driver and
+says so.
 
 ## The problem
 
@@ -42,15 +43,17 @@ type; a function whose return type changes inside the same module.
 Measured on Wikipedia iOS (fresh checkouts, three runs each, see `docs/benchmark.md`): adding a public function to a
 package that ~300 app files import took 33–36 s with the stock driver and 15 s with this one; edits that do not
 change an interface cost the same, and so does the first build of a checkout. On Ice Cubes the same edit took
-25.3–25.6 s and 6.0–6.2 s. A whole agent round (checkout, build, five edits each checked, final build) with xcfs's
-defaults, with and without this driver: 39.1 → 17.1 s on Ice Cubes, 132.3 → 82.0 s on Wikipedia, and on four apps
+25.3–25.6 s and 6.0–6.2 s. A whole agent round (checkout, build, five edits each checked, final build) with xcfs,
+without and with this driver: 39.1 → 17.1 s on Ice Cubes, 132.3 → 82.0 s on Wikipedia, and on four apps
 xcfs was not developed on 73.9 → 33.2 s, 93.5 → 57.4 s, 109.6 → 101.2 s and 159.9 → 98.9 s (`docs/benchmark.md`,
 zero-configuration table). Whether it should move upstream, and how it compares with Xcode's compilation cache:
 `docs/incremental-swift.md`.
 
 ## Use
 
-Nothing to configure. With the default `"swiftDriver": "auto"`, xcfs reads the selected Xcode's `swiftc --version`
+Turn it on in a project's toolchain entry: `"swiftDriver": "patched"` (or `XCFS_SWIFT_DRIVER=patched` for one shell).
+By default (`"native"`) nothing below happens: no clone, no build, Xcode's own driver. With `"patched"`, xcfs reads the
+selected Xcode's `swiftc --version`
 (it follows `xcode-select` and `DEVELOPER_DIR`), derives the swift-driver release tag of that Swift
 (`swift-6.4.2-RELEASE`) and the patch of its release line, and on the first build with that Xcode starts building
 the driver in the background: clone the tag, `git apply --check` (a patch that does not apply means Xcode's own
@@ -72,8 +75,9 @@ Switching Xcode picks the matching install, or starts building it. A failed buil
 retried after a day. Each build's JSON says which driver it used (`swift_driver`, with the reason when it is Xcode's
 own), and `xcfs doctor` reports the state.
 
-Overrides, in the toolchain entry of the config: `"swiftDriver": "native"` never uses it; `"api-digests"` warns on
-every build that cannot use it. `XCFS_SWIFT_DRIVER=native|auto|api-digests` overrides the config. To build by hand:
+Values, in the toolchain entry of the config: `"native"` (the default) never uses it; `"patched"` uses it, and warns
+on every build that cannot; `"api-digests"` is `"patched"`'s earlier name, and `"auto"`, the default before 0.3, now
+means `"native"`. `XCFS_SWIFT_DRIVER` overrides the config with the same values. To build by hand:
 `build.sh <install dir> <tag> <patch> <Package.resolved> <driver version> [<commit>]` (see its header).
 
 Patches by release line (`KITS` in `../swift_driver.py`): 6.4 — `api-digests-swift-6.4.2.patch` with

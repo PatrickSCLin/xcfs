@@ -60,8 +60,9 @@ This is the right idea, and it is what xcfs's pool is. What it takes to make it 
 - an incremental build session instead of `xcodebuild`'s fixed cost (a no-op 5.9 → 0.9 s on Ice Cubes), and a check
   of single files (1–4 s).
 
-With that, the next batch of three agents takes 111–121 s on Ice Cubes and 187–203 s on Wikipedia instead of 284–302
-and 375–387 s, at 8–12 and 5–8 GB, and removal leaves nothing behind. The first batch on a fresh pool is slower than
+With that, the next batch of three agents takes 138–151 s on Ice Cubes instead of 284–302 s, at 8–12 GB instead of
+24–25, and removal leaves nothing behind; with the opt-in experimental Swift driver, 111–121 s, and on Wikipedia
+(measured with the driver only) 187–203 s instead of 375–387 s. The first batch on a fresh pool is slower than
 plain worktrees (it pays for the warm-up), and starting without a warm-up is slower still (451 s on Ice Cubes, one
 run): warm the pool before the agents need it.
 

@@ -18,14 +18,16 @@ checkout's build session, which quits after `sessionIdleMinutes` (30) unused.
 - **Tools it starts:** `git`, and for the Xcode adapter `xcodebuild`, `xcrun simctl`, the `swbuild` tool inside Xcode
   and `swiftc`; for the Bazel adapter the project's `bazel`. An external adapter is an executable named
   `xcfs-adapter-<name>` on `PATH`, run only when a project's config lists it.
-- **Network:** `git fetch` in the repositories it manages (to bring idle slots to the baseline), and, for the
-  experimental Swift driver, a `git clone` of `https://github.com/swiftlang/swift-driver` at the release tag of the
-  installed Swift. The tools it starts use the network as they would without xcfs (package resolution, for one).
-- **The experimental Swift driver** is a patched build of that clone, used for Swift compilation on the Xcode
-  releases it applies to once its self-test has passed. For the releases the patch was made on, the clone is used
-  only if the tag points at the commit recorded in xcfs; the patch is applied with `git apply`, never fuzzily. It is
-  built in the user's cache directory and nothing in Xcode is modified. `"swiftDriver": "native"` in a configuration,
-  or `XCFS_SWIFT_DRIVER=native`, turns it off; `xcfs doctor` shows whether it is in use.
+- **Network:** `git fetch` in the repositories it manages (to bring idle slots to the baseline), and, only when a
+  project turns on the experimental Swift driver (`"swiftDriver": "patched"`), a `git clone` of
+  `https://github.com/swiftlang/swift-driver` at the release tag of the installed Swift. By default xcfs fetches and
+  builds no compiler code. The tools it starts use the network as they would without xcfs (package resolution, for one).
+- **The experimental Swift driver** (opt-in since 0.3; on by default in 0.2) is a patched build of that clone, used
+  for Swift compilation on the Xcode releases it applies to once its self-test has passed. For the releases the patch
+  was made on, the clone is used only if the tag points at the commit recorded in xcfs; the patch is applied with
+  `git apply`, never fuzzily. It is built in the user's cache directory and nothing in Xcode is modified. Without
+  `"swiftDriver": "patched"` in a configuration (or `XCFS_SWIFT_DRIVER=patched`) it is never fetched, built or used;
+  `xcfs doctor` shows whether it is in use.
 - **What it writes:** its state (`~/.local/state/xcfs`), its caches (`~/Library/Caches/xcfs`), its pools
   (`~/Library/Developer/xcfs/pools`), the worktrees it creates, and simulators it creates for its checkouts.
 - **Removing it:** `xcfs uninstall` lists all of the above and `xcfs uninstall --apply` removes it.

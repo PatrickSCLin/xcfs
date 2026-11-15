@@ -4,56 +4,56 @@
 <rect x="150.0" y="34" width="190.3" height="18" rx="2" fill="#8c959f"/>
 <path d="M329.2 43.0 H351.3 M329.2 38.0 V48.0 M351.3 38.0 V48.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
 <text x="357.3" y="48" fill="#1f2328">279–313 s</text>
-<rect x="150.0" y="58" width="21.3" height="18" rx="2" fill="#0969da"/>
-<text x="177.3" y="72" fill="#1f2328">33 s</text>
-<rect x="150.0" y="82" width="47.5" height="18" rx="2" fill="#80b9f2"/>
-<text x="203.5" y="96" fill="#1f2328">74 s</text>
+<rect x="150.0" y="58" width="47.5" height="18" rx="2" fill="#0969da"/>
+<text x="203.5" y="72" fill="#1f2328">74 s</text>
+<rect x="150.0" y="82" width="21.3" height="18" rx="2" fill="#8250df"/>
+<text x="177.3" y="96" fill="#1f2328">33 s</text>
 <text x="0" y="138" fill="#1f2328" font-weight="600">Element X</text>
 <rect x="150.0" y="124" width="180.8" height="18" rx="2" fill="#8c959f"/>
 <path d="M319.2 133.0 H342.5 M319.2 128.0 V138.0 M342.5 128.0 V138.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
 <text x="348.5" y="138" fill="#1f2328">263–299 s</text>
-<rect x="150.0" y="148" width="36.9" height="18" rx="2" fill="#0969da"/>
-<text x="192.9" y="162" fill="#1f2328">57 s</text>
-<rect x="150.0" y="172" width="60.1" height="18" rx="2" fill="#80b9f2"/>
-<text x="216.1" y="186" fill="#1f2328">94 s</text>
+<rect x="150.0" y="148" width="60.1" height="18" rx="2" fill="#0969da"/>
+<text x="216.1" y="162" fill="#1f2328">94 s</text>
+<rect x="150.0" y="172" width="36.9" height="18" rx="2" fill="#8250df"/>
+<text x="192.9" y="186" fill="#1f2328">57 s</text>
 <text x="0" y="228" fill="#1f2328" font-weight="600">Signal</text>
 <rect x="150.0" y="214" width="206.7" height="18" rx="2" fill="#8c959f"/>
 <path d="M353.9 223.0 H359.4 M353.9 218.0 V228.0 M359.4 218.0 V228.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
 <text x="365.4" y="228" fill="#1f2328">317–326 s</text>
-<rect x="150.0" y="238" width="65.1" height="18" rx="2" fill="#0969da"/>
-<text x="221.1" y="252" fill="#1f2328">101 s</text>
-<rect x="150.0" y="262" width="70.5" height="18" rx="2" fill="#80b9f2"/>
-<text x="226.5" y="276" fill="#1f2328">110 s</text>
+<rect x="150.0" y="238" width="70.5" height="18" rx="2" fill="#0969da"/>
+<text x="226.5" y="252" fill="#1f2328">110 s</text>
+<rect x="150.0" y="262" width="65.1" height="18" rx="2" fill="#8250df"/>
+<text x="221.1" y="276" fill="#1f2328">101 s</text>
 <text x="0" y="318" fill="#1f2328" font-weight="600">Home Assistant</text>
 <rect x="150.0" y="304" width="331.1" height="18" rx="2" fill="#8c959f"/>
 <path d="M466.5 313.0 H495.7 M466.5 308.0 V318.0 M495.7 308.0 V318.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
 <text x="501.7" y="318" fill="#1f2328">492–538 s</text>
-<rect x="150.0" y="328" width="63.6" height="18" rx="2" fill="#0969da"/>
-<text x="219.6" y="342" fill="#1f2328">99 s</text>
-<rect x="150.0" y="352" width="102.8" height="18" rx="2" fill="#80b9f2"/>
-<text x="258.8" y="366" fill="#1f2328">160 s</text>
+<rect x="150.0" y="328" width="102.8" height="18" rx="2" fill="#0969da"/>
+<text x="258.8" y="342" fill="#1f2328">160 s</text>
+<rect x="150.0" y="352" width="63.6" height="18" rx="2" fill="#8250df"/>
+<text x="219.6" y="366" fill="#1f2328">99 s</text>
 <text x="0" y="408" fill="#1f2328" font-weight="600">Ice Cubes</text>
 <rect x="150.0" y="394" width="97.9" height="18" rx="2" fill="#8c959f"/>
 <path d="M241.7 403.0 H254.0 M241.7 398.0 V408.0 M254.0 398.0 V408.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
 <text x="260.0" y="408" fill="#1f2328">143–162 s</text>
-<rect x="150.0" y="418" width="10.6" height="18" rx="2" fill="#0969da"/>
-<path d="M160.2 427.0 H161.0 M160.2 422.0 V432.0 M161.0 422.0 V432.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="167.0" y="432" fill="#1f2328">16–17 s</text>
-<rect x="150.0" y="442" width="24.8" height="18" rx="2" fill="#80b9f2"/>
-<path d="M174.5 451.0 H175.1 M174.5 446.0 V456.0 M175.1 446.0 V456.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="181.1" y="456" fill="#1f2328">38–39 s</text>
+<rect x="150.0" y="418" width="24.8" height="18" rx="2" fill="#0969da"/>
+<path d="M174.5 427.0 H175.1 M174.5 422.0 V432.0 M175.1 422.0 V432.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="181.1" y="432" fill="#1f2328">38–39 s</text>
+<rect x="150.0" y="442" width="10.6" height="18" rx="2" fill="#8250df"/>
+<path d="M160.2 451.0 H161.0 M160.2 446.0 V456.0 M161.0 446.0 V456.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="167.0" y="456" fill="#1f2328">16–17 s</text>
 <text x="0" y="498" fill="#1f2328" font-weight="600">Wikipedia iOS</text>
 <rect x="150.0" y="484" width="161.2" height="18" rx="2" fill="#8c959f"/>
 <path d="M308.1 493.0 H314.3 M308.1 488.0 V498.0 M314.3 488.0 V498.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
 <text x="320.3" y="498" fill="#1f2328">246–256 s</text>
-<rect x="150.0" y="508" width="52.7" height="18" rx="2" fill="#0969da"/>
-<text x="208.7" y="522" fill="#1f2328">82 s</text>
-<rect x="150.0" y="532" width="85.1" height="18" rx="2" fill="#80b9f2"/>
-<text x="241.1" y="546" fill="#1f2328">132 s</text>
+<rect x="150.0" y="508" width="85.1" height="18" rx="2" fill="#0969da"/>
+<text x="241.1" y="522" fill="#1f2328">132 s</text>
+<rect x="150.0" y="532" width="52.7" height="18" rx="2" fill="#8250df"/>
+<text x="208.7" y="546" fill="#1f2328">82 s</text>
 <rect x="0" y="576" width="12" height="12" rx="2" fill="#8c959f"/>
 <text x="17" y="586" fill="#59636e">plain worktree</text>
 <rect x="137" y="576" width="12" height="12" rx="2" fill="#0969da"/>
-<text x="154" y="586" fill="#59636e">xcfs defaults</text>
-<rect x="267" y="576" width="12" height="12" rx="2" fill="#80b9f2"/>
-<text x="284" y="586" fill="#59636e">xcfs, without the experimental driver</text>
+<text x="154" y="586" fill="#59636e">xcfs</text>
+<rect x="204" y="576" width="12" height="12" rx="2" fill="#8250df"/>
+<text x="221" y="586" fill="#59636e">xcfs + experimental driver (opt-in)</text>
 </svg>

@@ -18,8 +18,8 @@ It plugs into Claude Code's worktree and session hooks. Open source (MIT), macOS
 </picture>
 
 Three agents at once, each with a real task (add a function, fix a compile error, add and run a unit test, build the
-app), on Ice Cubes and Wikipedia iOS: every later batch on a pool is 1.8–2.7× faster than plain `git worktree` +
-`xcodebuild`; the first batch on a fresh pool pays for the warm-up and is slower. Peak memory is about half, nothing is
+app): on Ice Cubes every later batch on a pool is 1.9–2.2× faster than plain `git worktree` + `xcodebuild`
+(2.3–2.7× with the opt-in experimental Swift driver; Wikipedia iOS, measured with it: 1.8–2.1×); the first batch on a fresh pool pays for the warm-up and is slower. Peak memory is about half, nothing is
 left behind in DerivedData, and each agent tests on its own simulator. MacBook Pro, Apple M1 Max (10 cores), 64 GB,
 macOS 27.2, Xcode 27.2. [Method and tables](benchmark.md).
 

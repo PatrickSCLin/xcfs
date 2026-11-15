@@ -13,9 +13,9 @@ OUT = os.path.join(ROOT, "docs", "img")
 
 THEMES = {
     "light": {"text": "#1f2328", "muted": "#59636e", "grid": "#d1d9e0", "plain": "#8c959f", "xcfs": "#0969da",
-              "xcfs2": "#80b9f2", "whisker": "#1f2328"},
+              "xcfs2": "#80b9f2", "opt": "#8250df", "opt2": "#c8b3f5", "whisker": "#1f2328"},
     "dark": {"text": "#e6edf3", "muted": "#9198a1", "grid": "#3d444d", "plain": "#6e7681", "xcfs": "#4493f8",
-             "xcfs2": "#1f4f8f", "whisker": "#e6edf3"},
+             "xcfs2": "#1f4f8f", "opt": "#a371f7", "opt2": "#4c2f8a", "whisker": "#e6edf3"},
 }
 FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 
@@ -29,21 +29,25 @@ def rng(values):
 
 
 # ------------------------------------------------------------------ the data, from the results files
+# Before 0.3 the experimental Swift driver was on by default: in the results files "xcfs (defaults)" is xcfs WITH the
+# driver (now opt-in, "swiftDriver": "patched") and "xcfs (defaults-without-driver-patch)" is xcfs as it is by default
+# now. The charts label them by what they are.
+ICE = "tasks-icecubes-%s--results-ice-cubes-arm64-three-agents-real-tasks--20261115-%s.json"
+WIKI = "tasks-wikipedia-%s--results-wikipedia-ios-arm64-three-agents-real-tasks--20261115-%s.json"
 TASKS = {
     "Ice Cubes": {
-        "plain": ["tasks-icecubes-v4-rep1--results-ice-cubes-arm64-three-agents-real-tasks--20261115-062620.json",
-                  "tasks-icecubes-v4-rep2--results-ice-cubes-arm64-three-agents-real-tasks--20261115-064126.json"],
-        "xcfs": ["tasks-icecubes-v5-rep5--results-ice-cubes-arm64-three-agents-real-tasks--20261115-094011.json",
-                 "tasks-icecubes-v5-rep6--results-ice-cubes-arm64-three-agents-real-tasks--20261115-094853.json"],
+        "plain": [ICE % ("v4-rep1", "062620"), ICE % ("v4-rep2", "064126")],
+        "xcfs": [ICE % ("v4-rep2", "064126"), ICE % ("v4-rep3", "073552"), ICE % ("v4-rep4", "075201")],
+        "driver": [ICE % ("v5-rep5", "094011"), ICE % ("v5-rep6", "094853")],
     },
-    "Wikipedia iOS": {
-        "plain": ["tasks-wikipedia-rep1--results-wikipedia-ios-arm64-three-agents-real-tasks--20261115-161441.json",
-                  "tasks-wikipedia-rep2--results-wikipedia-ios-arm64-three-agents-real-tasks--20261115-163328.json"],
-        "xcfs": ["tasks-wikipedia-rep1--results-wikipedia-ios-arm64-three-agents-real-tasks--20261115-161441.json",
-                 "tasks-wikipedia-rep2--results-wikipedia-ios-arm64-three-agents-real-tasks--20261115-163328.json"],
+    "Wikipedia iOS": {   # measured with the driver only
+        "plain": [WIKI % ("rep1", "161441"), WIKI % ("rep2", "163328")],
+        "xcfs": [],
+        "driver": [WIKI % ("rep1", "161441"), WIKI % ("rep2", "163328")],
     },
 }
-FRESH, NEXT = "xcfs (defaults)", "xcfs (defaults), the next 3 agents on the same pool"
+WITH, WITHOUT = "xcfs (defaults)", "xcfs (defaults-without-driver-patch)"
+NEXT = ", the next 3 agents on the same pool"
 
 ZERO = [  # project, plain round files (three runs), xcfs round files
     ("Kickstarter", ["150920", "20261115-013105", "20261115-013631"], ["183610"], "kickstarter-ios-arm64-zero-config"),
@@ -63,18 +67,26 @@ def zero_file(profile, stamp):
     return "results-%s--%s.json" % (profile, stamp)
 
 
+def side(files, key):
+    """(fresh pool with warm-up, next batch, peak memory while the agents work) ranges, or None if not measured."""
+    runs = [load(f)["tasks"] for f in files]
+    if not runs:
+        return None
+    return {"fresh": rng([r[key]["wall_with_warm_seconds"] for r in runs]),
+            "next": rng([r[key + NEXT]["wall_with_warm_seconds"] for r in runs]),
+            "mem": rng([r[k]["peak_rss_kb"] / 2 ** 20 for r in runs for k in (key, key + NEXT)])}
+
+
 def task_numbers():
     out = {}
     for app, files in TASKS.items():
         plain = [load(f)["tasks"]["plain"] for f in files["plain"]]
-        xcfs = [load(f)["tasks"] for f in files["xcfs"]]
         out[app] = {
             "plain": rng([p["wall_seconds"] for p in plain]),
-            "fresh": rng([x[FRESH]["wall_with_warm_seconds"] for x in xcfs]),
-            "next": rng([x[NEXT]["wall_with_warm_seconds"] for x in xcfs]),
             "plain_mem": rng([p["peak_rss_kb"] / 2 ** 20 for p in plain]),
-            "xcfs_mem": rng([x[k]["peak_rss_kb"] / 2 ** 20 for x in xcfs for k in (FRESH, NEXT)]),
             "plain_left": rng([p["left_kb"] / 2 ** 20 for p in plain]),
+            "xcfs": side(files["xcfs"], WITHOUT),
+            "driver": side(files["driver"], WITH),
         }
     return out
 
@@ -83,9 +95,9 @@ def zero_numbers():
     out = []
     for name, plain, xcfs, profile in ZERO:
         p = [load(zero_file(profile, s))["round"]["plain"]["total_seconds"] for s in plain]
-        x = [load(zero_file(profile, s))["round"]["xcfs (defaults)"]["total_seconds"] for s in xcfs]
-        n = [load(zero_file(profile, s))["round"]["xcfs (defaults-without-driver-patch)"]["total_seconds"] for s in xcfs]
-        out.append((name, rng(p), rng(x), rng(n)))
+        x = [load(zero_file(profile, s))["round"][WITHOUT]["total_seconds"] for s in xcfs]
+        d = [load(zero_file(profile, s))["round"][WITH]["total_seconds"] for s in xcfs]
+        out.append((name, rng(p), rng(x), rng(d)))
     return out
 
 
@@ -146,25 +158,41 @@ def write(name, make):
         print("docs/img/%s-%s.svg" % (name, theme))
 
 
+NOT_MEASURED = (0.0, 0.0)
+
+
+def wall_bars(n):
+    bars = [("plain", n["plain"], "every batch")]
+    if n["xcfs"]:
+        bars += [("xcfs", n["xcfs"]["next"], "the next batch on the pool"),
+                 ("xcfs2", n["xcfs"]["fresh"], "a fresh pool, warm-up included")]
+    else:
+        bars += [("xcfs", NOT_MEASURED, "xcfs without the driver: not measured on this app")]
+    bars += [("opt", n["driver"]["next"], "next batch, with the experimental driver"),
+             ("opt2", n["driver"]["fresh"], "fresh pool + warm-up, with the driver")]
+    return bars
+
+
 def main():
     tn = task_numbers()
     write("agents-wall-time", lambda theme: hbar_chart(
-        [(app, [("plain", n["plain"], "every batch"), ("xcfs", n["next"], "the next batch on the pool"),
-                ("xcfs2", n["fresh"], "a fresh pool, warm-up included")]) for app, n in tn.items()],
-        [("plain", "plain git worktrees + xcodebuild"), ("xcfs", "xcfs, pool reused"),
-         ("xcfs2", "xcfs, fresh pool + warm-up")],
+        [(app, wall_bars(n)) for app, n in tn.items()],
+        [("plain", "plain worktrees + xcodebuild"), ("xcfs", "xcfs, pool reused"), ("xcfs2", "xcfs, fresh pool"),
+         ("opt", "+ experimental driver (opt-in)")],
         " s", 620, theme, title="Three agents, real tasks: wall time per batch (shorter is better)"))
     write("agents-memory-disk", lambda theme: hbar_chart(
-        [(app + ", memory", [("plain", n["plain_mem"], None), ("xcfs", n["xcfs_mem"], None)]) for app, n in tn.items()] +
-        [(app + ", left on disk", [("plain", n["plain_left"], "of DerivedData"), ("xcfs", (0.0, 0.0), "nothing")])
+        [(app + ", memory", [("plain", n["plain_mem"], None)] +
+          ([("xcfs", n["xcfs"]["mem"], None)] if n["xcfs"] else
+           [("opt", n["driver"]["mem"], "with the experimental driver")])) for app, n in tn.items()] +
+        [(app + ", left on disk", [("plain", n["plain_left"], "of DerivedData"), ("xcfs", NOT_MEASURED, "nothing")])
          for app, n in tn.items()],
-        [("plain", "plain git worktrees"), ("xcfs", "xcfs")],
+        [("plain", "plain git worktrees"), ("xcfs", "xcfs"), ("opt", "xcfs + experimental driver (opt-in)")],
         " GB", 30, theme, label_w=190,
         title="Peak memory while the agents work, and what removal leaves behind (less is better)"))
     zn = zero_numbers()
     write("zero-config-round", lambda theme: hbar_chart(
-        [(name, [("plain", p, None), ("xcfs", x, None), ("xcfs2", n, None)]) for name, p, x, n in zn],
-        [("plain", "plain worktree"), ("xcfs", "xcfs defaults"), ("xcfs2", "xcfs, without the experimental driver")],
+        [(name, [("plain", p, None), ("xcfs", x, None), ("opt", d, None)]) for name, p, x, d in zn],
+        [("plain", "plain worktree"), ("xcfs", "xcfs"), ("opt", "xcfs + experimental driver (opt-in)")],
         " s", 560, theme,
         title="One agent's round of work, zero configuration (shorter is better)"))
 

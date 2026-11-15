@@ -8,6 +8,11 @@ can be repeated.
 **Machine:** MacBook Pro, Apple M1 Max, 10 cores, 64 GB, macOS 27.2, Xcode 27.2. Edit loops were run twice where
 shown; the repeats agree within ~1 s, so differences of a few seconds between sides are real.
 
+**The experimental Swift driver is opt-in since 0.3** (`"swiftDriver": "patched"`). These runs were made with 0.2,
+where it was on by default: a column "xcfs" is xcfs as it is by default now (the runs made with
+`"swiftDriver": "native"`), and "xcfs + experimental driver" is what 0.2 ran by default. In the raw results the two
+are named `xcfs (defaults-without-driver-patch)` and `xcfs (defaults)`.
+
 ## Three agents, real tasks, at the same time
 
 The measure closest to what xcfs is for: three agents start at once on one app, each with a small task defined in
@@ -25,27 +30,28 @@ unwrapped), fixes it, adds a unit test, runs the package's tests and builds the 
 
 Ranges over clean runs (plain 2, each xcfs cell 2–3; nothing else ran on the machine):
 
-| | plain worktrees | xcfs, defaults | xcfs, without the experimental Swift driver |
+| | plain worktrees | xcfs | xcfs + experimental driver (opt-in) |
 |---|---|---|---|
-| warm-up before the agents (a fresh pool) | — | 280–301 s | 214–226 s |
-| the agents' wall time, warm-up excluded | 284–302 s | 107–139 s | 140–149 s |
-| **a fresh pool, warm-up included** | **284–302 s** | **408–419 s** (slower) | **354–376 s** (slower) |
-| **the next three agents** (warm-up of the released slots included) | **284–302 s** (every batch builds cold) | **111–121 s** | **138–151 s** |
-| no warm-up at all: the agents ask an empty pool (one run) | — | 451 s (slower still) | — |
-| peak memory while the agents work | 23.9–25.4 GB | 7.9–11.8 GB | 8.3–11.8 GB |
-| peak memory during the warm-up | — | 22.6–25.2 GB | 24.1–24.9 GB |
-| left on disk after removal | 1.5 GB of global DerivedData per worktree | nothing (pool retired) | nothing |
+| warm-up before the agents (a fresh pool) | — | 214–226 s | 280–301 s |
+| the agents' wall time, warm-up excluded | 284–302 s | 140–149 s | 107–139 s |
+| **a fresh pool, warm-up included** | **284–302 s** | **354–376 s** (slower) | **408–419 s** (slower) |
+| **the next three agents** (warm-up of the released slots included) | **284–302 s** (every batch builds cold) | **138–151 s** | **111–121 s** |
+| no warm-up at all: the agents ask an empty pool (one run) | — | — | 451 s (slower still) |
+| peak memory while the agents work | 23.9–25.4 GB | 8.3–11.8 GB | 7.9–11.8 GB |
+| peak memory during the warm-up | — | 24.1–24.9 GB | 22.6–25.2 GB |
+| left on disk after removal | 1.5 GB of global DerivedData per worktree | nothing | nothing (pool retired) |
 | builds or tests with an unexpected result | 0 in these runs; 1 of 6 test runs in an earlier run (below) | 0 | 0 |
 
 What it says:
 
-- **From the second batch on, xcfs is 2–2.7× faster**, and agents work in a third of the memory: the slots are built,
+- **From the second batch on, xcfs is 1.9–2.2× faster** (2.3–2.7× with the experimental driver), and agents work in
+  a third of the memory: the slots are built,
   each build is incremental, and a check compiles one file.
-- **A fresh pool's first batch is slower than plain worktrees** (25–45 %): warming three slots (three cold builds
+- **A fresh pool's first batch is slower than plain worktrees** (17–32 %; 35–48 % with the experimental driver): warming three slots (three cold builds
   side by side, and each slot's simulator booted once) takes longer than three plain cold builds, because each warm-up
   build is bounded to keep memory near plain's (see the experimental driver below). The pool pays once; plain
   worktrees pay on every batch.
-- **Starting without a warm-up is the slowest way in** (451 s, one run): each agent's first build is then a full
+- **Starting without a warm-up is the slowest way in** (451 s, one run, with the experimental driver): each agent's first build is then a full
   build in a slot (266–267 s, three at once), and its first test also builds the test targets and boots the slot's
   simulator (124–161 s); peak memory 20.8 GB. So the quick start warms the pool first, in the background, before the
   agents need it.
@@ -72,7 +78,7 @@ The same design on a larger app with Swift and Objective-C ([profile](../bench/p
 a wikitext helper and a URL helper added to `WMFData` (imported by ~300 app files), a layout helper added to
 `WMFComponents`; each task runs its own new test class (`-only-testing`, `xcfs test --only`). Two runs each:
 
-| | plain worktrees | xcfs, defaults |
+| | plain worktrees | xcfs + experimental driver (opt-in; xcfs without it was not measured here) |
 |---|---|---|
 | warm-up before the agents (a fresh pool) | — | 278–279 s |
 | the agents' wall time, warm-up excluded | 375–387 s | 241–259 s |
@@ -104,7 +110,7 @@ time.
 
 The same comparison with the round of work above (no tests), three agents at once. Ranges over two runs:
 
-| | plain worktrees | xcfs, defaults: warm-up excluded | a fresh pool, warm-up included | the next three agents (re-warm included) | peak memory: agents / warm-up |
+| | plain worktrees | xcfs + experimental driver: warm-up excluded | a fresh pool, warm-up included | the next three agents (re-warm included) | peak memory: agents / warm-up |
 |---|---|---|---|---|---|
 | Ice Cubes | 288–289 s, 21–23 GB | 19.4–19.7 s | 228–239 s | 24.3–24.6 s | 3.6–4.6 GB / 56–59 GB* |
 | Wikipedia iOS | 381–429 s, 12–16 GB | 92.3–92.5 s | 334–343 s | 115.5–115.6 s | 5.4–5.7 GB / 10–14 GB |
@@ -186,21 +192,22 @@ check of a file that depends on it — once, not on every check.
 
 Does it carry over? Four apps never built while xcfs was written, plus Ice Cubes and Wikipedia, each with an `.xcfs.json`
 that only names the project, the scheme and the destination (plus the arm64-only and no-signing settings both sides
-use): no `skipScripts`, no `driver`, no `swiftDriver` — every optimization decides by itself. One agent's round
+use): no `skipScripts`, no `driver`, no `swiftDriver` — every optimization decides by itself (in 0.2, where the
+experimental driver was on by default; the "xcfs" column is the same round with it turned off, as 0.3 does by default). One agent's round
 (checkout, first build, five edits each checked, a final build, release), the edits being a function body in the app
 target, a function body in a widely imported module, and a public declaration added to that module. Plain worktrees
 measured the same day on the same machine, three times each (the runs differ by 3–13 %, so a difference of a few
-percent between sides means nothing; the ones below are 2.5–10×). The xcfs columns are the last run after the fixes
+percent between sides means nothing; the ones below are 1.9–4.2×, and 3–10× with the experimental driver). The xcfs columns are the last run after the fixes
 listed below; repeats of it on Ice Cubes (15.8–17.1 s) and Element X (57.0–57.4 s) differed by less than 5 %.
 
-| project | kind | plain worktree (mean of 3, range) | xcfs, defaults | xcfs, defaults without the experimental Swift driver |
+| project | kind | plain worktree (mean of 3, range) | xcfs | xcfs + experimental driver (opt-in) |
 |---|---|---|---|---|
-| [Kickstarter](https://github.com/kickstarter/ios-oss) | `.xcodeproj` + local Swift packages (KsApi: ~800 importing files) | 301.3 s (279–313) | **33.2 s** | 73.9 s |
-| [Element X](https://github.com/element-hq/element-x-ios) | XcodeGen-generated, one large app target, Swift packages, a prebuilt Rust SDK | 287.3 s (263–299) | **57.4 s** | 93.5 s |
-| [Signal](https://github.com/signalapp/Signal-iOS) | workspace, Swift and Objective-C frameworks (SignalServiceKit: ~800 importing files) | 322.3 s (317–326) | **101.2 s** | 109.6 s |
-| [Home Assistant](https://github.com/home-assistant/iOS) | large app target, a shared framework (~550 importing files), many extensions, SwiftGen and SwiftLint phases | 518.7 s (492–538) | **98.9 s** | 159.9 s |
-| Ice Cubes (seen) | `.xcodeproj` + 13 local Swift packages | 155.1 s (143–162) | **17.1 s** | 39.1 s |
-| Wikipedia iOS (seen) | Swift and Objective-C, local packages | 251.4 s (246–256) | **82.0 s** | 132.3 s |
+| [Kickstarter](https://github.com/kickstarter/ios-oss) | `.xcodeproj` + local Swift packages (KsApi: ~800 importing files) | 301.3 s (279–313) | **73.9 s** | 33.2 s |
+| [Element X](https://github.com/element-hq/element-x-ios) | XcodeGen-generated, one large app target, Swift packages, a prebuilt Rust SDK | 287.3 s (263–299) | **93.5 s** | 57.4 s |
+| [Signal](https://github.com/signalapp/Signal-iOS) | workspace, Swift and Objective-C frameworks (SignalServiceKit: ~800 importing files) | 322.3 s (317–326) | **109.6 s** | 101.2 s |
+| [Home Assistant](https://github.com/home-assistant/iOS) | large app target, a shared framework (~550 importing files), many extensions, SwiftGen and SwiftLint phases | 518.7 s (492–538) | **159.9 s** | 98.9 s |
+| Ice Cubes (seen) | `.xcodeproj` + 13 local Swift packages | 155.1 s (143–162) | **39.1 s** | 17.1 s |
+| Wikipedia iOS (seen) | Swift and Objective-C, local packages | 251.4 s (246–256) | **132.3 s** | 82.0 s |
 
 What each automatic decision did, over all six rounds:
 
@@ -208,11 +215,11 @@ What each automatic decision did, over all six rounds:
 |---|---|---|---|
 | pool slot instead of a new worktree + first build | always | 6 of 6 (checkout 0.2–0.3 s) | — |
 | build session (`"driver": "auto"`) | after a one-time regression check per Xcode | 6 of 6 | 0 |
-| experimental Swift driver (`"swiftDriver": "auto"`) | when the selected Xcode is of the Swift 6.4 line (built and self-tested per Xcode) | 6 of 6; digests extracted for 282 of 283 module versions (one module had no symbols to describe and kept the stock behavior) | 0 build failures |
+| experimental Swift driver (`"swiftDriver": "auto"` in 0.2; opt-in since 0.3, `"patched"`) | when the selected Xcode is of the Swift 6.4 line (built and self-tested per Xcode) | 6 of 6; digests extracted for 282 of 283 module versions (one module had no symbols to describe and kept the stock behavior) | 0 build failures |
 | leave out lint-only script phases (`"skipScripts": "auto"`) | phases that only run a linter | Element X (SwiftLint, SwiftFormat in lint mode), Home Assistant (two SwiftLint phases) | the other projects have none: Wikipedia's SwiftLint phase runs `swiftlint --fix`, which rewrites sources, and is kept |
 | `xcfs check` | always available | every edit of every round | — |
 
-Running the defaults on these apps found five defects that Ice Cubes and Wikipedia had not shown, all fixed before
+Running 0.2's defaults on these apps found five defects that Ice Cubes and Wikipedia had not shown, all fixed before
 these numbers: a private submodule the source checkout never had made a checkout fail; the session check did not
 recognize the compile tasks of an external Swift driver, so "auto" fell back to `xcodebuild` everywhere; a failed
 check was trusted forever; the patched driver lacked the version line and the features file through which the build
@@ -271,7 +278,7 @@ in any 6.4 release branch, so not in Xcode 27.2.
 
 Where it pays, Ice Cubes, three slots, two runs each:
 
-| | defaults (experimental driver) | `"all"` | `"dependencies"` |
+| | xcfs + experimental driver (0.2's default) | `"all"` | `"dependencies"` |
 |---|---|---|---|
 | the baseline moves on 15 commits (1.5 days of history): three slots follow it | 115–116 s, 12.8–13.5 GB | **93–98 s**, 8.6–8.9 GB | 117–123 s, 11.6–11.7 GB |
 | the baseline moves on 20 commits (5 days) | 105–117 s, 13.3–13.7 GB | **89–98 s**, 8.5–9.2 GB | 114–128 s, 11.6–11.7 GB |
@@ -305,7 +312,7 @@ planned refinement) would save about that much; the first export belongs to the 
 ## Is an incremental build the same as a clean one?
 
 Speed is worth nothing if an incremental build can leave something stale. [bench/oracle.py](../bench/oracle.py)
-checks it on real apps with xcfs's defaults (build session, experimental Swift driver): one worktree takes a list of
+checks it on real apps with the build session and the experimental Swift driver: one worktree takes a list of
 edits one after another and is built incrementally after each; for every step a fresh worktree gets the same edits
 and is built from nothing, and every object file of the clean build is compared with the incremental one (code and
 symbol names; a build that fails must fail on both sides). The edits are the kind a dependency graph can get wrong:
