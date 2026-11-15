@@ -27,6 +27,8 @@ Operations and what they return:
     ownedCaches   args {root}                 -> {"paths": [...]}      (caches outside root that belong to root)
     foreignCaches args {owned, staleDays}     -> {"caches": [{"kind", "path", "owner"}]}
     cacheRoots    args {}                     -> {"paths": [...]}      (where those caches live)
+    sharesResults args {entry}                -> {"shares": bool}      (checkouts reuse one another's compile
+                                                                        results: a warm-up builds one slot first)
     orphans       args {inUse, apply}         -> {"actions": [[kind, what]]} (resources it created for checkouts
                                                                         that are gone: inUse is every live
                                                                         checkout's saved resources)
@@ -120,6 +122,11 @@ class Adapter:
         """[(kind, what)] for resources this adapter created for checkouts that no longer exist (removed with
         --apply). in_use: the saved resources of every checkout that still exists."""
         return []
+
+    def shares_results(self, entry):
+        """Whether checkouts reuse one another's compile results (a shared cache): a fresh pool's warm-up then builds
+        one slot first and the others from what it left."""
+        return False
 
     def foreign_caches(self, owned, stale_days):
         return []
@@ -221,6 +228,9 @@ class ExternalAdapter(Adapter):
 
     def orphans(self, in_use, apply):
         return [tuple(x) for x in (self._opt("orphans", inUse=in_use, apply=apply, default={}) or {}).get("actions", [])]
+
+    def shares_results(self, entry):
+        return bool((self._opt("sharesResults", entry=entry, default={}) or {}).get("shares"))
 
     def cache_roots(self):
         return (self._opt("cacheRoots", default={}) or {}).get("paths", [])

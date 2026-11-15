@@ -7,7 +7,7 @@ from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say
     write_json
 
 ENTRY_KEYS = {"adapter", "root", "workspace", "project", "package", "scheme", "target", "configurations", "default",
-              "warm", "simulator", "packagesDir", "xcodebuildArgs", "buildSettings", "driver", "prepare",
+              "warm", "simulator", "packagesDir", "compileCache", "xcodebuildArgs", "buildSettings", "driver", "prepare",
               "reexportWhenChanged", "pinDerivedData", "sharedXcodeCaches", "skipScripts", "swiftDriver"}
 CONFIG_KEYS = {"configuration", "destination", "testDestination", "buildSettings"}
 TRASH = ".xcfs-trash"
@@ -41,6 +41,54 @@ def first_json_object(text):
             pass
         i = text.find("{", i + 1)
     return None
+
+
+COMPILE_CACHE_MODES = ("off", "dependencies", "all")
+
+
+def compile_cache_mode(entry):
+    return os.environ.get("XCFS_COMPILE_CACHE") or entry.get("compileCache", "off")
+
+
+def compile_cache_dir():
+    return os.path.join(state.cache_dir(), "compilation-cache")
+
+
+def compile_cache_settings(ctx, settings):
+    """Xcode's compilation cache, one for every checkout, with each checkout's own paths kept out of its keys so that a
+    slot replays what another slot compiled. Xcode maps only a target's source and intermediates directories; the
+    checkout's project file (the compiler's working directory) and the checkout's build directory are mapped here.
+    "dependencies": the checkout's sources keep their real paths (#filePath, debug info, test failure locations are
+    unchanged), so its own modules compile in every slot and only what is outside it (packages, Clang modules) is
+    shared. "all": the whole checkout is mapped to /^checkout (xcfs maps test failure locations back): every compile
+    job is shared, but #filePath at run time is /^checkout/..., which breaks tests that find files through it."""
+    mode = compile_cache_mode(ctx.entry)
+    if mode == "off":
+        return {}
+    out = {"COMPILATION_CACHE_ENABLE_CACHING": "YES", "COMPILATION_CACHE_CAS_PATH": compile_cache_dir(),
+           "SWIFT_ENABLE_PREFIX_MAPPING": "YES", "CLANG_ENABLE_PREFIX_MAPPING": "YES",
+           # Xcode's own project mapping sends every package's root to one /^src: ambiguous, so not reversible
+           "SWIFT_ENABLE_PROJECT_PREFIX_MAPPING": "NO", "CLANG_ENABLE_PROJECT_PREFIX_MAPPING": "NO"}
+    container = os.path.join(ctx.toolchain_root, ctx.entry.get("workspace") or ctx.entry.get("project") or "")
+    pairs = ([(ctx.root, CHECKOUT)] if mode == "all" else [(container, "/^container")]) + [(ctx.build_dir, BUILD)]
+    out["OTHER_SWIFT_FLAGS"] = settings.get("OTHER_SWIFT_FLAGS", "$(inherited)") + "".join(
+        " -scanner-prefix-map %s=%s" % kv for kv in pairs)
+    out["OTHER_CFLAGS"] = settings.get("OTHER_CFLAGS", "$(inherited)") + "".join(
+        " -fdepscan-prefix-map=%s=%s" % kv for kv in pairs)
+    return out
+
+
+CHECKOUT, BUILD = "/^checkout", "/^build"
+
+
+def unmap_paths(ctx, diagnostics):
+    """Locations a run reports in the mapped form (a test failure's #filePath) back to the checkout's real paths."""
+    for d in diagnostics:
+        f = d.get("file") or ""
+        for mapped, real in ((CHECKOUT, ctx.root), (BUILD, ctx.build_dir)):
+            if f == mapped or f.startswith(mapped + "/"):
+                d["file"] = real + f[len(mapped):]
+    return diagnostics
 
 
 def simulator_record():
@@ -128,6 +176,8 @@ class XcodeAdapter(Adapter):
             p.append("swiftDriver must be \"auto\", \"native\" or \"api-digests\"")
         if entry.get("driver", "auto") not in ("xcodebuild", "session", "auto"):
             p.append("driver must be \"xcodebuild\", \"session\" or \"auto\"")
+        if entry.get("compileCache", "off") not in COMPILE_CACHE_MODES:
+            p.append("compileCache must be one of %s" % ", ".join('"%s"' % m for m in COMPILE_CACHE_MODES))
         return p
 
     def suggest_seed(self, root):
@@ -253,7 +303,8 @@ class XcodeAdapter(Adapter):
                             SDK_STAT_CACHE_DIR=root)
         settings.update(ctx.entry.get("buildSettings", {}))
         settings.update(conf.get("buildSettings", {}))
-        swiftc = self.swift_driver(ctx.entry)
+        settings.update(compile_cache_settings(ctx, settings))
+        swiftc = self.swift_driver(ctx.entry) if compile_cache_mode(ctx.entry) == "off" else None
         if swiftc:
             from . import swift_driver as sd
             settings.update(SWIFT_USE_INTEGRATED_DRIVER="NO", SWIFT_EXEC=swiftc, XCFS_SWIFT_DRIVER_BUILD=sd.install_id())
@@ -271,6 +322,9 @@ class XcodeAdapter(Adapter):
         mode = os.environ.get("XCFS_SWIFT_DRIVER") or entry.get("swiftDriver", "auto")
         if mode == "native":
             XcodeAdapter.swift_driver_decision = "native (configured)"
+            return None
+        if compile_cache_mode(entry) != "off":
+            XcodeAdapter.swift_driver_decision = "native: the compilation cache (compileCache) needs Xcode's own driver"
             return None
         wrapper, why, buildable = sd.status()
         if wrapper:
@@ -359,6 +413,7 @@ class XcodeAdapter(Adapter):
         for t in args.get("only") or []:
             extra.append("-only-testing:" + t)
         r = self.xcodebuild(ctx, action, name, conf, extra, destination=dest, timeout=args.get("timeout"), dd=dd)
+        unmap_paths(ctx, r.get("diagnostics", []))
         if built:
             r.update(built_by="session", build_seconds=built["seconds"], test_seconds=r["seconds"],
                      seconds=round(built["seconds"] + r["seconds"], 2), test_targets=built.get("test_targets"),
@@ -414,16 +469,23 @@ class XcodeAdapter(Adapter):
 
     def warm(self, ctx, args):
         names = ctx.entry.get("warm") or [self.conf(ctx.entry, None)[0]]
-        total, results = 0.0, []
+        total, results, sim = 0.0, [], []
+        # The slot's simulator boots for the first time while it builds: the two do not depend on each other, and a
+        # first boot took as long as a third of a cache-replayed warm-up when it came after the build.
+        booting = None
+        if ctx.kind == "slot":
+            import threading
+            booting = threading.Thread(target=lambda: sim.append(self.first_boot(ctx, names)), daemon=True)
+            booting.start()
         for n in names:
             r = self.build(ctx, dict(args, config=n))
             total += r.get("seconds", 0)
             results.append(r)
             if not r["ok"]:
                 break
-        sim = None
-        if all(r["ok"] for r in results) and ctx.kind == "slot":
-            sim = self.first_boot(ctx, names)
+        if booting:
+            booting.join()
+        sim = sim[0] if sim else None
         return {"ok": all(r["ok"] for r in results), "seconds": round(total, 2),
                 "diagnostics": [d for r in results for d in r["diagnostics"] if d["severity"] == "error"][:50],
                 "timeout": any(r.get("timeout") for r in results), "configurations": names, "simulator_first_boot": sim}
@@ -565,6 +627,9 @@ class XcodeAdapter(Adapter):
         if ctx.resources.get("simulator"):
             delete_simulator(ctx.resources["simulator"])
             ctx.resources.pop("simulator", None)
+
+    def shares_results(self, entry):
+        return compile_cache_mode(entry) != "off"
 
     def orphans(self, in_use, apply):
         """Simulators xcfs created (and recorded) for checkouts that are gone: a checkout removed behind xcfs's back,

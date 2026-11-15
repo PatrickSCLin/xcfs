@@ -220,7 +220,15 @@ shell plumbing — are left out, since they cannot change what is built; a list 
 for instance a project's localization sync, and `[]` keeps them all; xcfs removes them from a copy of the project
 description, the project itself is untouched, and each build's JSON lists what it skipped and why); `swiftDriver` (`auto` by default: on an Xcode of the Swift 6.4 line, build with a patched Swift driver that recompiles only the files a
 changed interface really affects, built in the background on first use — see [its notes](lib/xcfs/adapters/swiftdriver/README.md);
-`native` turns it off).
+`native` turns it off); `compileCache` (`off` by default; experimental: Xcode's compilation cache shared by every
+checkout, with each checkout's own paths kept out of its keys so a slot replays what another compiled. `"dependencies"`
+keeps the checkout's sources at their real paths and shares what lies outside them (packages, Clang modules);
+`"all"` maps the whole checkout, so every compile job is shared, but `#filePath` at run time reads `/^checkout/…`,
+which breaks tests that find files next to their source (fixtures, snapshot tests); xcfs maps test failure locations
+back. Either uses Xcode's own Swift driver, and a fresh pool then warms one slot first and the others from the cache.
+Measured on Ice Cubes: a second slot's warm-up 84–88 → 35–38 s with `"all"`; incremental builds within 0–4 s of no
+cache; three agents' first batch on a fresh pool 387–398 s against 408–419 s with the defaults and 284–302 s for plain
+worktrees. See [docs/benchmark.md](docs/benchmark.md#a-shared-compilation-cache)).
 
 Bazel toolchain keys: `build`, `test`, `run`, `warm` (shell commands run in the checkout; `--config` appends
 arguments), `env`, `outputUserRoot`, `stopServerOnRelease`. The adapter owns each checkout's Bazel output base — kept
@@ -357,7 +365,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 65 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 67 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

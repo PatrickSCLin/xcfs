@@ -481,6 +481,8 @@ if op in ("build", "warm"):
         out(ok=False, seconds=0.01, resources=res, diagnostics=[{"file": os.path.join(ctx["toolchainRoot"], "toy.txt"),
             "line": 1, "column": 1, "severity": "error", "message": "broken"}])
     out(ok=True, seconds=0.01, diagnostics=[], resources=res, count=res["count"], had_previous=had, build_dir=ctx["buildDir"])
+if op == "sharesResults":
+    out(shares=os.environ.get("TOY_SHARES") == "1")
 if op == "afterSwitch":
     res = dict(ctx["resources"]); res["switches"] = res.get("switches", 0) + 1
     out(resources=res)
@@ -1381,12 +1383,17 @@ def t61_a_slot_warm_up_boots_its_simulator_once():
     from xcfs.adapters import xcode as xa
     booted = []
 
+    times = {}
+
     class Fake(xa.XcodeAdapter):
-        def build(self, ctx, args): return {"ok": True, "seconds": 1.0, "diagnostics": []}
+        def build(self, ctx, args):
+            time.sleep(0.3); times["built"] = time.time()
+            return {"ok": True, "seconds": 1.0, "diagnostics": []}
         def simulator(self, ctx):
             ctx.resources["simulator"] = "U1"
             return "U1"
-        def boot(self, udid): booted.append(udid)
+        def boot(self, udid):
+            times["boot"] = time.time(); booted.append(udid)
     saved = xa.run
     xa.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, "", "")   # the shutdown
     try:
@@ -1394,6 +1401,7 @@ def t61_a_slot_warm_up_boots_its_simulator_once():
         slot = Context("slot", SB, SB, {}, entry, SB + "/b61")
         r = Fake().warm(slot, {})
         assert r["ok"] and booted == ["U1"] and r["simulator_first_boot"] is not None, (r, booted)
+        assert times["boot"] < times["built"], "the simulator boots while the slot builds"
         assert Fake().warm(slot, {})["simulator_first_boot"] is None and booted == ["U1"], "booted a second time"
         wt = Context("worktree", SB, SB, {}, entry, SB + "/b61w")
         assert Fake().warm(wt, {})["simulator_first_boot"] is None, "only a slot's warm-up prepares a simulator"
@@ -1575,6 +1583,56 @@ def t65_driver_frontends_go_through_a_shared_gate():
     ps = [subprocess.Popen([gate, "-frontend", "-c"], env=env) for _ in range(2)]
     [p.wait() for p in ps]
     assert time.time() - t0 < 1.9, "two places: both at once"
+
+
+@test
+def t66_compile_cache_settings():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapter import Context
+    from xcfs.adapters import xcode as xa
+    os.environ.pop("XCFS_COMPILE_CACHE", None)
+    entry = {"adapter": "xcode", "project": "App.xcodeproj", "scheme": "App", "configurations": {"sim": {}}}
+    ctx = lambda e: Context("slot", SB + "/slot-1/app", SB + "/app", {}, e, SB + "/slot-1/build")
+    assert xa.compile_cache_settings(ctx(entry), {}) == {}, "off by default"
+    dep = xa.compile_cache_settings(ctx(dict(entry, compileCache="dependencies")), {"OTHER_SWIFT_FLAGS": "-DX"})
+    c = ctx(entry)
+    assert dep["COMPILATION_CACHE_ENABLE_CACHING"] == "YES" and dep["SWIFT_ENABLE_PROJECT_PREFIX_MAPPING"] == "NO"
+    assert dep["OTHER_SWIFT_FLAGS"].startswith("-DX "), "the project's own flags come first"
+    assert "%s/App.xcodeproj=/^container" % c.toolchain_root in dep["OTHER_SWIFT_FLAGS"], dep
+    assert "%s=/^build" % c.build_dir in dep["OTHER_SWIFT_FLAGS"] and "%s=/^checkout" % c.root not in dep["OTHER_SWIFT_FLAGS"]
+    assert "-fdepscan-prefix-map=%s=/^build" % c.build_dir in dep["OTHER_CFLAGS"]
+    full = xa.compile_cache_settings(ctx(dict(entry, compileCache="all")), {})
+    assert full["OTHER_SWIFT_FLAGS"].startswith("$(inherited) ") and "%s=/^checkout" % c.root in full["OTHER_SWIFT_FLAGS"]
+    # the experimental driver cannot use the cache: Xcode's own driver, said so
+    a = xa.XcodeAdapter()
+    assert a.swift_driver(dict(entry, compileCache="all")) is None and "compilation cache" in a.swift_driver_decision
+    assert "compileCache must be" in " ".join(a.validate(dict(entry, compileCache="yes")))
+    assert not [p for p in a.validate(dict(entry, compileCache="dependencies")) if "compileCache" in p]
+    # a test failure's #filePath in the mapped form points back into the checkout
+    d = xa.unmap_paths(c, [{"file": "/^checkout/Tests/T.swift"}, {"file": "/^build/x.swift"}, {"file": "/elsewhere/y"}])
+    assert [x["file"] for x in d] == [c.root + "/Tests/T.swift", c.build_dir + "/x.swift", "/elsewhere/y"], d
+
+
+@test
+def t67_a_shared_cache_warms_one_slot_first():
+    E = toy_env(); repo = toy_repo("r67", slots=3)
+    settings = os.path.join(ENV.get("XDG_CONFIG_HOME", SB + "/config"), "xcfs", "settings.json")
+    os.makedirs(os.path.dirname(settings), exist_ok=True)
+    saved = open(settings).read() if os.path.exists(settings) else None
+    try:
+        json.dump(dict(json.loads(saved) if saved else {}, warmJobs=3), open(settings, "w"))
+        log = SB + "/t67.log"
+        r = xcfs("pool", "warm", repo, "--slots", "3", env=dict(E, TOY_SLEEP="1.2", TOY_LOG=log, TOY_SHARES="1"))
+        assert r["_code"] == 0 and all(x["ok"] for x in r["slots"]), r
+        spans = sorted(tuple(map(float, l.split())) for l in open(log))
+        assert len(spans) == 3 and spans[1][0] >= spans[0][1] and spans[2][0] >= spans[0][1], \
+            "the others start once the first is built: %s" % spans
+        assert spans[2][0] < spans[1][1], "and then side by side: %s" % spans
+    finally:
+        if saved is None:
+            os.remove(settings)
+        else:
+            open(settings, "w").write(saved)
 
 
 def main():

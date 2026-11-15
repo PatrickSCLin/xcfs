@@ -281,15 +281,27 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
         # when they run side by side, instead of one cold build per slot in turn.
         jobs = int(settings.get("warmJobs") or 0) or max(1, memory_gb() // 16)
         jobs = max(1, min(jobs, len(todo)))
+        rest = todo
+        if jobs > 1 and shares_results(repo, cfg):   # the others replay what the first one compiles
+            warm_one(todo[0][0])
+            rest = todo[1:]
         if jobs == 1:
-            for slot, _ in todo:
+            for slot, _ in rest:
                 warm_one(slot)
-        else:
+        elif rest:
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
-                for f in [ex.submit(warm_one, slot) for slot, _ in todo]:
+                for f in [ex.submit(warm_one, slot) for slot, _ in rest]:
                     f.result()
     return results
+
+
+def shares_results(repo, cfg):
+    from .adapter import adapters_for
+    try:
+        return any(a.shares_results(entry) for a, entry in adapters_for(repo, cfg))
+    except Fail:
+        return False
 
 
 def memory_gb():

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""oracle.py <profile.json> --source <clone> [--work DIR] [--edits N] [--keep]
+"""oracle.py <profile.json> --source <clone> [--work DIR] [--edits N] [--keep] [--clean-env NAME=VALUE]...
 
 Is an incremental build the same as a clean one, on a real project, with xcfs's defaults (build session, the
 experimental Swift driver)? One worktree takes the profile's "oracle" edits one after another and is built
@@ -44,9 +44,16 @@ def say(*a):
     print(time.strftime("%H:%M:%S"), *a, flush=True)
 
 
-def xcfs(*args):
+CLEAN_ENV = {}   # --clean-env NAME=VALUE: for the clean builds only ({step} is the step number)
+for i, a in enumerate(sys.argv):
+    if a == "--clean-env":
+        k, _, v = sys.argv[i + 1].partition("=")
+        CLEAN_ENV[k] = v
+
+
+def xcfs(*args, env=None):
     t0 = time.time()
-    r = subprocess.run([sys.executable, XCFS, *args, "--json"], capture_output=True, text=True, env=ENV, cwd=WORK)
+    r = subprocess.run([sys.executable, XCFS, *args, "--json"], capture_output=True, text=True, env=env or ENV, cwd=WORK)
     try:
         out = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
@@ -98,7 +105,7 @@ def objects(dd):
 SOURCE_EXT = (".swift", ".m", ".mm", ".c", ".cpp")
 
 
-def recompile(checkout, dd, rels):
+def recompile(checkout, dd, rels, env=None):
     """Touch the sources of these objects (in the checkout and in the packages its build checked out) and build."""
     stems = {PATH_HASH.sub("", os.path.basename(r))[:-2] for r in rels if "/Binary/" not in r}
     for top in (checkout, os.path.dirname(dd)):
@@ -108,7 +115,7 @@ def recompile(checkout, dd, rels):
                 stem, ext = os.path.splitext(f)
                 if ext in SOURCE_EXT and stem in stems:
                     os.utime(os.path.join(dp, f))
-    return xcfs("build", checkout)
+    return xcfs("build", checkout, env=env)
 
 
 def main():
@@ -140,7 +147,7 @@ def main():
             assert len(clean) == len(inc), (clean, inc)
             for ce, cn in applied:
                 apply_edit(clean, ce, cn)
-            tc, oc = xcfs("build", clean)
+            tc, oc = xcfs("build", clean, env=dict(ENV, **{k: v.replace("{step}", str(i)) for k, v in CLEAN_ENV.items()}))
             clean_objs = objects(oc["derived_data"]) if oc.get("ok") else {}
             if oc.get("ok") and oi.get("ok"):
                 assert len(oc["derived_data"]) == len(oi["derived_data"]), (oc["derived_data"], oi["derived_data"])
@@ -159,7 +166,8 @@ def main():
             # has nothing stale, so its sources are compiled again there, one build, and compared once more.
             explained = []
             if differing:
-                recompile(clean, oc["derived_data"], differing)
+                recompile(clean, oc["derived_data"], differing, dict(ENV, **{k: v.replace("{step}", str(i))
+                                                                       for k, v in CLEAN_ENV.items()}))
                 again = objects(oc["derived_data"])
                 explained = [r for r in differing if again.get(r) == inc_objs[r]]
                 diffs += ["differs: " + r for r in differing if r not in explained]

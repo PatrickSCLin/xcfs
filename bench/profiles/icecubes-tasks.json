@@ -39,6 +39,12 @@
    "defaults": {},
    "defaults-without-driver-patch": {
     "swiftDriver": "native"
+   },
+   "cache-all": {
+    "compileCache": "all"
+   },
+   "cache-dependencies": {
+    "compileCache": "dependencies"
    }
   }
  },
