@@ -1401,13 +1401,17 @@ def t61_a_slot_warm_up_boots_its_simulator_once():
         slot = Context("slot", SB, SB, {}, entry, SB + "/b61")
         r = Fake().warm(slot, {})
         assert r["ok"] and booted == ["U1"] and r["simulator_first_boot"] is not None, (r, booted)
-        assert times["boot"] < times["built"], "the simulator boots while the slot builds"
+        assert times["boot"] > times["built"], "without a shared cache the simulator boots after the build"
         assert Fake().warm(slot, {})["simulator_first_boot"] is None and booted == ["U1"], "booted a second time"
         wt = Context("worktree", SB, SB, {}, entry, SB + "/b61w")
         assert Fake().warm(wt, {})["simulator_first_boot"] is None, "only a slot's warm-up prepares a simulator"
+        shared = Context("slot", SB, SB, {}, dict(entry, compileCache="all"), SB + "/b61s")
+        assert Fake().warm(shared, {})["simulator_first_boot"] is not None and times["boot"] < times["built"], \
+            "with a shared cache the simulator boots while the slot builds"
         mac = Context("slot", SB, SB, {}, {"adapter": "xcode", "configurations": {"m": {"destination": "platform=macOS"}}},
                       SB + "/b61m")
-        assert Fake().warm(mac, {})["simulator_first_boot"] is None and booted == ["U1"]
+        n = len(booted)
+        assert Fake().warm(mac, {})["simulator_first_boot"] is None and len(booted) == n, "no simulator for macOS"
     finally:
         xa.run = saved
 

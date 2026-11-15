@@ -470,10 +470,12 @@ class XcodeAdapter(Adapter):
     def warm(self, ctx, args):
         names = ctx.entry.get("warm") or [self.conf(ctx.entry, None)[0]]
         total, results, sim = 0.0, [], []
-        # The slot's simulator boots for the first time while it builds: the two do not depend on each other, and a
-        # first boot took as long as a third of a cache-replayed warm-up when it came after the build.
+        # With a shared compilation cache the slot's simulator boots for the first time while it builds (a replayed
+        # build leaves the machine room for it: a fresh Ice Cubes pool of three warmed in 206-221 instead of
+        # 220-224 s). A cold build does not: three of them side by side with three first boots took 322-332 instead
+        # of 280-301 s, so without the cache the simulator boots after the build.
         booting = None
-        if ctx.kind == "slot":
+        if ctx.kind == "slot" and self.shares_results(ctx.entry):
             import threading
             booting = threading.Thread(target=lambda: sim.append(self.first_boot(ctx, names)), daemon=True)
             booting.start()
@@ -485,6 +487,8 @@ class XcodeAdapter(Adapter):
                 break
         if booting:
             booting.join()
+        elif ctx.kind == "slot" and all(r["ok"] for r in results):
+            sim.append(self.first_boot(ctx, names))
         sim = sim[0] if sim else None
         return {"ok": all(r["ok"] for r in results), "seconds": round(total, 2),
                 "diagnostics": [d for r in results for d in r["diagnostics"] if d["severity"] == "error"][:50],
