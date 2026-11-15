@@ -484,7 +484,8 @@ simulator.
 
 ## Running the benchmarks
 
-`bench/bench.py <profile> --source <clone>` sets up N parallel checkouts of a real project twice — as plain
+`bench/run-public.sh icecubes|wikipedia` reruns the three-agent benchmark on your machine: it clones the app at the
+pinned commit, sets it up and runs the harness. `bench/bench.py <profile> --source <clone>` sets up N parallel checkouts of a real project twice — as plain
 `git worktree`s with the project's own setup, and as xcfs slots — and measures the time until an agent can build, the
 first build, disk, resident memory, an edit loop, and what removal leaves behind; `--phases tasks` runs the three-agent
 tasks above, and `bench/pool-idle.py` what a pool costs at rest. A profile (`bench/profiles/`) says how the project is
@@ -496,6 +497,8 @@ are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
 
 ## Design
 
+[docs/why-not-plain-worktrees.md](docs/why-not-plain-worktrees.md): plain worktrees, a shared DerivedData (measured: two
+worktrees take turns recompiling everything), copied DerivedData and long-lived worktrees, against what xcfs does.
 [docs/design.md](docs/design.md): the measurements behind the approach, the architecture and adapter interface, the
 slot lifecycle, the edge cases and how each is handled, and what is not verified.
 [docs/build-systems.md](docs/build-systems.md): what Bazel, Buck2, Gradle, Tuist, Nx and compiler caches do, which of

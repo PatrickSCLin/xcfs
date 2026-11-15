@@ -9,7 +9,7 @@ a one-file compile check, its own simulator, and a cleanup that removes everythi
 It plugs into Claude Code's worktree and session hooks. Open source (MIT), macOS, Python 3 standard library only.
 
 [Source and README](https://github.com/PatrickSCLin/xcfs) ·
-[Using it from an agent](agents.md) · [Benchmarks](benchmark.md) · [Design](design.md) ·
+[Using it from an agent](agents.md) · [Benchmarks](benchmark.md) · [Why not just git worktree](why-not-plain-worktrees.md) · [Design](design.md) ·
 [Xcode versions](xcode-versions.md) · [What is stable](stability.md)
 
 <picture>

@@ -1,0 +1,7 @@
+A cold                                   exit 0  81.3 s  swift compile tasks 1890
+A again (no-op)                          exit 0  5.9 s  swift compile tasks 0
+B after A (another path)                 exit 0  62.0 s  swift compile tasks 1890
+A after B                                exit 0  59.7 s  swift compile tasks 1890
+both at once:
+A concurrent                             exit 0  5.2 s  swift compile tasks 0
+B concurrent                             exit 0  60.4 s  swift compile tasks 1890

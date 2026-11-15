@@ -21,6 +21,7 @@ nothing left in DerivedData (plain worktrees left 1.5–2.9 GB each).
 
 ## Optional
 
+- [Why not just git worktree](https://github.com/PatrickSCLin/xcfs/blob/main/docs/why-not-plain-worktrees.md): plain worktrees, a shared DerivedData, long-lived worktrees, measured
 - [Design](https://github.com/PatrickSCLin/xcfs/blob/main/docs/design.md): architecture, adapter interface, slot lifecycle, edge cases, what is not verified
 - [Build systems](https://github.com/PatrickSCLin/xcfs/blob/main/docs/build-systems.md): Bazel, Buck2, Tuist, compiler caches, and what each is worth here
 - [The experimental Swift driver](https://github.com/PatrickSCLin/xcfs/blob/main/docs/incremental-swift.md): the patch and what upstream would need

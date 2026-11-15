@@ -552,6 +552,9 @@ by a test or by the sample end-to-end run:
 
 ## Reproduce
 
+`bench/run-public.sh icecubes` (or `wikipedia`) clones the app at the pinned commit, sets it up and runs the
+three-agent tasks; `--print` shows the commands first. By hand:
+
 ```
 # one agent's round of work: bench.py <profile> --source <clone> --phases round   (profiles *-round.json)
 # what build settings cost on one checkout: bench/knobs.py <profile> --source <clone> [--only knob,…]
