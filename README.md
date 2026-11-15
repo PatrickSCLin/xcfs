@@ -112,7 +112,9 @@ xcfs reap --session "$SESSION" --apply --prune-branch --json # the session ends
 commands themselves (`xcfs hook worktree-create` reads `{"name", "cwd", "session_id"}` on stdin and prints
 the path; `xcfs hook session-end` reads `{"session_id"}` and runs that `reap`). For people and tools used to `git worktree add`, a shell function keeps the habit:
 `xwt() { cd "$(xcfs checkout "$(git rev-parse --show-toplevel)" "$1" --json | jq -r .worktree)"; }`.
-[docs/agents.md](docs/agents.md) has instructions to paste into an agent's instruction file.
+[docs/agents.md](docs/agents.md) has the contract (steps, fields, exit codes), and
+[examples/agent-instructions](examples/agent-instructions/README.md) a block for any tool's instruction file (`AGENTS.md`,
+`GEMINI.md`, …).
 
 ## Quick start
 

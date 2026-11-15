@@ -606,7 +606,25 @@ def status(repo=None):
         say("  %-24s %d of %d slot(s)" % (os.path.basename(pr), sum(1 for r in rows if r["project"] == pr), targets[pr]))
     if not projects:
         say("no pools. create one with `xcfs pool warm <repo>` (or just `xcfs checkout <repo> <branch>`).")
-    return {"slots": rows, "targets": targets, "pool_root": settings["poolRoot"]}
+    return {"slots": rows, "targets": targets, "pool_root": settings["poolRoot"], "summary": summary(rows, projects)}
+
+
+def summary(rows, projects):
+    """Per project, what an orchestrator asks before starting agents: how many slots a checkout gets already built
+    at the baseline, which one checkout would hand out, and when the next warm-up under way should be done."""
+    out = {}
+    for pr in projects:
+        mine = [r for r in rows if r["project"] == pr]
+        ready = [r for r in mine if r["state"] == "idle" and r["warm"] and r["at_baseline"]]
+        warming = [r for r in mine if r["state"] == "warming" and r.get("estimate_seconds")]
+        left = [max(0, r["estimate_seconds"] - r.get("elapsed_seconds", 0)) for r in warming]
+        free = [r for r in mine if r["state"] in ("idle", "cold")]
+        best = ready or [r for r in free if r["warm"]] or free
+        out[pr] = {"ready": len(ready), "free": len(free), "leased": sum(1 for r in mine if r["state"] == "leased"),
+                   "warming": sum(1 for r in mine if r["state"] == "warming"),
+                   "next_checkout": best[0]["worktree"] if best else None,
+                   "next_ready_in_seconds": round(min(left)) if left else None}
+    return out
 
 
 def resize(repo, n, cfg, settings):

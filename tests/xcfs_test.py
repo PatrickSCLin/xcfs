@@ -1898,12 +1898,16 @@ def t75_pool_status_shows_a_warm_up_under_way():
         assert wait_for(lambda: any(r.get("step") == "building" for r in xcfs("pool", "status", repo, env=E)["slots"]), 20)
         row = xcfs("pool", "status", repo, env=E)["slots"][0]
         assert row["state"] == "warming" and row["elapsed_seconds"] >= 0 and row["estimate_seconds"] >= 1, row
+        sm = xcfs("pool", "status", repo, env=E)["summary"][repo]
+        assert sm["warming"] == 1 and sm["ready"] == 0 and sm["next_ready_in_seconds"] is not None, sm
         w = subprocess.run([PY, XCFS, "pool", "status", repo, "--watch"], env=E, capture_output=True, text=True, timeout=60)
         assert w.returncode == 0 and "building" in w.stdout and "of about" in w.stdout, w.stdout[-600:]
     finally:
         p.wait(60)
     row = xcfs("pool", "status", repo, env=E)["slots"][0]
     assert row["state"] == "idle" and "step" not in row and row["warm"], row
+    sm = xcfs("pool", "status", repo, env=E)["summary"][repo]
+    assert sm["ready"] == 1 and sm["free"] == 1 and sm["leased"] == 0 and sm["next_checkout"] == row["worktree"], sm
 
 
 @test

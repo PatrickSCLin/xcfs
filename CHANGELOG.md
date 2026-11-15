@@ -5,6 +5,10 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs pool status --json` has a `summary` per project for orchestrators: ready, free, leased and warming slots,
+  the slot a checkout would get, when the next warm-up should be done.
+- `examples/agent-instructions`: instructions for any agent tool's instruction file, and which file each tool reads;
+  `docs/agents.md` opens with the contract (steps, fields, exit codes).
 - `xcfs gc --sizes`: what xcfs holds on disk (pools, caches, worktrees) against the free space of each volume.
 - `maxSessions` setting: at most this many build sessions alive; the longest idle stops first.
 - `minFreeGB` setting: keep space free on the pool's volume by retiring other projects' idle slots, least recently

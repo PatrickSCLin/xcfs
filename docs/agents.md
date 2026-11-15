@@ -1,9 +1,29 @@
 # Using xcfs from an AI agent
 
+## The contract
+
+What an agent (or the tool around it) does, in order, and what it reads back. Every command prints one JSON object
+with `--json`; the fields named here are the stable ones ([stability.md](stability.md)).
+
+| step | command | read | when it fails |
+|---|---|---|---|
+| before starting agents (an orchestrator) | `xcfs pool status <repo> --json` | `summary.<repo>`: `ready` (built at the baseline), `free`, `leased`, `warming`, `next_checkout`, `next_ready_in_seconds` | — |
+| get a checkout | `xcfs checkout <repo> <branch> --session ID --json` | `worktree` (work there), `warm`, `hint` | 10: no free slot (`--wait 600`, or `xcfs new`); 3: config not trusted |
+| or a plain worktree | `xcfs new <repo> <branch> --session ID --json` | `worktree` | 4: another volume; 3 |
+| check while editing | `xcfs check <file>... --json` | `ok`, `diagnostics`, `against` | 8: fix `diagnostics` |
+| build | `xcfs build [path] --json` | `ok`, `diagnostics`, `seconds` | 8: fix `diagnostics`; 9: timed out |
+| test | `xcfs test [path] [--scheme S] [--only T/C/m] --json` | `ok`, `tests`, `failures`, `failed` | 8: fix `failed` |
+| finish a task | commit, then `xcfs release --prune-branch --json` (slot) or `xcfs rm <wt> --apply --prune-branch --json` | `ok` | 5: uncommitted work; 7: changed carried files; 6: in use |
+| the session ends | `xcfs reap --session ID --apply --prune-branch --json` | `left` (kept: unsaved work) | never fails (exit 0) |
+
+On every failure, `error` says what happened and `next` what to do. A refusal (5, 7) means xcfs would otherwise have
+lost something: commit or ask, never force or delete by hand.
+
 ## Instructions to paste
 
-Put something like this into the agent's instruction file (`CLAUDE.md`, `AGENTS.md`, …) of a repository, adjusting
-the paths:
+[examples/agent-instructions](../examples/agent-instructions/README.md) has a block for any tool's instruction file
+(`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, an Aider conventions file) and says which file each tool reads. A shorter one,
+to adjust:
 
 ```markdown
 ## Checkouts and builds
