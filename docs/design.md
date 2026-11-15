@@ -196,9 +196,11 @@ Collected from two months of a worktree script in daily use, where every special
 
 ## Not verified
 
-- The pool and the session on a large project: everything xcfs itself measured ran on the sample. The large-app
+- The pool and the session on a very large project (a thousand targets and more): xcfs itself was measured on the
+  sample and on the public apps of [benchmark.md](benchmark.md). The large-app
   numbers come from prototypes of the same mechanisms.
-- `swbuild` on Xcode versions other than 27.0 (the regression check decides on each machine).
+- `swbuild` on Xcode versions other than 27.0–27.2 (the regression check decides on each machine; see
+  [xcode-versions.md](xcode-versions.md)).
 - The Metal toolchain hand-over to the session (written from the prototype's recipe; the sample has no Metal).
 - Intel Macs (the filesystem check reads the 64-bit-inode `statfs` layout there; not run).
 - Signed device builds; running the same slot in Xcode.app at the same time (Xcode.app would build its own copy).

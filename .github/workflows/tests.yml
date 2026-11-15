@@ -1,0 +1,27 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["python3", "/usr/bin/python3"]   # the runner's current Python 3, and the 3.9 of the command-line tools
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versions
+        run: |
+          sw_vers
+          ${{ matrix.python }} --version
+          git --version
+      - name: End-to-end tests
+        run: ${{ matrix.python }} tests/xcfs_test.py --python ${{ matrix.python }}

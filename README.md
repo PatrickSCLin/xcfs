@@ -135,7 +135,8 @@ hooks above and let the agent tool do it.
   ([Build session](#build-session)).
 - A repository, its worktrees and its pool on one APFS volume; `xcfs` refuses rather than silently copying in full.
 - Optional: the experimental Swift driver applies to Xcode 27.x (Swift 6.4) only; elsewhere builds use Xcode's own
-  driver.
+  driver. [docs/xcode-versions.md](docs/xcode-versions.md) lists what was run on which Xcode version and what happens
+  on one that does not fit.
 
 ## Correctness
 
@@ -472,6 +473,13 @@ slot lifecycle, the edge cases and how each is handled, and what is not verified
 those problems the measured apps have, what each is worth in seconds, and why xcfs is not rewritten in a faster language.
 [docs/incremental-swift.md](docs/incremental-swift.md): the experimental Swift driver's patch — what upstream would need
 (a filter hook in the driver, or finer fingerprints in the frontend) — and how it compares with Xcode's compilation cache.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md): reporting bugs and measurements, running the tests, the rules for a change.
+[docs/stability.md](docs/stability.md): the JSON fields, exit codes and config keys that scripts and agents can rely
+on. [CHANGELOG.md](CHANGELOG.md). [SECURITY.md](SECURITY.md): reporting a vulnerability, and what xcfs runs, reads
+from the network, writes and deletes.
 
 ## License
 
