@@ -5,6 +5,7 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `maxSessions` setting: at most this many build sessions alive; the longest idle stops first.
 - `minFreeGB` setting: keep space free on the pool's volume by retiring other projects' idle slots, least recently
   used first, instead of refusing a slot.
 - `xcfs doctor <checkout>` reports what is kept for that checkout: its build session (running or not), whether its

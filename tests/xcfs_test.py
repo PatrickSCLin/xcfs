@@ -2013,6 +2013,44 @@ def t80_min_free_retires_idle_slots_of_other_projects():
     assert xcfs("pool", "warm", b, env=E)["_code"] == 11 and os.path.isdir(leased)
 
 
+@test
+def t81_max_sessions_stops_the_longest_idle():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters import xcode_session as xs
+    import socket, tempfile, threading
+    assert xs.to_stop([("a", 5.0), ("b", 100.0)], 0) == []
+    assert xs.to_stop([("a", 5.0), ("b", 100.0)], 3) == []
+    assert xs.to_stop([("a", 5.0), ("b", 100.0)], 2) == ["b"]
+    assert xs.to_stop([("a", 5.0), ("b", None), ("c", 50.0)], 2) == ["c", "a"]
+    assert xs.to_stop([("b", None)], 1) == [], "a session that is building is never stopped"
+    d = tempfile.mkdtemp(dir="/tmp")   # unix socket paths are short
+    quits = []
+
+    def fake(name, idle, answer=True):
+        sp = os.path.join(d, name + ".sock")
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); srv.bind(sp); srv.listen(4)
+
+        def loop():
+            while True:
+                c, _ = srv.accept()
+                f = c.makefile("rw"); req = json.loads(f.readline())
+                if not answer:
+                    time.sleep(5); c.close(); continue
+                if req["op"] == "quit":
+                    quits.append(name); f.write('{"ok": true}\n'); f.flush(); c.close(); return
+                f.write(json.dumps({"ok": True, "idle_seconds": idle}) + "\n"); f.flush(); c.close()
+        threading.Thread(target=loop, daemon=True).start()
+        return sp
+    fake("old", 900.0); fake("new", 10.0); fake("busy", 0, answer=False)
+    open(os.path.join(d, "gone.sock"), "w").close()   # a socket file nobody listens on
+    own = os.path.join(d, "own.sock")
+    found = dict(xs.other_sessions(own))
+    assert set(found) == {os.path.join(d, n + ".sock") for n in ("old", "new", "busy")}, found
+    assert found[os.path.join(d, "busy.sock")] is None
+    assert xs.limit_sessions(3, own) == [os.path.join(d, "old.sock")] and quits == ["old"], quits
+    shutil.rmtree(d, ignore_errors=True)
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

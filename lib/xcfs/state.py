@@ -28,6 +28,7 @@ DEFAULT_SETTINGS = {
     "warmJobs": 0,            # slots one warm-up builds at the same time; 0: one per 16 GB of memory
     "minFreeGB": 0,           # keep this much free on the pool's volume: idle slots are retired (oldest use first)
                               # to make room for a slot being created or warmed; 0: off, a slot is refused instead
+    "maxSessions": 0,         # build sessions alive at once (≈0.7 GB resident each); the longest idle stops first; 0: no limit
     "sessionIdleMinutes": 30,  # a checkout's build session (and what it keeps running) quits after this long unused
 }
 

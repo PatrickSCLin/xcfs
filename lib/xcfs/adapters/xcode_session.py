@@ -669,6 +669,7 @@ def serve(sock_path, swb, cwd, env_json, log_dir, idle_seconds=IDLE_SECONDS):
     os.chmod(sock_path, 0o600)
     srv.listen(4)
     srv.settimeout(float(idle_seconds))
+    since = time.time()   # the end of the last build (for maxSessions: which session has waited longest)
     try:
         while True:
             try:
@@ -686,10 +687,12 @@ def serve(sock_path, swb, cwd, env_json, log_dir, idle_seconds=IDLE_SECONDS):
                     f.flush()
                     break
                 if req.get("op") == "ping":
-                    f.write(json.dumps({"ok": True, "pid": os.getpid(), "swbuild": sb.p.pid}) + "\n")
+                    f.write(json.dumps({"ok": True, "pid": os.getpid(), "swbuild": sb.p.pid,
+                                        "idle_seconds": round(time.time() - since, 1)}) + "\n")
                     f.flush()
                     continue
                 res = handle(sb, req, last)
+                since = time.time()
                 f.write(json.dumps(res) + "\n")
                 f.flush()
     finally:
@@ -750,6 +753,9 @@ def ensure_daemon(adapter, ctx, cwd, env):
         say("  restarting the build session: its environment changed")
         stop(ctx)
     swb = swbuild_path()
+    if swb:
+        from .. import state
+        limit_sessions(int(state.settings().get("maxSessions") or 0), sp)
     if not swb:
         raise Fail("no swbuild in this Xcode", next="build with xcodebuild: set \"driver\": \"xcodebuild\" in the config, "
                    "or XCFS_DRIVER=xcodebuild")
@@ -776,6 +782,48 @@ def ensure_daemon(adapter, ctx, cwd, env):
     raise Fail("the build session did not start; see %s" % os.path.join(log_dir, "daemon.log"),
                next="`xcfs doctor <checkout> --session-check` shows why; meanwhile XCFS_DRIVER=xcodebuild builds without "
                     "the session")
+
+
+def other_sessions(own):
+    """[(socket, seconds since its last build, or None while it builds)] of the other live sessions of this user."""
+    out = []
+    for sp in glob.glob(os.path.join(os.path.dirname(own), "*.sock")):
+        if sp == own:
+            continue
+        try:
+            r = call(sp, {"op": "ping"}, 3)
+            out.append((sp, float(r.get("idle_seconds") or 0)))
+        except socket.timeout:
+            out.append((sp, None))   # busy building: it answers between builds
+        except (OSError, ValueError):
+            pass                     # a socket left by a session that is gone
+    return out
+
+
+def to_stop(sessions, limit):
+    """Which sessions to stop so that a new one keeps the total at limit: the longest idle first, never one that is
+    building. limit 0: no limit."""
+    if not limit or len(sessions) + 1 <= limit:
+        return []
+    idle = sorted((s for s in sessions if s[1] is not None), key=lambda s: -s[1])
+    return [sp for sp, _ in idle[:len(sessions) + 1 - limit]]
+
+
+def limit_sessions(limit, own):
+    """maxSessions: before a session starts, stop the longest-idle others beyond the limit (each costs about 0.7 GB
+    resident; a stopped one starts again on its checkout's next build)."""
+    if not limit:
+        return []
+    stopped = []
+    for sp in to_stop(other_sessions(own), limit):
+        try:
+            call(sp, {"op": "quit"}, 30)
+            stopped.append(sp)
+        except (OSError, ValueError):
+            pass
+    if stopped:
+        say("  stopped %d idle build session(s) to stay within maxSessions %d" % (len(stopped), limit))
+    return stopped
 
 
 def ping(sp):

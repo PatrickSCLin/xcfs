@@ -98,7 +98,8 @@ def sizing_advice(settings, mem=None):
     if mem < 32:
         out.append("with less than 32 GB, keep pools at 1–2 slots and warmJobs at 1 (settings.json), and run at most "
                    "two agents that build at the same time; three building agents peaked at 8–12 GB with xcfs on a "
-                   "mid-size app, plus the agents themselves")
+                   "mid-size app, plus the agents themselves; maxSessions 2 keeps idle build sessions (≈0.7 GB each) "
+                   "from adding up")
     out.append("each slot needs %d GB free on the volume to be created or warmed (slotDiskGB); measured: 1.5–3 GB of "
                "build output per slot on mid-size apps" % settings["slotDiskGB"])
     if not settings.get("minFreeGB"):

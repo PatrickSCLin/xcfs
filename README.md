@@ -362,6 +362,7 @@ state, from one lease to the next; returning a slot keeps its server (and the an
 | `buildTimeout` | 3600 | seconds before a build is killed (exit 9) |
 | `warmJobs` | 0 | slots one warm-up builds side by side; 0 means one per 16 GB of memory (a 64 GB machine warms up to 4 at a time) |
 | `minFreeGB` | 0 | keep this much free on the pool's volume: to make room for a slot being created or warmed, idle slots of other projects are retired, least recently used first (they hold nothing that is not rebuildable; their pools keep the smaller size). 0: a slot that does not fit is refused (exit 11) and nothing else is touched |
+| `maxSessions` | 0 | build sessions alive at once (each ≈0.7 GB resident): before one starts, the longest-idle others beyond the limit stop (never one that is building; a stopped one starts again on its checkout's next build). 0: no limit |
 | `sessionIdleMinutes` | 30 | a checkout's build session (and its `swbuild` and build service, ≈0.7 GB resident) quits after this long unused; the next build starts it again |
 
 | variable | |
@@ -466,7 +467,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 80 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 81 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```
