@@ -1690,6 +1690,47 @@ def t68_init_detects_and_never_overwrites():
     assert m["package"] == "." and m["configurations"]["debug"]["destination"] == "platform=macOS", m
 
 
+@test
+def t69_session_idle_time_is_a_setting():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters import xcode_session as xs
+    d = SB + "/t69"; os.makedirs(d + "/session", exist_ok=True)
+    ctx = type("Ctx", (), {"build_dir": d, "resources": {}})
+    started, pings = [], []
+
+    class P:
+        pid = 4242
+        def poll(self): return None
+
+    def popen(argv, **kw):
+        started.append(argv)
+        return P()
+    settings = os.path.join(ENV.get("XDG_CONFIG_HOME", SB + "/config"), "xcfs", "settings.json")
+    os.makedirs(os.path.dirname(settings), exist_ok=True)
+    saved_settings = open(settings).read() if os.path.exists(settings) else None
+    saved = (xs.ping, xs.swbuild_path, xs.socket_path, xs.subprocess.Popen, os.environ.get("XDG_CONFIG_HOME"))
+    xs.ping = lambda sp: pings.append(1) or len(pings) > 1   # nothing running at first, then the new one answers
+    xs.swbuild_path, xs.socket_path = (lambda: "/bin/true"), (lambda c: d + "/s.sock")
+    xs.subprocess.Popen = popen
+    os.environ["XDG_CONFIG_HOME"] = ENV.get("XDG_CONFIG_HOME", SB + "/config")
+    try:
+        json.dump(dict(json.loads(saved_settings) if saved_settings else {}, sessionIdleMinutes=5), open(settings, "w"))
+        xs.ensure_daemon(None, ctx, d, {"PATH": "/usr/bin"})
+        assert started and started[0][-1] == "300", "the session is started with the configured idle time: %s" % started
+        import inspect
+        assert inspect.signature(xs.serve).parameters["idle_seconds"].default == 1800, "30 minutes by default"
+    finally:
+        xs.ping, xs.swbuild_path, xs.socket_path, xs.subprocess.Popen = saved[:4]
+        if saved[4] is None:
+            os.environ.pop("XDG_CONFIG_HOME", None)
+        else:
+            os.environ["XDG_CONFIG_HOME"] = saved[4]
+        if saved_settings is None:
+            os.remove(settings)
+        else:
+            open(settings, "w").write(saved_settings)
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

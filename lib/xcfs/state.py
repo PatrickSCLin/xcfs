@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = {
     "warmOnRelease": True,    # a released slot is brought back to its baseline and rebuilt in the background
     "buildTimeout": 3600,     # seconds; a build that runs longer is killed (exit 9)
     "warmJobs": 0,            # slots one warm-up builds at the same time; 0: one per 16 GB of memory
+    "sessionIdleMinutes": 30,  # a checkout's build session (and what it keeps running) quits after this long unused
 }
 
 

@@ -22,7 +22,7 @@ from ..util import Fail, USAGE, git, phys, read_json, run, say, short_hash, warn
 
 KEY_FILES = re.compile(r"(^|/)(Package\.swift|Package\.resolved|Podfile\.lock|project\.yml|project\.json|Cartfile\.resolved|"
                        r"[^/]+\.xcconfig|[^/]+\.xcscheme|contents\.xcworkspacedata|project\.pbxproj)$")
-IDLE_SECONDS = 1800
+IDLE_SECONDS = 1800   # the default; the machine setting sessionIdleMinutes changes it
 
 
 # ------------------------------------------------------------------ where things are
@@ -654,8 +654,9 @@ def shq(s):
     return '"%s"' % s.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def serve(sock_path, swb, cwd, env_json, log_dir):
-    """Daemon main loop: one request per connection, one build at a time, quit after IDLE_SECONDS without work."""
+def serve(sock_path, swb, cwd, env_json, log_dir, idle_seconds=IDLE_SECONDS):
+    """Daemon main loop: one request per connection, one build at a time, quit after idle_seconds without work (its
+    swbuild and build service go with it: about 0.7 GB resident per checkout while they live)."""
     os.makedirs(log_dir, exist_ok=True)
     log = open(os.path.join(log_dir, "session-%s.log" % time.strftime("%Y%m%d-%H%M%S")), "w", buffering=1)
     env = dict(os.environ, **json.loads(env_json))
@@ -667,7 +668,7 @@ def serve(sock_path, swb, cwd, env_json, log_dir):
     srv.bind(sock_path)
     os.chmod(sock_path, 0o600)
     srv.listen(4)
-    srv.settimeout(IDLE_SECONDS)
+    srv.settimeout(float(idle_seconds))
     try:
         while True:
             try:
@@ -756,7 +757,10 @@ def ensure_daemon(adapter, ctx, cwd, env):
     log_dir = os.path.join(session_dir(ctx), "logs")
     os.makedirs(log_dir, exist_ok=True)
     with open(os.path.join(log_dir, "daemon.log"), "a") as log:
-        p = subprocess.Popen([sys.executable, "-c", code, sp, swb, cwd, json.dumps(env), log_dir], stdin=subprocess.DEVNULL,
+        from .. import state
+        idle = str(int(float(state.settings().get("sessionIdleMinutes", IDLE_SECONDS / 60)) * 60))
+        p = subprocess.Popen([sys.executable, "-c", code, sp, swb, cwd, json.dumps(env), log_dir, idle],
+                             stdin=subprocess.DEVNULL,
                              stdout=log, stderr=log, start_new_session=True, cwd="/")
     ctx.resources["session_pid"] = p.pid
     write_json(env_file, env)
