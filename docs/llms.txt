@@ -1,0 +1,26 @@
+# xcfs
+
+> xcfs gives parallel AI coding agents their own git worktrees of one Xcode (iOS or macOS) project without a cold
+> build per worktree: a pool of checkouts kept built at the baseline, an incremental build session instead of
+> xcodebuild's fixed cost, a one-file compile check, one simulator per checkout, and cleanup that removes everything a
+> checkout made (DerivedData included) and nothing that holds unsaved work. It installs as Claude Code
+> WorktreeCreate / WorktreeRemove / SessionEnd hooks (`xcfs hook install --apply`), and every command answers in JSON
+> for other agent tools. macOS on APFS, Xcode, Python 3.9+ standard library; MIT; `brew install PatrickSCLin/xcfs/xcfs`.
+
+Measured with three agents at once on public apps: later batches 1.8–2.7× faster than plain `git worktree` +
+`xcodebuild` (the first batch on a fresh pool is slower, it pays for the warm-up), about half the peak memory, and
+nothing left in DerivedData (plain worktrees left 1.5–2.9 GB each).
+
+## Docs
+
+- [README](https://github.com/PatrickSCLin/xcfs/blob/main/README.md): what it solves, benchmarks, commands, configuration
+- [Using xcfs from an AI agent](https://github.com/PatrickSCLin/xcfs/blob/main/docs/agents.md): the commands, the hooks, exit codes and what to do on each
+- [What is stable](https://github.com/PatrickSCLin/xcfs/blob/main/docs/stability.md): JSON fields, exit codes and config keys scripts can rely on
+- [Benchmarks](https://github.com/PatrickSCLin/xcfs/blob/main/docs/benchmark.md): method, tables, caveats; raw results in bench/results
+- [Xcode versions](https://github.com/PatrickSCLin/xcfs/blob/main/docs/xcode-versions.md): what was run on which Xcode, and what happens on others
+
+## Optional
+
+- [Design](https://github.com/PatrickSCLin/xcfs/blob/main/docs/design.md): architecture, adapter interface, slot lifecycle, edge cases, what is not verified
+- [Build systems](https://github.com/PatrickSCLin/xcfs/blob/main/docs/build-systems.md): Bazel, Buck2, Tuist, compiler caches, and what each is worth here
+- [The experimental Swift driver](https://github.com/PatrickSCLin/xcfs/blob/main/docs/incremental-swift.md): the patch and what upstream would need

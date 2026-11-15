@@ -1,0 +1,4 @@
+title: xcfs
+description: Parallel AI coding agents on one Xcode project — built worktrees, build sessions, a simulator per agent, clean removal.
+theme: jekyll-theme-primer
+include: [llms.txt]

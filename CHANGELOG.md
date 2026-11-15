@@ -5,6 +5,8 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `docs/index.md`, `docs/llms.txt` and `docs/_config.yml`: a GitHub Pages site from `docs/`, and an index for
+  language models.
 - `xcfs uninstall [--apply]`: list everything xcfs made on the machine and remove it; what holds unsaved work is
   kept.
 - `xcfs hook install | uninstall | status [repo] [--apply]`: put the Claude Code hooks in the user's or a
