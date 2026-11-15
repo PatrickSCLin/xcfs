@@ -891,7 +891,7 @@ def breakdown(total, pif, start, build, timing):
             "compile_task_seconds": round(compile_s, 2), "link_task_seconds": round(link_s, 2)}
 
 
-def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None):
+def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None, start_only=False):
     """A build through the session. With test_scheme: build that scheme's test targets (into the same DerivedData,
     so whatever the last build made is reused); None when it has none the session can find."""
     t0 = time.time()
@@ -928,6 +928,10 @@ def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None):
     t1 = time.time()
     sp = ensure_daemon(adapter, ctx, cwd, env)
     t_start = time.time() - t1
+    if start_only:   # `xcfs session start`: the description exported and the session up, nothing built
+        return {"ok": True, "seconds": round(time.time() - t0, 2), "driver": "session", "pif_exported": exported,
+                "configuration": name, "breakdown": {"pif_seconds": round(t_pif, 2),
+                                                      "session_start_seconds": round(t_start, 2)}}
     timeout = args.get("timeout") or 3600
     try:
         out = call(sp, {"op": "build", "pif": pif_path, "request": rfile, "target": target,
@@ -957,6 +961,10 @@ def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None):
 
 def build(adapter, ctx, name, conf, args):
     return session_build(adapter, ctx, name, conf, args)
+
+
+def start(adapter, ctx, name, conf, args):
+    return session_build(adapter, ctx, name, conf, args, start_only=True)
 
 
 def build_tests(adapter, ctx, name, conf, args, scheme):

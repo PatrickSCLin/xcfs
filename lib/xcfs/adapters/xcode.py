@@ -527,6 +527,15 @@ class XcodeAdapter(Adapter):
         from . import xcode_session
         return xcode_session.choose_driver(self, ctx)
 
+    def start(self, ctx, args):
+        """Have the checkout's build session running, with its project description exported, without building: the
+        next build pays neither (on a large app, seconds to tens of seconds)."""
+        name, conf = self.conf(ctx.entry, args.get("config"))
+        if self.driver(ctx) != "session":
+            return {"ok": True, "seconds": 0, "diagnostics": [], "skipped": "builds of this checkout use xcodebuild"}
+        from . import xcode_session
+        return xcode_session.start(self, ctx, name, conf, args)
+
     def build(self, ctx, args):
         name, conf = self.conf(ctx.entry, args.get("config"))
         if self.driver(ctx) == "session":

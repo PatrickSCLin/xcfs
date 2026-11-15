@@ -28,6 +28,8 @@ Building (in a worktree, a slot, or any checkout; output never inside the source
   xcfs check <file>... [--config NAME]                          compile-check these files
   xcfs test [path] [--config NAME] [--scheme NAME] [--only TARGET/CLASS[/METHOD]]...
   xcfs run [path] [--config NAME]                               build, install on the checkout's simulator, launch
+  xcfs session start [path] [--config NAME]                     start the checkout's build session (project description
+                                                                exported), nothing built: the next build starts sooner
 
 Agent tools
   xcfs hook worktree-create | worktree-remove | session-end      for a tool's hooks (Claude Code's WorktreeCreate,
@@ -137,6 +139,13 @@ def cmd_build(a):
     return build_like("build", a, a.pos[0] if a.pos else ".")
 
 
+def cmd_session(a):
+    sub = a.pos[0] if a.pos else ""
+    if sub != "start":
+        raise Fail("usage: xcfs session start [path] [--config NAME]", USAGE)
+    return build_like("start", a, a.pos[1] if len(a.pos) > 1 else ".")
+
+
 def cmd_check(a):
     if not a.pos:
         raise Fail("usage: xcfs check <file>... [--config NAME]", USAGE)
@@ -228,7 +237,7 @@ def cmd_pool(a):
 
 COMMANDS = {"new": worktree.cmd_new, "rm": worktree.cmd_rm, "reap": worktree.cmd_reap, "adopt": worktree.cmd_adopt,
             "ls": worktree.cmd_ls, "gc": maint.cmd_gc, "uninstall": maint.cmd_uninstall, "stats": maint.cmd_stats, "doctor": maint.cmd_doctor, "init": maint.cmd_init,
-            "trust": maint.cmd_trust, "hook": hooks.cmd_hook, "build": cmd_build, "check": cmd_check, "test": cmd_test, "run": cmd_run,
+            "trust": maint.cmd_trust, "hook": hooks.cmd_hook, "session": cmd_session, "build": cmd_build, "check": cmd_check, "test": cmd_test, "run": cmd_run,
             "checkout": cmd_checkout, "release": cmd_release, "pool": cmd_pool}
 
 

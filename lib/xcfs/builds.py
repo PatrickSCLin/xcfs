@@ -133,9 +133,13 @@ def report(res, op):
                 bits.append("%s=%s" % (k, r[k]))
         b = r.get("breakdown")
         if b:
-            bits.append("(pif %.1fs, session start %.1fs, planning %.1fs, tasks %.1fs; compile %.1fs and link %.1fs of task "
-                        "time)" % (b["pif_seconds"], b["session_start_seconds"], b["planning_seconds"], b["tasks_seconds"],
-                                   b["compile_task_seconds"], b["link_task_seconds"]))
+            parts = [("pif", "pif_seconds"), ("session start", "session_start_seconds"), ("planning", "planning_seconds"),
+                     ("tasks", "tasks_seconds")]
+            text = ", ".join("%s %.1fs" % (n, b[k]) for n, k in parts if k in b)
+            if "compile_task_seconds" in b:
+                text += "; compile %.1fs and link %.1fs of task time" % (b["compile_task_seconds"],
+                                                                         b.get("link_task_seconds", 0))
+            bits.append("(%s)" % text)
         if r.get("log"):
             bits.append("log: %s" % r["log"])
         say("%s: %s" % (op, "  ".join(bits)))

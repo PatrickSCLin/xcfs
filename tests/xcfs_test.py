@@ -2068,6 +2068,15 @@ def t82_gc_sizes_what_xcfs_holds():
     assert "pool" in kinds and u["total_kb"] > 0 and u["free"] and u["free"][0]["free_kb"] > 0, u
 
 
+@test
+def t83_session_start_builds_nothing():
+    E = toy_env(); repo = toy_repo("r83", slots=1)
+    s = xcfs("checkout", repo, "s83", env=E)
+    r = xcfs("session", "start", s["worktree"], env=E)
+    assert r["_code"] == 0 and r["ok"] and "keeps nothing running" in r.get("skipped", ""), r
+    assert xcfs("session", "stop", s["worktree"], env=E)["_code"] == 2
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

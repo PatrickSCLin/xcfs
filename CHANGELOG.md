@@ -5,6 +5,7 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs session start [path]`: the build session and its project description ready, nothing built.
 - `xcfs pool status --json` has a `summary` per project for orchestrators: ready, free, leased and warming slots,
   the slot a checkout would get, when the next warm-up should be done.
 - `examples/agent-instructions`: instructions for any agent tool's instruction file, and which file each tool reads;

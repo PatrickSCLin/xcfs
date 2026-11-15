@@ -132,7 +132,8 @@ hooks above and let the agent tool do it.
 ## When it does not help much
 
 - **One checkout, day to day.** Without parallel checkouts there is no pool to reuse; what remains is the build
-  session (a no-op build 5.9 → 0.9 s, a small edit 8 → 3–4 s on Ice Cubes) and `xcfs check`.
+  session (a no-op build 5.9 → 0.9 s, a small edit 8 → 3–4 s on Ice Cubes), `xcfs check`, and `xcfs session start`
+  when the project is opened, so that the first build does not wait for the session and the project description.
 - **The first batch on a fresh pool**, as above: the warm-up costs more than plain worktrees' cold builds, and
   skipping it is slower still (451 s against 284–302 s on Ice Cubes, one run): warm the pool before the agents need it.
 - **CI.** Fresh machines and one build per job: no pool survives between jobs, and remote build caches are out of
@@ -237,6 +238,7 @@ through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
 | `xcfs check <file>... [--config NAME]` | Compile-check these files (see [Build session](#build-session) for what a pass means). |
 | `xcfs test [path] [--config NAME] [--scheme NAME] [--only TARGET/CLASS[/METHOD]]...` | Run tests on the checkout's own simulator; `--scheme` names another scheme (a package's tests). With the session driver the session builds the tests (only what changed since the last build) and xcodebuild runs them without building. |
 | `xcfs run [path] [--config NAME]` | Build, install on the checkout's simulator, launch. |
+| `xcfs session start [path] [--config NAME]` | Start the checkout's build session with its project description exported, building nothing, so the next build starts at once (a shell hook or an editor task can run it when a project is opened). With the `xcodebuild` driver it does nothing. |
 | **agent tools** | |
 | `xcfs hook worktree-create \| worktree-remove` | For a tool's own worktree hooks (Claude Code's `WorktreeCreate`/`WorktreeRemove`): JSON on stdin; create prints the path of a built slot or a new xcfs worktree. See [docs/agents.md](docs/agents.md#worktrees-an-agent-tool-creates-by-itself). |
 | `xcfs hook session-end` | For a tool's session-end hook (Claude Code's `SessionEnd`): JSON with `session_id` on stdin; removes the session's clean worktrees and returns its clean slots (`reap --session ID --apply --prune-branch`), records what was left in `last-reap.json` in the state directory, and always exits 0. |
@@ -469,7 +471,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 82 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 83 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

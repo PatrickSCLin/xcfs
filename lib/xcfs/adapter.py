@@ -112,6 +112,10 @@ class Adapter:
     def warm(self, ctx, args):
         return {"ok": True, "seconds": 0, "diagnostics": [], "skipped": "nothing to build"}
 
+    def start(self, ctx, args):
+        """`xcfs session start`: whatever makes the next build start sooner (a build server), without building."""
+        return {"ok": True, "seconds": 0, "diagnostics": [], "skipped": "%s keeps nothing running" % self.name}
+
     def release(self, ctx):
         pass
 

@@ -183,7 +183,11 @@ b = d.get("breakdown") or {}
 print("%-34s pif %.2fs, session start %.2fs, planning %.2fs, tasks %.2fs, other %.2fs" % ("", b.get("pif_seconds", -1), b.get("session_start_seconds", -1), b.get("planning_seconds", -1), b.get("tasks_seconds", -1), b.get("other_seconds", -1)))
 assert d.get("driver") == "session", d
 assert b and abs(sum(b[k] for k in ("pif_seconds", "session_start_seconds", "tasks_seconds", "planning_seconds", "other_seconds")) - d["seconds"]) < 0.5, (d["seconds"], b)' "$1" "$2"; }
+out=$("${XCFS}" session start "${swt}" --json) || fail "session start failed: ${out}"
+[ "$(json "${out}" driver)" = session ] || fail "session start did not start a session: ${out}"
+echo "session start: $(json "${out}" seconds)s (PIF and session, nothing built)"
 out=$("${XCFS}" build "${swt}" --json) || fail "session cold build failed: ${out}"; report "${out}" "cold build"
+[ "$(json "${out}" pif_exported)" = False ] || fail "the cold build after session start exported the PIF again"
 out=$("${XCFS}" build "${swt}" --json) || fail "session no-op failed: ${out}"; report "${out}" "no-op"
 [ "$(json "${out}" compile_tasks)" = 0 ] || fail "a no-op compiled something"
 echo 'enum Added { static func v() -> Int { 1 } }' >> "${swt}/App/Other.swift"
