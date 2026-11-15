@@ -1536,6 +1536,47 @@ def t64_parallel_warm_ups_share_state_safely():
             os.environ["XCFS_DRIVER"] = saved[2]
 
 
+@test
+def t65_driver_frontends_go_through_a_shared_gate():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters import swift_driver as sd
+    tools = SB + "/t65/toolchain/usr/bin"
+    os.makedirs(tools)
+    for n in ("swift-frontend", "swift-symbolgraph-extract", "clang"):
+        open(os.path.join(tools, n), "w").write("#!/bin/sh\n"); os.chmod(os.path.join(tools, n), 0o755)
+    r = SB + "/t65/install"
+    os.makedirs(r + "/bin")
+    toolchain = {"frontend": tools + "/swift-frontend"}
+    sd.refresh_wrapper(r, toolchain)
+    sd.refresh_wrapper(r, toolchain)   # again: nothing changes, nothing fails
+    w = open(r + "/bin/swiftc").read()
+    assert 'XCFS_REAL_SWIFT_FRONTEND="%s"' % toolchain["frontend"] in w and "frontend-bin/swift-frontend" in w, w
+    assert os.readlink(r + "/frontend-bin/swift-symbolgraph-extract") == tools + "/swift-symbolgraph-extract", \
+        "the driver finds the other tools next to the frontend"
+    gate = r + "/frontend-bin/swift-frontend"
+    assert not os.path.islink(gate) and os.access(gate, os.X_OK)
+    # one place: the second frontend starts when the first has ended
+    log = SB + "/t65/runs.log"
+    real = SB + "/t65/fake-frontend"
+    open(real, "w").write("#!/bin/sh\necho start $(date +%s.%N 2>/dev/null || python3 -c 'import time;print(time.time())') >> " + log
+                          + "\nsleep 1\n")
+    os.chmod(real, 0o755)
+    env = dict(os.environ, XCFS_REAL_SWIFT_FRONTEND=real, XCFS_FRONTEND_JOBS="1")
+    t0 = time.time()
+    ps = [subprocess.Popen([gate, "-frontend", "-c"], env=env) for _ in range(2)]
+    [p.wait() for p in ps]
+    assert all(p.returncode == 0 for p in ps) and time.time() - t0 >= 1.9, "two compile jobs ran at once with one place"
+    t0 = time.time()
+    ps = [subprocess.Popen([gate, "-frontend", "-emit-module"], env=env) for _ in range(2)]
+    [p.wait() for p in ps]
+    assert time.time() - t0 < 1.9, "emitting a module never waits"
+    env["XCFS_FRONTEND_JOBS"] = "2"
+    t0 = time.time()
+    ps = [subprocess.Popen([gate, "-frontend", "-c"], env=env) for _ in range(2)]
+    [p.wait() for p in ps]
+    assert time.time() - t0 < 1.9, "two places: both at once"
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

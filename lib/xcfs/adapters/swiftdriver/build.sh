@@ -91,12 +91,23 @@ features["features"] = [f for f in features["features"]
 json.dump(features, open(dst, "w"), indent=1)
 PY
 
+# SWIFT_EXEC for Xcode, and the gate its frontends start through (it bounds how many run at once across every build
+# using this install). xcfs keeps both up to date itself (swift_driver.py: WRAPPER, refresh_wrapper).
+# The driver finds the toolchain's other tools next to the frontend: frontend-bin links them all.
+mkdir -p "$ROOT/frontend-bin"
+for e in "$(dirname "$FRONTEND")"/*; do
+  [ "$(basename "$e")" = swift-frontend ] || ln -sfn "$e" "$ROOT/frontend-bin/$(basename "$e")"
+done
+cp "$HERE/frontend-gate.py" "$ROOT/frontend-bin/swift-frontend.new"
+chmod +x "$ROOT/frontend-bin/swift-frontend.new"
+mv "$ROOT/frontend-bin/swift-frontend.new" "$ROOT/frontend-bin/swift-frontend"
 cat > "$ROOT/bin/swiftc.new" <<EOF
 #!/bin/sh
-# SWIFT_EXEC for Xcode (written by xcfs swiftdriver/build.sh): the patched swift-driver, run against
-# the frontend of the Xcode it was built for.
+# SWIFT_EXEC for Xcode (written by xcfs): the patched swift-driver, run against the frontend of the Xcode it was
+# built for, through frontend-bin/swift-frontend (a gate that bounds how many frontends run at once). wrapper 2
 D=\$(cd "\$(dirname "\$0")" && pwd)
-export SWIFT_DRIVER_SWIFT_FRONTEND_EXEC="$FRONTEND"
+export XCFS_REAL_SWIFT_FRONTEND="$FRONTEND"
+export SWIFT_DRIVER_SWIFT_FRONTEND_EXEC="\$(cd "\$D/.." && pwd)/frontend-bin/swift-frontend"
 export SWIFT_DRIVER_API_DIGEST_DIR="\${SWIFT_DRIVER_API_DIGEST_DIR:-\$(cd "\$D/.." && pwd -P)/store}"
 exec "\$D/swift-driver" --driver-mode=swiftc "\$@"
 EOF

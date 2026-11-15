@@ -87,7 +87,15 @@ tag and self-tested; the commit built is recorded in `toolchain.json`.
   plus a one-time build of the Clang modules the extraction needs (tens of seconds the first time on a new machine or
   SDK). A build that changes an interface waits for the extraction of the modules it needs.
 - `SWIFT_USE_INTEGRATED_DRIVER=NO` makes Xcode run `swiftc` as a process per target instead of planning compile jobs
-  in its own build service; measured, this costs nothing on the projects above.
+  in its own build service. One build costs the same. But each `swiftc` starts as many compile jobs as there are
+  cores, so several targets compiling at once, and several cold builds at once (a fresh pool warming three slots side
+  by side), ran far more frontends than Xcode's own driver would: 59 GB of frontends at the peak on Ice Cubes, against
+  24 GB without this driver. Its frontends therefore start through a gate (`frontend-gate.py`, installed as
+  `frontend-bin/swift-frontend`, with the toolchain's other tools linked next to it, where the driver looks for
+  them): compile jobs (`-c`) wait for one of four places per core, shared by every build that uses the install
+  (`XCFS_FRONTEND_JOBS` sets another number); emitting a module, scans and queries never wait. Measured on that fresh
+  pool: 22 GB at the peak and 276 s, against 59 GB and 217 s ungated (two places per core: 17 GB, 327 s). xcfs
+  writes the wrapper and the gate itself, so an install made before them gets them on its next use.
 - `@inlinable`, `@_transparent` and `@_alwaysEmitIntoClient` bodies are not part of a digest. Measured: when only such
   a body changes, neither the stock driver nor this one recompiles the clients that use it (the module's dependency
   graph does not change).

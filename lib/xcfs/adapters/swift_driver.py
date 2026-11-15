@@ -18,7 +18,20 @@ from ..util import read_json, run
 KITS = {"6.4": {"patch": "api-digests-swift-6.4.2.patch", "resolved": "Package-swift-6.4.resolved",
                 "commits": dict.fromkeys(("swift-6.4.0-RELEASE", "swift-6.4.1-RELEASE", "swift-6.4.2-RELEASE"),
                                          "174567a5681a9a949bcd52f821deb8fa65105434")}}
-KIT_FILES = ("build.sh", "selftest.py")
+KIT_FILES = ("build.sh", "selftest.py", "frontend-gate.py")
+# SWIFT_EXEC: the patched driver, its frontends started through the gate (frontend-gate.py, installed as
+# frontend-bin/swift-frontend) that bounds how many run at once across every build using this install. The driver
+# finds the toolchain's other tools next to the frontend (swift-symbolgraph-extract, for one), so frontend-bin links
+# every other tool of the toolchain's bin directory.
+WRAPPER = """#!/bin/sh
+# SWIFT_EXEC for Xcode (written by xcfs): the patched swift-driver, run against the frontend of the Xcode it was
+# built for, through frontend-bin/swift-frontend (a gate that bounds how many frontends run at once). wrapper 2
+D=$(cd "$(dirname "$0")" && pwd)
+export XCFS_REAL_SWIFT_FRONTEND="%(frontend)s"
+export SWIFT_DRIVER_SWIFT_FRONTEND_EXEC="$(cd "$D/.." && pwd)/frontend-bin/swift-frontend"
+export SWIFT_DRIVER_API_DIGEST_DIR="${SWIFT_DRIVER_API_DIGEST_DIR:-$(cd "$D/.." && pwd -P)/store}"
+exec "$D/swift-driver" --driver-mode=swiftc "$@"
+"""
 SELFTEST_VERSION = 2       # selftest.py's VERSION: an installed driver tested by an older self-test is tested again
 RETRY_AFTER = 24 * 3600    # a failed build is not retried sooner
 VERSION_LINE = re.compile(r"Apple Swift version (?P<swift>\d+\.\d+(?:\.\d+)?) \((?P<build>swiftlang-[^ )]+)[^)]*\)")
@@ -104,6 +117,7 @@ def status():
     built = bool(toolchain and os.access(wrapper, os.X_OK)
                  and swift_release(toolchain.get("swiftVersion", "")) == info["release"])
     if built and test and test.get("ok") and test.get("version") == SELFTEST_VERSION:
+        refresh_wrapper(r, toolchain)
         return wrapper, None, False
     if building():
         return None, "being built for %s in the background (log: %s)" % (tag, os.path.join(r, "build.log")), False
@@ -114,6 +128,45 @@ def status():
     if built and test and test.get("ok"):
         return None, "built for %s; its newer self-test has not run yet" % tag, True
     return None, "not built yet for %s" % tag, True
+
+
+def refresh_wrapper(r, toolchain):
+    """Bring an install's wrapper and frontend gate to this version of xcfs (an install made by an older one has
+    neither the gate nor its wrapper); rewritten only when they differ. Anything that fails leaves the old ones."""
+    if not toolchain.get("frontend") or not os.path.isdir(os.path.dirname(toolchain["frontend"])):
+        return
+    try:
+        _refresh_wrapper(r, toolchain)
+    except OSError as e:
+        from ..util import warn
+        warn("could not update the experimental driver's wrapper in %s: %s" % (r, e))
+
+
+def _refresh_wrapper(r, toolchain):
+    fbin = os.path.join(r, "frontend-bin")
+    os.makedirs(fbin, exist_ok=True)
+    tools = os.path.dirname(toolchain["frontend"])
+    for n in os.listdir(tools):
+        link, target = os.path.join(fbin, n), os.path.join(tools, n)
+        if n == "swift-frontend" or (os.path.islink(link) and os.readlink(link) == target):
+            continue
+        if os.path.lexists(link):
+            os.remove(link)
+        os.symlink(target, link)
+    files = {os.path.join(r, "bin", "swiftc"): (WRAPPER % {"frontend": toolchain["frontend"]}).encode(),
+             os.path.join(fbin, "swift-frontend"): pkgutil.get_data(__package__, "swiftdriver/frontend-gate.py")}
+    for path, data in files.items():
+        try:
+            with open(path, "rb") as f:
+                if f.read() == data:
+                    continue
+        except OSError:
+            pass
+        tmp = "%s.%d.tmp" % (path, os.getpid())
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, 0o755)
+        os.replace(tmp, path)
 
 
 def install_id():
