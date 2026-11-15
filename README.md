@@ -241,7 +241,7 @@ through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
 | `xcfs hook install \| uninstall \| status [repo] [--apply]` | Put the three hooks in Claude Code's settings — the user's, or `<repo>/.claude/settings.json` — or take them out. Shows the changes; writes only with `--apply`; keeps every hook that is not xcfs's; refuses when another tool's worktree hook is installed. |
 | **maintenance** | |
 | `xcfs gc [--apply] [--foreign] [--stale-days N]` | Repair interrupted operations, return clean slots whose lease went stale, drop unused dependency snapshots and the build output of vanished checkouts. `--foreign` also reports (with `--apply`, removes) orphaned or stale global DerivedData xcfs did not create. |
-| `xcfs doctor [path] [--session-check]` | Environment, hygiene and toolchain checks; `--session-check` runs the build-session regression check. |
+| `xcfs doctor [path] [--session-check]` | Environment, hygiene and toolchain checks, and for a checkout xcfs built its build session, project description and simulator; `--session-check` runs the build-session regression check. |
 | `xcfs init [repo] [--write \| --user] [--force]` | Detect what the repository needs and suggest a config: the project or workspace, the scheme (the one named after it, else one that builds an app), the platform and a configuration for it, git-ignored settings files to carry, dependency directories to seed and the lock files that key them; an XcodeGen or Tuist project's generated project and workspace are seeded too (or, when not generated yet, it says what to run). Prints what it found and the next commands. `--write` saves `.xcfs.json` in the repository, `--user` saves `~/.config/xcfs/<repo>.json` and leaves the repository untouched; an existing config is never overwritten without `--force`. |
 | `xcfs trust <repo>` | Approve the commands a repository's config runs. |
 | `xcfs stats [--days N]` | What xcfs did on this machine (default: the last 7 days), from a local history file in its state directory: checkouts handed out already built and the full builds agents therefore did not wait for (each slot's own last full build time), and the count and median time of builds, checks, tests and warm-ups. Nothing is sent anywhere. |
@@ -465,7 +465,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 78 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 79 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

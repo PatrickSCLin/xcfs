@@ -145,6 +145,17 @@ def cmd_doctor(a):
         for ad, entry in pairs:
             for c in ad.doctor(root, entry):
                 check(c["ok"], "[%s] %s" % (ad.name, c["message"]))
+        try:   # a checkout xcfs built: what its adapters keep for it
+            loc = builds.locate(root)
+            with state.registry(write=False) as reg:
+                known = loc["root"] in reg["builds"]
+            if known:
+                say("checkout %s (%s):" % (loc["root"], loc["kind"]))
+                for ad, ctx in builds.contexts(loc, config.load_config(loc["project"], validate=False)):
+                    for c in ad.doctor_checkout(ctx):
+                        check(c["ok"], "[%s] %s" % (ad.name, c["message"]))
+        except Fail:
+            pass
     with state.registry(write=False) as reg:
         gone = [p for p in reg["worktrees"] if not os.path.isdir(p)] + \
                [s["src"] for s in reg["slots"].values() if not os.path.isdir(s["src"]) and s["state"] != "creating"]

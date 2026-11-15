@@ -199,6 +199,8 @@ out=$("${XCFS}" build "${swt}" --json) || fail "a new file in a synchronized fol
 report "${out}" "new file in a synchronized folder"
 [ "$(json "${out}" pif_exported)" = True ] || fail "the PIF was not re-exported for a new file"
 rm "${swt}/Synced/Fresh.swift"
+"${XCFS}" doctor "${swt}" | grep -E "build session: running|simulator " \
+  || fail "doctor does not report the checkout's build session"
 # The session must build what xcodebuild builds: a generic destination means every supported architecture.
 sw_archs=$(lipo -archs "$(json "${out}" derived_data)/Build/Products/Debug-iphonesimulator/GenApp.app/GenApp")
 xc_out=$(XCFS_DRIVER=xcodebuild "${XCFS}" build "${swt}" --json) || fail "xcodebuild build for comparison failed"

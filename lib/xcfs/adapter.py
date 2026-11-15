@@ -135,6 +135,10 @@ class Adapter:
         """For `xcfs init`: (the entry with what it needs filled in, ignored files to carry, notes for the user)."""
         return entry, [], []
 
+    def doctor_checkout(self, ctx):
+        """`xcfs doctor <checkout>`: the state of what this adapter keeps for one checkout ([{"ok", "message"}])."""
+        return []
+
     def advise(self, result):
         """For a failed build, check or test: what to do next when the failure is a known one, else None."""
         return None

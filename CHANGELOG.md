@@ -5,6 +5,8 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs doctor <checkout>` reports what is kept for that checkout: its build session (running or not), whether its
+  project description is current, its simulator.
 - Session builds report where their time went (`breakdown`: PIF, session start, planning, tasks, other; compile and
   link task time).
 - Benchmarks: three agents on an empty pool without a warm-up (`bench.py --phases tasks-cold`): slower than plain

@@ -1969,6 +1969,22 @@ def t78_session_build_time_is_broken_down():
     assert "pif 1.5s, session start 0.5s, planning 2.0s, tasks 5.0s" in buf.getvalue(), buf.getvalue()
 
 
+@test
+def t79_doctor_looks_at_a_checkout():
+    E = toy_env(); repo = toy_repo("r79", slots=1)
+    s = xcfs("checkout", repo, "d79", env=E)
+    assert xcfs("build", s["worktree"], env=E)["_code"] == 0
+    r = subprocess.run([PY, XCFS, "doctor", s["worktree"]], env=E, capture_output=True, text=True)
+    assert "checkout %s (slot):" % s["worktree"] in r.stdout, r.stdout[-800:]
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode import XcodeAdapter
+    from xcfs.adapter import Context
+    entry = {"adapter": "xcode", "project": "App.xcodeproj", "scheme": "App", "driver": "xcodebuild"}
+    ctx = Context("worktree", SB, SB, {}, entry, SB + "/b79")
+    msgs = [c["message"] for c in XcodeAdapter().doctor_checkout(ctx)]
+    assert msgs == ["build session: not used (driver xcodebuild)"], msgs
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

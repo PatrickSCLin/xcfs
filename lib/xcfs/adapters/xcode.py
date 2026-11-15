@@ -879,6 +879,43 @@ class XcodeAdapter(Adapter):
         return out
 
     # ---------------------------------------------------------------- doctor
+    def doctor_checkout(self, ctx):
+        """The checkout's build session (running or not, its project description current or not), its simulator."""
+        out = []
+        from . import xcode_session as xs
+        sp = xs.socket_path(ctx)
+        running = os.path.exists(sp) and xs.ping(sp)
+        configured = os.environ.get("XCFS_DRIVER") or ctx.entry.get("driver", "auto")
+        out.append({"ok": True, "message": "build session: %s (driver %s)" % (
+            "running" if running else "not running; the next build starts it" if configured != "xcodebuild" else "not used",
+            configured)})
+        pif_dir = os.path.join(xs.session_dir(ctx), "pif")
+        pifs = sorted(glob.glob(os.path.join(pif_dir, "*.json")), key=os.path.getmtime)
+        scheme = ctx.entry.get("scheme") or ctx.resources.get("scheme")
+        if pifs and scheme:
+            try:
+                current = os.path.isfile(os.path.join(pif_dir, xs.pif_key(self, ctx, scheme) + ".json"))
+            except Exception:   # noqa: BLE001 - a doctor reports, it does not fail
+                current = None
+            age = (time.time() - os.path.getmtime(pifs[-1])) / 3600
+            out.append({"ok": True, "message": "project description (PIF): %s, last exported %.1f h ago" % (
+                "current" if current else "out of date: the next build exports it again (seconds on a large package "
+                "graph)" if current is False else "unknown", age)})
+        udid = ctx.resources.get("simulator")
+        if udid:
+            try:
+                dev = {d["udid"]: d for d in self.devices()}.get(udid)
+            except Exception:   # noqa: BLE001
+                dev = None
+                out.append({"ok": True, "message": "simulator %s: could not ask simctl" % udid})
+            else:
+                ok = bool(dev) and dev.get("isAvailable", True)
+                out.append({"ok": ok, "message": "simulator %s: %s" % (
+                    udid, "%s, %s" % (dev.get("state"), dev["runtime"].rsplit(".", 1)[-1]) if ok else
+                    "missing or unavailable (its runtime was removed?); the next test or run creates a new one" if not dev
+                    else "unavailable: %s" % dev.get("availabilityError", "?"))})
+        return out
+
     def advise(self, result):
         texts = [d.get("message", "") for d in result.get("diagnostics") or []] + [str(result.get("error") or "")]
         texts.append(log_tail(result.get("log")))
