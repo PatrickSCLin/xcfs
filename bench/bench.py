@@ -752,6 +752,14 @@ def run_tasks_xcfs(variant, overrides):
     XENV = {}
 
 
+def retire_after_failure():
+    """A variant that failed half way (a warm-up that failed, say) still retires its pool: slots, their simulators."""
+    global XENV
+    if XENV:
+        xcfs("pool", "resize", SOURCE, "0", log_name="retire-after-failure")
+        XENV = {}
+
+
 # ------------------------------------------------------------------ report
 def gb(kb):
     if kb is None:
@@ -925,6 +933,7 @@ def main():
                 try:
                     run_tasks_xcfs(name, overrides)
                 except SystemExit as e:
+                    retire_after_failure()
                     RESULTS["tasks"]["xcfs (%s)" % name] = {"failed": str(e)}
                     say("tasks[xcfs %s]: FAILED: %s" % (name, e))
         if "concurrent" in PHASES or "concurrent-plain" in PHASES:
@@ -935,6 +944,7 @@ def main():
                     try:
                         run_concurrent_xcfs(name, overrides, overlap)
                     except SystemExit as e:
+                        retire_after_failure()
                         RESULTS["concurrent"]["xcfs (%s) %s" % (name, phase)] = {"failed": str(e)}
                         say("%s[xcfs %s]: FAILED: %s" % (phase, name, e))
         if "round" in PHASES or "round-xcfs" in PHASES:
@@ -944,6 +954,7 @@ def main():
                 try:
                     run_round_xcfs(name, overrides)
                 except SystemExit as e:   # a failed variant is a result too; the others still run
+                    retire_after_failure()
                     RESULTS["round"]["xcfs (%s)" % name] = {"failed": str(e)}
                     say("round[xcfs %s]: FAILED: %s" % (name, e))
     finally:
