@@ -80,7 +80,11 @@ Install for Claude Code: `xcfs hook install --apply` adds both worktree hooks an
 `.claude/settings.json` (one project). Without `--apply` it only shows what it would add. Hooks that are not xcfs's
 are kept; when another tool's worktree hook is installed it refuses, since the agent tool takes a worktree from one
 command only. `xcfs hook uninstall --apply` takes xcfs's hooks out again, `xcfs hook status` shows what is installed.
-What it writes is [examples/agent-hooks/claude-code-settings.json](../examples/agent-hooks/claude-code-settings.json),
+Or install them as a Claude Code plugin, which adds a skill with the instructions below:
+`claude plugin marketplace add PatrickSCLin/xcfs` and `claude plugin install xcfs@xcfs`
+([plugins/xcfs](../plugins/xcfs/README.md)); not both, since Claude Code runs every matching hook. The session-end hook
+has a 60 s timeout: without one, Claude Code gives SessionEnd hooks 1.5 s in all.
+What `xcfs hook install` writes is [examples/agent-hooks/claude-code-settings.json](../examples/agent-hooks/claude-code-settings.json),
 which can be merged by hand as well. `xcfs` must be on the `PATH` the hooks run with. Without Claude Code, any tool or
 script can call the same commands with the same JSON.
 

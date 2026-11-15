@@ -1,13 +1,35 @@
 {
   "hooks": {
     "WorktreeCreate": [
-      { "hooks": [ { "type": "command", "command": "xcfs hook worktree-create" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "xcfs hook worktree-create"
+          }
+        ]
+      }
     ],
     "WorktreeRemove": [
-      { "hooks": [ { "type": "command", "command": "xcfs hook worktree-remove" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "xcfs hook worktree-remove"
+          }
+        ]
+      }
     ],
     "SessionEnd": [
-      { "hooks": [ { "type": "command", "command": "xcfs hook session-end" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "xcfs hook session-end",
+            "timeout": 60
+          }
+        ]
+      }
     ]
   }
 }

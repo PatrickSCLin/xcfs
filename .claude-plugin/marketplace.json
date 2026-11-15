@@ -1,0 +1,14 @@
+{
+  "name": "xcfs",
+  "owner": {
+    "name": "PatrickSCLin"
+  },
+  "description": "xcfs: parallel AI coding agents on one Xcode project.",
+  "plugins": [
+    {
+      "name": "xcfs",
+      "source": "./plugins/xcfs",
+      "description": "Worktrees for parallel agents on one Xcode project come from xcfs: built pool slots, build sessions, a simulator per checkout, cleanup at session end."
+    }
+  ]
+}

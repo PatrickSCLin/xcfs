@@ -1754,6 +1754,7 @@ def t70_hooks_are_installed_and_removed_without_touching_others():
     cmds = lambda ev: [h["command"] for g in got["hooks"].get(ev, []) for h in g["hooks"]]
     assert cmds("WorktreeCreate") == ["xcfs hook worktree-create"] and cmds("WorktreeRemove") == ["xcfs hook worktree-remove"]
     assert cmds("SessionEnd") == ["say done", "xcfs hook session-end"], "the earlier session-end line is replaced: %s" % cmds("SessionEnd")
+    assert got["hooks"]["SessionEnd"][-1]["hooks"][0]["timeout"] == 60, "more than the 1.5 s SessionEnd hooks get by default"
     assert xcfs("hook", "status", env=E)["installed"] is True
     r = xcfs("hook", "install", "--apply", env=E)
     assert r["changes"] == [] and not r["applied"], "installing twice changes nothing: %s" % r
@@ -2078,6 +2079,21 @@ def t83_session_start_builds_nothing():
     r = xcfs("session", "start", s["worktree"], env=E)
     assert r["_code"] == 0 and r["ok"] and "keeps nothing running" in r.get("skipped", ""), r
     assert xcfs("session", "stop", s["worktree"], env=E)["_code"] == 2
+
+
+@test
+def t84_plugin_hooks_match_what_hook_install_writes():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs import hooks
+    root = os.path.dirname(HERE)
+    plugin = json.load(open(root + "/plugins/xcfs/hooks/hooks.json"))["hooks"]
+    example = json.load(open(root + "/examples/agent-hooks/claude-code-settings.json"))["hooks"]
+    for event, command in hooks.EVENTS:
+        want = [{"hooks": [hooks.hook_entry(event, command)]}]
+        assert plugin[event] == want and example[event] == want, (event, plugin.get(event), example.get(event))
+    market = json.load(open(root + "/.claude-plugin/marketplace.json"))
+    assert market["plugins"][0]["source"] == "./plugins/xcfs" and os.path.isfile(root + "/plugins/xcfs/skills/xcfs/SKILL.md")
+    assert open(root + "/examples/agent-instructions/xcfs.md").read() in open(root + "/plugins/xcfs/skills/xcfs/SKILL.md").read()
 
 
 def main():

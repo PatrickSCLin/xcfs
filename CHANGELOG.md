@@ -5,6 +5,10 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- A Claude Code plugin (`plugins/xcfs`, marketplace in `.claude-plugin/marketplace.json`): the three hooks and a skill
+  with the agent's instructions.
+- The SessionEnd hook gets a 60 s timeout (Claude Code gives SessionEnd hooks 1.5 s in all by default);
+  `xcfs hook install` updates an installed one.
 - `xcfs init` notes macOS, watchOS, visionOS and tvOS targets next to the iOS ones.
 - `docs/why-not-plain-worktrees.md`, with a new measurement: two worktrees sharing one DerivedData recompile everything
   each time the other one built (`bench/shared-deriveddata.sh`).

@@ -82,7 +82,9 @@ xcfs hook install ~/src/app --apply   # or into one repository's .claude/setting
 ```
 
 It refuses when another tool's worktree hook is installed, `xcfs hook uninstall --apply` takes them out again, and
-`xcfs hook status` shows what is there. What it writes
+`xcfs hook status` shows what is there. The same hooks, with a skill that tells the agent how to build, check and test
+through xcfs, come as a Claude Code plugin instead: `claude plugin marketplace add PatrickSCLin/xcfs`, then
+`claude plugin install xcfs@xcfs` ([plugins/xcfs](plugins/xcfs/README.md)); use one or the other, not both. What it writes
 ([examples/agent-hooks/claude-code-settings.json](examples/agent-hooks/claude-code-settings.json)):
 
 ```json
@@ -90,7 +92,7 @@ It refuses when another tool's worktree hook is installed, `xcfs hook uninstall 
   "hooks": {
     "WorktreeCreate": [{ "hooks": [{ "type": "command", "command": "xcfs hook worktree-create" }] }],
     "WorktreeRemove": [{ "hooks": [{ "type": "command", "command": "xcfs hook worktree-remove" }] }],
-    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "xcfs hook session-end" }] }]
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "xcfs hook session-end", "timeout": 60 }] }]
   }
 }
 ```
@@ -471,7 +473,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 83 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 84 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

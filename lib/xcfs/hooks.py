@@ -124,6 +124,16 @@ def session_end(data):
 # ------------------------------------------------------------------ installing the hooks in the agent tool's settings
 EVENTS = (("WorktreeCreate", "xcfs hook worktree-create"), ("WorktreeRemove", "xcfs hook worktree-remove"),
           ("SessionEnd", "xcfs hook session-end"))
+# Claude Code gives SessionEnd hooks 1.5 s in all unless a hook sets a timeout of its own (then up to 60 s); returning
+# a session's checkouts can take longer than 1.5 s.
+TIMEOUTS = {"SessionEnd": 60}
+
+
+def hook_entry(event, command):
+    h = {"type": "command", "command": command}
+    if event in TIMEOUTS:
+        h["timeout"] = TIMEOUTS[event]
+    return h
 EXCLUSIVE = ("WorktreeCreate", "WorktreeRemove")   # the tool takes a worktree from one command only
 
 
@@ -179,13 +189,15 @@ def planned(data, install):
             raise Fail("hooks.%s is not a list; nothing changed" % event)
         others = without_ours(before)
         mine = [c for c in commands(before) if ours(c)]
+        mine_hooks = [h for g in before if isinstance(g, dict) for h in g.get("hooks") or []
+                      if isinstance(h, dict) and ours(h.get("command"))]
         if install:
             if event in EXCLUSIVE and commands(others):
                 raise Fail("another %s hook is installed (%s): the agent tool takes a worktree from one command only; "
                            "remove it first" % (event, commands(others)[0]))
-            if mine == [command]:
+            if mine_hooks == [hook_entry(event, command)]:
                 continue
-            hooks[event] = others + [{"hooks": [{"type": "command", "command": command}]}]
+            hooks[event] = others + [{"hooks": [hook_entry(event, command)]}]
             changes.append("%s %s: %s" % ("replace" if mine else "add", event, command))
         elif mine:
             if others:
