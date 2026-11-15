@@ -27,7 +27,9 @@ class Xcfs < Formula
   end
 
   test do
-    assert_match "xcfs #{version}", shell_output("#{bin}/xcfs --version")
+    # a --HEAD build reports the version in the code, not "HEAD-<sha>"
+    expected = version.head? ? /xcfs \d+\.\d+\.\d+/ : "xcfs #{version}"
+    assert_match expected, shell_output("#{bin}/xcfs --version")
     system "git", "init", "-q", testpath/"repo"
     (testpath/"repo/Package.swift").write "// swift-tools-version: 5.9\n"
     assert_match "\"package\"", shell_output("#{bin}/xcfs init #{testpath}/repo --json")
