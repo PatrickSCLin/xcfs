@@ -131,7 +131,8 @@ hooks above and let the agent tool do it.
 
 - **One checkout, day to day.** Without parallel checkouts there is no pool to reuse; what remains is the build
   session (a no-op build 5.9 → 0.9 s, a small edit 8 → 3–4 s on Ice Cubes) and `xcfs check`.
-- **The first batch on a fresh pool**, as above: the warm-up costs more than plain worktrees' cold builds.
+- **The first batch on a fresh pool**, as above: the warm-up costs more than plain worktrees' cold builds, and
+  skipping it is slower still (451 s against 284–302 s on Ice Cubes, one run): warm the pool before the agents need it.
 - **CI.** Fresh machines and one build per job: no pool survives between jobs, and remote build caches are out of
   scope ([docs/build-systems.md](docs/build-systems.md)).
 - **Bazel projects:** incremental builds are Bazel's own; xcfs helps with the wait for a checkout and with cleanup.
@@ -243,6 +244,7 @@ through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
 | `xcfs doctor [path] [--session-check]` | Environment, hygiene and toolchain checks; `--session-check` runs the build-session regression check. |
 | `xcfs init [repo] [--write \| --user] [--force]` | Detect what the repository needs and suggest a config: the project or workspace, the scheme (the one named after it, else one that builds an app), the platform and a configuration for it, git-ignored settings files to carry, dependency directories to seed and the lock files that key them; an XcodeGen or Tuist project's generated project and workspace are seeded too (or, when not generated yet, it says what to run). Prints what it found and the next commands. `--write` saves `.xcfs.json` in the repository, `--user` saves `~/.config/xcfs/<repo>.json` and leaves the repository untouched; an existing config is never overwritten without `--force`. |
 | `xcfs trust <repo>` | Approve the commands a repository's config runs. |
+| `xcfs stats [--days N]` | What xcfs did on this machine (default: the last 7 days), from a local history file in its state directory: checkouts handed out already built and the full builds agents therefore did not wait for (each slot's own last full build time), and the count and median time of builds, checks, tests and warm-ups. Nothing is sent anywhere. |
 | `xcfs uninstall [--apply]` | List everything xcfs made on this machine — worktrees, pools, build output, dependency snapshots, the experimental driver's cache, simulators, its hooks in Claude Code's settings, its state — and with `--apply` remove it. A worktree or slot with unsaved work is kept, with the state that knows about it (exit 5). Configs and the program itself are left. |
 
 Every command takes `--json` and then prints exactly one JSON object. **Nothing is deleted without `--apply`**
@@ -459,7 +461,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 76 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 77 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

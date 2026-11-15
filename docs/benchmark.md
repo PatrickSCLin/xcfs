@@ -31,6 +31,7 @@ Ranges over clean runs (plain 2, each xcfs cell 2–3; nothing else ran on the m
 | the agents' wall time, warm-up excluded | 284–302 s | 107–139 s | 140–149 s |
 | **a fresh pool, warm-up included** | **284–302 s** | **408–419 s** (slower) | **354–376 s** (slower) |
 | **the next three agents** (warm-up of the released slots included) | **284–302 s** (every batch builds cold) | **111–121 s** | **138–151 s** |
+| no warm-up at all: the agents ask an empty pool (one run) | — | 451 s (slower still) | — |
 | peak memory while the agents work | 23.9–25.4 GB | 7.9–11.8 GB | 8.3–11.8 GB |
 | peak memory during the warm-up | — | 22.6–25.2 GB | 24.1–24.9 GB |
 | left on disk after removal | 1.5 GB of global DerivedData per worktree | nothing (pool retired) | nothing |
@@ -44,6 +45,10 @@ What it says:
   side by side, and each slot's simulator booted once) takes longer than three plain cold builds, because each warm-up
   build is bounded to keep memory near plain's (see the experimental driver below). The pool pays once; plain
   worktrees pay on every batch.
+- **Starting without a warm-up is the slowest way in** (451 s, one run): each agent's first build is then a full
+  build in a slot (266–267 s, three at once), and its first test also builds the test targets and boots the slot's
+  simulator (124–161 s); peak memory 20.8 GB. So the quick start warms the pool first, in the background, before the
+  agents need it.
 - **The experimental Swift driver** makes the next batches faster (111–121 vs 138–151 s; the ranges do not overlap)
   and the fresh pool slower (408–419 vs 354–376 s). With the warm-up excluded, the difference is within the noise of
   this task mix (107–139 vs 140–149 s).

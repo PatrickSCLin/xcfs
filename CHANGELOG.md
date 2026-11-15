@@ -5,6 +5,10 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- Benchmarks: three agents on an empty pool without a warm-up (`bench.py --phases tasks-cold`): slower than plain
+  worktrees and than warming first; the quick start keeps the warm-up.
+- `xcfs stats [--days N]`: checkouts handed out built, the full builds not waited for, builds and checks, from a
+  local history (`history.jsonl` in the state directory; nothing is sent anywhere).
 - Refusals and failures carry `next`: what to do, by exit code, and for known Xcode build failures (full disk,
   out-of-date precompiled module, simulator, signing, package or CocoaPods resolution, the build session).
 - `xcfs pool status --watch`: a warm-up's step, elapsed time and an estimate from the last one, until it is done.

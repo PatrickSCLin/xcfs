@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR]
-           [--phases plain,xcfs,round,round-xcfs,round-plain,concurrent,concurrent-plain,overlap,tasks,tasks-plain]
+           [--phases plain,xcfs,round,round-xcfs,round-plain,concurrent,concurrent-plain,overlap,tasks,tasks-plain,
+                     tasks-cold]
            [--xcfs PATH] [--reuse-from RESULTS.json]   (sides not in --phases are taken from that earlier run)
 
 Compare N parallel checkouts made the plain way (git worktree + the project's own setup and build) with the same N
@@ -755,6 +756,24 @@ def run_tasks_xcfs(variant, overrides):
     XENV = {}
 
 
+def run_tasks_cold(variant, overrides):
+    """No warm-up at all: the agents ask an empty pool for checkouts and each slot's first build is the agent's own
+    first build. What someone who installs xcfs and starts working right away sees."""
+    global XENV
+    xcfs_variant_env(os.path.join(WORK, "tasks-cold-" + variant), overrides)
+    n = len(PROFILE["tasks"])
+    xcfs("pool", "resize", SOURCE, str(n), log_name="tasks-warm")
+    sampler = MemorySampler()
+    sampler.start()
+    results, wall = concurrently(lambda a: xcfs_task("cold-" + variant, a), n)
+    mem = sampler.stop()
+    key = "xcfs (%s), no warm-up" % variant
+    RESULTS["tasks"][key] = dict({"wall_seconds": wall, "agents": summarize_tasks(results)}, **mem)
+    say("tasks[%s]: %.1fs wall, peak memory %s" % (key, wall, gb(mem["peak_rss_kb"])))
+    xcfs("pool", "resize", SOURCE, "0", log_name="tasks-warm")
+    XENV = {}
+
+
 def retire_after_failure():
     """A variant that failed half way (a warm-up that failed, say) still retires its pool: slots, their simulators."""
     global XENV
@@ -939,6 +958,14 @@ def main():
                     retire_after_failure()
                     RESULTS["tasks"]["xcfs (%s)" % name] = {"failed": str(e)}
                     say("tasks[xcfs %s]: FAILED: %s" % (name, e))
+        for name, overrides in VARIANTS.items():
+            if "tasks-cold" in PHASES or "tasks-cold:" + name in PHASES:
+                try:
+                    run_tasks_cold(name, overrides)
+                except SystemExit as e:
+                    retire_after_failure()
+                    RESULTS["tasks"]["xcfs (%s), no warm-up" % name] = {"failed": str(e)}
+                    say("tasks-cold[xcfs %s]: FAILED: %s" % (name, e))
         if "concurrent" in PHASES or "concurrent-plain" in PHASES:
             run_concurrent_plain()
         for name, overrides in VARIANTS.items():

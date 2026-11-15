@@ -29,6 +29,7 @@ Three agents, real tasks (`icecubes-tasks.json`): plain `tasks-icecubes-v4-rep1`
 (`v4-rep1`, `-rep3`, `-rep4` hold the defaults before the gate). Agents at the same time: `concurrent2-*` (slots warmed
 one after another), `concurrent3-*` (side by side). Warm-up memory with and without the gate: `warmjobs-icecubes-*`.
 
+No warm-up at all (agents ask an empty pool): `tasks-icecubes-cold-rep1` (`bench.py --phases tasks-cold:defaults`).
 The plain test run killed on the shared simulator: `tasks-icecubes-v2-rep2` (an earlier run of the same tasks;
 `-rep1` the one before it).
 
