@@ -1577,7 +1577,7 @@ def t65_driver_frontends_go_through_a_shared_gate():
     # fake frontend), not by the total time, which a slow machine stretches.
     log = SB + "/t65/runs.log"
     real = SB + "/t65/fake-frontend"
-    open(real, "w").write("#!/bin/sh\npython3 -c 'import time; print(time.time())' >> " + log + "\nsleep 2\n")
+    open(real, "w").write("#!/bin/sh\npython3 -c 'import time; print(time.time())' >> '%s'\nsleep 2\n" % log)
     os.chmod(real, 0o755)
     env = dict(os.environ, XCFS_REAL_SWIFT_FRONTEND=real, XCFS_FRONTEND_JOBS="1")
 
