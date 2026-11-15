@@ -38,8 +38,9 @@ Agent tools
                                                                 or <repo>/.claude/settings.json), or take them out
 
 Maintenance
-  xcfs gc [--apply] [--foreign] [--stale-days N]                reclaim what xcfs owns; --foreign also looks at caches
-                                                                it did not create (a toolchain's global caches)
+  xcfs gc [--apply] [--foreign] [--sizes] [--stale-days N]      reclaim what xcfs owns; --foreign also looks at caches
+                                                                it did not create (a toolchain's global caches);
+                                                                --sizes: what xcfs holds on disk, against free space
   xcfs doctor [path] [--session-check]                          environment, hygiene and toolchain checks
   xcfs init [repo] [--write | --user] [--force]                suggest a config: detected project, scheme, platform,
                                                                 carried files; --write saves .xcfs.json, --user

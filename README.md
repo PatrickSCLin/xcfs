@@ -240,7 +240,7 @@ through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
 | `xcfs hook session-end` | For a tool's session-end hook (Claude Code's `SessionEnd`): JSON with `session_id` on stdin; removes the session's clean worktrees and returns its clean slots (`reap --session ID --apply --prune-branch`), records what was left in `last-reap.json` in the state directory, and always exits 0. |
 | `xcfs hook install \| uninstall \| status [repo] [--apply]` | Put the three hooks in Claude Code's settings — the user's, or `<repo>/.claude/settings.json` — or take them out. Shows the changes; writes only with `--apply`; keeps every hook that is not xcfs's; refuses when another tool's worktree hook is installed. |
 | **maintenance** | |
-| `xcfs gc [--apply] [--foreign] [--stale-days N]` | Repair interrupted operations, return clean slots whose lease went stale, drop unused dependency snapshots and the build output of vanished checkouts. `--foreign` also reports (with `--apply`, removes) orphaned or stale global DerivedData xcfs did not create. |
+| `xcfs gc [--apply] [--foreign] [--sizes] [--stale-days N]` | Repair interrupted operations, return clean slots whose lease went stale, drop unused dependency snapshots and the build output of vanished checkouts. `--foreign` also reports (with `--apply`, removes) orphaned or stale global DerivedData xcfs did not create. `--sizes` shows what xcfs holds on disk — each pool, its caches, its worktrees — against the free space (clones share blocks, so these are upper bounds). |
 | `xcfs doctor [path] [--session-check]` | Environment, hygiene and toolchain checks, and for a checkout xcfs built its build session, project description and simulator; `--session-check` runs the build-session regression check. |
 | `xcfs init [repo] [--write \| --user] [--force]` | Detect what the repository needs and suggest a config: the project or workspace, the scheme (the one named after it, else one that builds an app), the platform and a configuration for it, git-ignored settings files to carry, dependency directories to seed and the lock files that key them; an XcodeGen or Tuist project's generated project and workspace are seeded too (or, when not generated yet, it says what to run). Prints what it found and the next commands. `--write` saves `.xcfs.json` in the repository, `--user` saves `~/.config/xcfs/<repo>.json` and leaves the repository untouched; an existing config is never overwritten without `--force`. |
 | `xcfs trust <repo>` | Approve the commands a repository's config runs. |
@@ -467,7 +467,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 81 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 82 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

@@ -81,7 +81,43 @@ def cmd_gc(a):
         say("dry-run: nothing removed. re-run with --apply.")
     if not actions and not foreign:
         say("nothing to reclaim.")
-    a.result(actions=[list(x) for x in actions], foreign=[[c["kind"], c["path"]] for c in foreign], applied=apply)
+    usage = disk_usage(settings) if a.flag("sizes") else None
+    a.result(actions=[list(x) for x in actions], foreign=[[c["kind"], c["path"]] for c in foreign], applied=apply,
+             **({"usage": usage} if usage else {}))
+
+
+def disk_usage(settings):
+    """What xcfs holds on disk, by place, against the free space of each volume (`gc --sizes`; sizing takes a while,
+    so only when asked). Clones share blocks with their origin, so these sums are upper bounds of what removal frees."""
+    from .util import free_bytes
+    rows = []
+    root = settings["poolRoot"]
+    if os.path.isdir(root):
+        for n in sorted(os.listdir(root)):
+            if n.endswith(".noindex"):
+                rows.append(("pool", os.path.join(root, n)))
+    cache = state.cache_dir()
+    if os.path.isdir(cache):
+        for n in sorted(os.listdir(cache)):
+            if not n.startswith("."):
+                rows.append(("cache", os.path.join(cache, n)))
+    with state.registry(write=False) as reg:
+        rows += [("worktree", p) for p in sorted(reg["worktrees"]) if os.path.isdir(p)]
+    out, total = [], 0
+    say("on disk (clones share blocks with their origin: these are upper bounds of what removal frees):")
+    for kind, p in rows:
+        kb = du_kb(p)
+        total += kb
+        out.append({"kind": kind, "path": p, "kb": kb})
+        say("  %8s  %-9s %s" % (human(kb), kind, p))
+    vols = {}
+    for p in [root, cache] + [r["path"] for r in out]:
+        if os.path.exists(p):
+            vols.setdefault(os.stat(p).st_dev, p)
+    free = [{"path": p, "free_kb": free_bytes(p) // 1024} for p in vols.values()]
+    say("  %8s  in all; free: %s" % (human(total), ", ".join("%s on %s's volume" % (human(f["free_kb"]), f["path"])
+                                                              for f in free)))
+    return {"items": out, "total_kb": total, "free": free}
 
 
 def sizing_advice(settings, mem=None):

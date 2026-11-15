@@ -5,6 +5,7 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs gc --sizes`: what xcfs holds on disk (pools, caches, worktrees) against the free space of each volume.
 - `maxSessions` setting: at most this many build sessions alive; the longest idle stops first.
 - `minFreeGB` setting: keep space free on the pool's volume by retiring other projects' idle slots, least recently
   used first, instead of refusing a slot.

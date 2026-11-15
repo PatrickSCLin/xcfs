@@ -2051,6 +2051,19 @@ def t81_max_sessions_stops_the_longest_idle():
     shutil.rmtree(d, ignore_errors=True)
 
 
+@test
+def t82_gc_sizes_what_xcfs_holds():
+    E = dict(toy_env(), XCFS_STATE=SB + "/state82", XCFS_POOL_ROOT=SB + "/pool82", XCFS_CACHE=SB + "/cache82")
+    repo = toy_repo("r82", slots=1)
+    if xcfs("new", repo, "p82", env=E)["_code"] == 3:
+        assert xcfs("trust", repo, env=E)["_code"] == 0
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0
+    assert "usage" not in xcfs("gc", env=E), "nothing is sized unless asked"
+    u = xcfs("gc", "--sizes", env=E)["usage"]
+    kinds = {i["kind"] for i in u["items"]}
+    assert "pool" in kinds and u["total_kb"] > 0 and u["free"] and u["free"][0]["free_kb"] > 0, u
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))
