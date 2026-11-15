@@ -12,6 +12,8 @@ shortened to placeholders). A run never overwrites another's files. When a run t
 | the same with the experimental Swift driver (superseded) | `…ice-cubes-arm64-only-agent-round--20261114-134936`, `…wikipedia-ios-arm64-only-agent-round--20261114-135601` |
 | Zero configuration | per project, the plain round and the xcfs rounds (the last run, after the fixes the table's text lists): Kickstarter `…150920` / `…183610`, Element X `…152658` / `…182835`, Signal `…153216` / `…184224`, Home Assistant `…153836` / `…185000`, Ice Cubes `…154957` / `…190207` (and a later repeat `…205259`), Wikipedia `…155808` / `…190515` |
 
+Two more plain rounds per project (the plain column is the mean of three): `…-zero-config--20261115-*`.
+
 The xcfs sides of `…150920`, `…154957` and `…155808` were measured before those fixes and are not used.
 
 In the one-architecture runs, the xcodebuild column's per-edit times in the docs are those of `xcfs check`: with the
@@ -21,5 +23,10 @@ on Wikipedia).
 Incremental vs clean (`bench/oracle.py`): `oracle-ice-cubes-20261115-002829.json`,
 `oracle-ice-cubes-xcode27.1-20261115-010135.json` (with `DEVELOPER_DIR` set to Xcode 27.1),
 `oracle-wikipedia-ios-20261114-233450.json`.
+
+Three agents, real tasks (`icecubes-tasks.json`): plain `tasks-icecubes-v4-rep1`, `-rep2`; xcfs without the driver
+`tasks-icecubes-v4-rep2`, `-rep3`, `-rep4`; xcfs defaults with the frontend gate `tasks-icecubes-v5-rep5`, `-rep6`
+(`v4-rep1`, `-rep3`, `-rep4` hold the defaults before the gate). Agents at the same time: `concurrent2-*` (slots warmed
+one after another), `concurrent3-*` (side by side). Warm-up memory with and without the gate: `warmjobs-icecubes-*`.
 
 Runs of the two-architecture tables and of Telegram-iOS were not kept.

@@ -1,0 +1,62 @@
+{
+ "profile": "Kickstarter iOS (arm64, zero-config)",
+ "agents": 3,
+ "started": "20261115-013631",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "8a9f360"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "plain": {
+   "total_seconds": 278.7,
+   "steps": [
+    [
+     "create",
+     1.2
+    ],
+    [
+     "create",
+     0.0
+    ],
+    [
+     "first build",
+     133.7
+    ],
+    [
+     "edit 1 + build",
+     18.4
+    ],
+    [
+     "edit 2 + build",
+     18.9
+    ],
+    [
+     "edit 3 + build",
+     44.3
+    ],
+    [
+     "edit 4 + build",
+     16.9
+    ],
+    [
+     "edit 5 + build",
+     44.0
+    ],
+    [
+     "remove",
+     0.5
+    ]
+   ],
+   "left_kb": 6020588,
+   "disk_kb_after": 3912980
+  }
+ },
+ "concurrent": {}
+}

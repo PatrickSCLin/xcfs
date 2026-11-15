@@ -92,8 +92,8 @@ tag and self-tested; the commit built is recorded in `toolchain.json`.
   by side), ran far more frontends than Xcode's own driver would: 59 GB of frontends at the peak on Ice Cubes, against
   24 GB without this driver. Its frontends therefore start through a gate (`frontend-gate.py`, installed as
   `frontend-bin/swift-frontend`, with the toolchain's other tools linked next to it, where the driver looks for
-  them): compile jobs (`-c`) wait for one of four places per core, shared by every build that uses the install
-  (`XCFS_FRONTEND_JOBS` sets another number); emitting a module, scans and queries never wait. Measured on that fresh
+  them): compile jobs (`-c`) wait for one of four places per core (`os.cpu_count()`; 40 places on the 10-core
+  machine measured below), shared by every build that uses the install (`XCFS_FRONTEND_JOBS` sets another number); emitting a module, scans and queries never wait. Measured on that fresh
   pool: 22 GB at the peak and 276 s, against 59 GB and 217 s ungated (two places per core: 17 GB, 327 s). xcfs
   writes the wrapper and the gate itself, so an install made before them gets them on its next use.
 - `@inlinable`, `@_transparent` and `@_alwaysEmitIntoClient` bodies are not part of a digest. Measured: when only such

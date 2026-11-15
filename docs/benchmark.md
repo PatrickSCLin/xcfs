@@ -8,6 +8,73 @@ can be repeated.
 **Machine:** MacBook Pro, Apple M1 Max, 10 cores, 64 GB, macOS 27.2, Xcode 27.2. Edit loops were run twice where
 shown; the repeats agree within ~1 s, so differences of a few seconds between sides are real.
 
+## Three agents, real tasks, at the same time
+
+The measure closest to what xcfs is for: three agents start at once on one app, each with a small task defined in
+advance and judged by a build and the package's own tests. On [Ice Cubes](#ice-cubes) (one architecture): a public
+helper added to `Models` (12 packages depend on it), a computed property added to `Timeline`'s filter enum, a helper
+added to `Env`. Each task first writes code that does not compile (a typo, a non-exhaustive switch, an optional not
+unwrapped), fixes it, adds a unit test, runs the package's tests and builds the app
+([profile](../bench/profiles/icecubes-tasks.json), `bench.py --phases tasks`).
+
+- **Plain:** `git worktree add` + the README's setup, `xcodebuild` into the default DerivedData; a "does it compile"
+  is a build, tests run on the simulator named in the command (`name=iPhone 18 Pro`), as an agent would write it.
+- **xcfs:** a pool of three slots, `xcfs check` / `xcfs build` / `xcfs test` (each checkout its own simulator). The
+  pool is warmed first, and that time is shown, not hidden: a fresh pool (the first batch of agents ever), and the
+  next three agents on the same pool after the first released their slots (the slots are warmed again first, timed).
+
+Ranges over clean runs (plain 2, each xcfs cell 2–3; nothing else ran on the machine):
+
+| | plain worktrees | xcfs, defaults | xcfs, without the experimental Swift driver |
+|---|---|---|---|
+| warm-up before the agents (a fresh pool) | — | 280–301 s | 214–226 s |
+| the agents' wall time, warm-up excluded | 284–302 s | 107–139 s | 140–149 s |
+| **a fresh pool, warm-up included** | **284–302 s** | **408–419 s** (slower) | **354–376 s** (slower) |
+| **the next three agents** (warm-up of the released slots included) | **284–302 s** (every batch builds cold) | **111–121 s** | **138–151 s** |
+| peak memory while the agents work | 23.9–25.4 GB | 7.9–11.8 GB | 8.3–11.8 GB |
+| peak memory during the warm-up | — | 22.6–25.2 GB | 24.1–24.9 GB |
+| left on disk after removal | 1.5 GB of global DerivedData per worktree | nothing (pool retired) | nothing |
+| builds or tests with an unexpected result | 0 in these runs; 1 of 6 test runs in an earlier run (below) | 0 | 0 |
+
+What it says:
+
+- **From the second batch on, xcfs is 2–2.7× faster**, and agents work in a third of the memory: the slots are built,
+  each build is incremental, and a check compiles one file.
+- **A fresh pool's first batch is slower than plain worktrees** (25–45 %): warming three slots (three cold builds
+  side by side, and each slot's simulator booted once) takes longer than three plain cold builds, because each warm-up
+  build is bounded to keep memory near plain's (see the experimental driver below). The pool pays once; plain
+  worktrees pay on every batch.
+- **The experimental Swift driver** makes the next batches faster (111–121 vs 138–151 s; the ranges do not overlap)
+  and the fresh pool slower (408–419 vs 354–376 s). With the warm-up excluded, the difference is within the noise of
+  this task mix (107–139 vs 140–149 s).
+- **Shared simulator:** in an earlier run of the same tasks, one of six plain test runs failed with "Test crashed with
+  signal kill while preparing to run tests": three agents testing on the one simulator they all named, one test run
+  killed another's. Each xcfs checkout has its own simulator (≈535 MB on disk once booted, created and booted once
+  during the warm-up).
+
+What changed to get there (each found by these runs, each with a test): `xcfs test` had the build session's tests
+built by `xcodebuild` from nothing in a DerivedData of its own (first test 45.6 s; now the session builds them, 0.4–1 s,
+and `xcodebuild test-without-building` runs them); Swift Testing results were counted as zero; a warm-up took an
+already-current slot away from an agent asking for one; a slot's simulator was created and first booted during the
+agent's first test (~30 s idle, far more under load); the slots of a fresh pool were warmed one after another
+(301 s); and once side by side, the experimental driver's compile jobs were unbounded (59 GB at the peak; now a
+gate of four places per core, 40 on the 10-core machine, keeps it at 22–25 GB, for a warm-up of 280–301 instead of
+217 s).
+
+### Agents at the same time: the round of work
+
+The same comparison with the round of work above (no tests), three agents at once. Ranges over two runs:
+
+| | plain worktrees | xcfs, defaults: warm-up excluded | a fresh pool, warm-up included | the next three agents (re-warm included) | peak memory: agents / warm-up |
+|---|---|---|---|---|---|
+| Ice Cubes | 288–289 s, 21–23 GB | 19.4–19.7 s | 228–239 s | 24.3–24.6 s | 3.6–4.6 GB / 56–59 GB* |
+| Wikipedia iOS | 381–429 s, 12–16 GB | 92.3–92.5 s | 334–343 s | 115.5–115.6 s | 5.4–5.7 GB / 10–14 GB |
+
+\* measured before the frontend gate; with it, the Ice Cubes warm-up peaks at 22 GB and takes 276 s.
+
+One agent working beside a warm-up of two more slots (the pool growing while it is used): Ice Cubes 34–56 s (alone:
+19 s), Wikipedia 81 s (alone: 92 s).
+
 ## Overview
 
 For the two Xcode projects the main numbers build **one architecture** (`ARCHS=arm64`), which is what an agent needs
@@ -83,16 +150,18 @@ that only names the project, the scheme and the destination (plus the arm64-only
 use): no `skipScripts`, no `driver`, no `swiftDriver` — every optimization decides by itself. One agent's round
 (checkout, first build, five edits each checked, a final build, release), the edits being a function body in the app
 target, a function body in a widely imported module, and a public declaration added to that module. Plain worktrees
-measured the same day on the same machine.
+measured the same day on the same machine, three times each (the runs differ by 3–13 %, so a difference of a few
+percent between sides means nothing; the ones below are 2.5–10×). The xcfs columns are the last run after the fixes
+listed below; repeats of it on Ice Cubes (15.8–17.1 s) and Element X (57.0–57.4 s) differed by less than 5 %.
 
-| project | kind | plain worktree | xcfs, defaults | xcfs, defaults without the experimental Swift driver |
+| project | kind | plain worktree (mean of 3, range) | xcfs, defaults | xcfs, defaults without the experimental Swift driver |
 |---|---|---|---|---|
-| [Kickstarter](https://github.com/kickstarter/ios-oss) | `.xcodeproj` + local Swift packages (KsApi: ~800 importing files) | 312.0 s | **33.2 s** | 73.9 s |
-| [Element X](https://github.com/element-hq/element-x-ios) | XcodeGen-generated, one large app target, Swift packages, a prebuilt Rust SDK | 299.2 s | **57.4 s** | 93.5 s |
-| [Signal](https://github.com/signalapp/Signal-iOS) | workspace, Swift and Objective-C frameworks (SignalServiceKit: ~800 importing files) | 323.8 s | **101.2 s** | 109.6 s |
-| [Home Assistant](https://github.com/home-assistant/iOS) | large app target, a shared framework (~550 importing files), many extensions, SwiftGen and SwiftLint phases | 537.8 s | **98.9 s** | 159.9 s |
-| Ice Cubes (seen) | `.xcodeproj` + 13 local Swift packages | 161.8 s | **17.1 s** | 39.1 s |
-| Wikipedia iOS (seen) | Swift and Objective-C, local packages | 255.6 s | **82.0 s** | 132.3 s |
+| [Kickstarter](https://github.com/kickstarter/ios-oss) | `.xcodeproj` + local Swift packages (KsApi: ~800 importing files) | 301.3 s (279–313) | **33.2 s** | 73.9 s |
+| [Element X](https://github.com/element-hq/element-x-ios) | XcodeGen-generated, one large app target, Swift packages, a prebuilt Rust SDK | 287.3 s (263–299) | **57.4 s** | 93.5 s |
+| [Signal](https://github.com/signalapp/Signal-iOS) | workspace, Swift and Objective-C frameworks (SignalServiceKit: ~800 importing files) | 322.3 s (317–326) | **101.2 s** | 109.6 s |
+| [Home Assistant](https://github.com/home-assistant/iOS) | large app target, a shared framework (~550 importing files), many extensions, SwiftGen and SwiftLint phases | 518.7 s (492–538) | **98.9 s** | 159.9 s |
+| Ice Cubes (seen) | `.xcodeproj` + 13 local Swift packages | 155.1 s (143–162) | **17.1 s** | 39.1 s |
+| Wikipedia iOS (seen) | Swift and Objective-C, local packages | 251.4 s (246–256) | **82.0 s** | 132.3 s |
 
 What each automatic decision did, over all six rounds:
 

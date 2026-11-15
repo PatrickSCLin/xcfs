@@ -1,0 +1,58 @@
+{
+ "profile": "Signal iOS (arm64, zero-config)",
+ "agents": 3,
+ "started": "20261115-015102",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "a690a26"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "plain": {
+   "total_seconds": 325.8,
+   "steps": [
+    [
+     "create",
+     0.7
+    ],
+    [
+     "first build",
+     119.6
+    ],
+    [
+     "edit 1 + build",
+     26.5
+    ],
+    [
+     "edit 2 + build",
+     28.4
+    ],
+    [
+     "edit 3 + build",
+     62.0
+    ],
+    [
+     "edit 4 + build",
+     25.1
+    ],
+    [
+     "edit 5 + build",
+     63.1
+    ],
+    [
+     "remove",
+     0.5
+    ]
+   ],
+   "left_kb": 6409728,
+   "disk_kb_after": 5207836
+  }
+ },
+ "concurrent": {}
+}

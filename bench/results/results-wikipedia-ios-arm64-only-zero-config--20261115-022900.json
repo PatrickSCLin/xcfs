@@ -1,0 +1,63 @@
+{
+ "profile": "Wikipedia iOS (arm64 only, zero-config)",
+ "agents": 3,
+ "started": "20261115-022900",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "0919f3e"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "plain": {
+   "total_seconds": 245.9,
+   "steps": [
+    [
+     "create",
+     0.7
+    ],
+    [
+     "create",
+     0.1
+    ],
+    [
+     "first build",
+     87.5
+    ],
+    [
+     "edit 1 + build",
+     23.2
+    ],
+    [
+     "edit 2 + build",
+     18.0
+    ],
+    [
+     "edit 3 + build",
+     44.5
+    ],
+    [
+     "edit 4 + build",
+     22.4
+    ],
+    [
+     "edit 5 + build",
+     48.8
+    ],
+    [
+     "remove",
+     0.4
+    ]
+   ],
+   "left_kb": 2931392,
+   "disk_kb_after": 2700388
+  }
+ },
+ "concurrent": {},
+ "tasks": {}
+}

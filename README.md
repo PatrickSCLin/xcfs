@@ -1,8 +1,8 @@
 # xcfs
 
-Worktrees, a pool of pre-built worktrees, and persistent build sessions for parallel development on macOS — built for
-AI agents that each need their own checkout of a large Xcode project, without paying for a full copy of the
-dependencies, a cold build per checkout, or tens of gigabytes of build output left behind.
+**Several AI agents developing one iOS app at the same time, without waiting on cold builds and without filling the
+disk.** Each agent gets its own checkout of the Xcode project: a slot of a pool that is already built, an incremental
+build session, a one-file compile check, its own simulator, and nothing left behind when it is done.
 
 ```
 xcfs checkout ~/src/app feature/x      # lease a slot that is already built at the baseline; prints its path
@@ -12,11 +12,53 @@ xcfs test && xcfs run                  # on the slot's own simulator
 xcfs release                           # back to the pool; rebuilt at the baseline in the background
 ```
 
+With Claude Code, two hooks make every worktree it creates (`claude --worktree`, subagents with worktree isolation)
+an xcfs slot, with no change to how anyone works: see [docs/agents.md](docs/agents.md).
+
 `xcfs` is the name of the tool, not a file system: it uses git worktrees and APFS clones, needs no root, installs no
 kernel extension and does not modify Xcode.
 
 **Status: v0.2.** Python 3 (standard library only, 3.9 or later). Everything below is implemented and tested; see
 [docs/design.md](docs/design.md) for what is measured, what is planned and what is not verified.
+
+## What it is worth
+
+Three agents start at once on [Ice Cubes](https://github.com/Dimillian/IceCubesApp), each with a real task judged by
+a build and the package's tests (add a function, get a compile error, fix it, add a unit test, run the tests, build the
+app). Plain: `git worktree add` and `xcodebuild`, as an agent would. Ranges over clean repeated runs
+([details](docs/benchmark.md#three-agents-real-tasks-at-the-same-time)):
+
+| | plain worktrees | xcfs |
+|---|---|---|
+| the next three agents on the same pool (warm-up of the released slots included) | 284–302 s | **111–121 s** |
+| the first three agents on a fresh pool, warm-up included | 284–302 s | 408–419 s — **slower** |
+| memory while the agents work | 24–25 GB | 8–12 GB |
+| left on disk afterwards | 1.5 GB of DerivedData per worktree | nothing |
+| tests run at the same time | one simulator for all; a test run was killed by another's once in six | one simulator per checkout |
+
+The pool is warmed once and reused: from the second batch of agents on, xcfs is 2.3–2.7× faster; the very first batch on a
+fresh pool pays for the warm-up (280–301 s for three slots) and is slower than plain worktrees. On four more apps
+xcfs was not developed on, one agent's round of work (checkout, build, five edits each checked, a final build) took
+3–9× less time with the default configuration
+([zero-configuration table](docs/benchmark.md#zero-configuration-on-projects-xcfs-was-not-developed-on)).
+
+**Where it does not help much:**
+
+- **One checkout, day to day.** Without parallel checkouts there is no pool to reuse; what remains is the build
+  session (a no-op build 5.9 → 0.9 s, a small edit 8 → 3–4 s on Ice Cubes) and `xcfs check`.
+- **CI.** Fresh machines and one build per job: no pool survives between jobs, and remote build caches are out of
+  scope ([docs/build-systems.md](docs/build-systems.md)).
+- **The first batch on a fresh pool**, as above.
+- **Bazel projects:** incremental builds are Bazel's own; xcfs helps with the wait for a checkout and with cleanup.
+
+**Optional acceleration: an experimental Swift driver.** On Xcode 27.x (Swift 6.4), xcfs builds a patched
+swift-driver in the background and uses it once it passes a correctness self-test: after a public declaration is
+added to a widely imported module, it recompiles only the files that use what changed (Ice Cubes 25 → 6 s, Wikipedia
+35 → 15 s). It is on by default where it applies and off everywhere else; `"swiftDriver": "native"` turns it off. In the
+three-agent tasks it made the next batches faster (111–121 vs 138–151 s) and the fresh pool's warm-up slower (408–419
+vs 354–376 s, warm-up included). Incremental builds with it are checked against clean builds on real apps
+([oracle](docs/benchmark.md#is-an-incremental-build-the-same-as-a-clean-one)). See
+[its notes](lib/xcfs/adapters/swiftdriver/README.md) and [docs/incremental-swift.md](docs/incremental-swift.md).
 
 ## Why
 
@@ -315,7 +357,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 63 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 65 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

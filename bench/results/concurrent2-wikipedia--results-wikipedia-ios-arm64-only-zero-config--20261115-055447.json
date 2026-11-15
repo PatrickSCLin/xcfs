@@ -1,0 +1,680 @@
+{
+ "profile": "Wikipedia iOS (arm64 only, zero-config)",
+ "agents": 3,
+ "started": "20261115-055447",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "0919f3e"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {},
+ "concurrent": {
+  "plain": {
+   "wall_seconds": 428.5,
+   "agents": [
+    {
+     "agent": 1,
+     "total_seconds": 423.2,
+     "steps": [
+      [
+       "create",
+       1.5
+      ],
+      [
+       "create",
+       0.3
+      ],
+      [
+       "first build",
+       191.4
+      ],
+      [
+       "edit 1 + build",
+       25.6
+      ],
+      [
+       "edit 2 + build",
+       20.6
+      ],
+      [
+       "edit 3 + build",
+       76.5
+      ],
+      [
+       "edit 4 + build",
+       25.4
+      ],
+      [
+       "edit 5 + build",
+       81.1
+      ],
+      [
+       "remove",
+       0.8
+      ]
+     ],
+     "left_kb": 2928496
+    },
+    {
+     "agent": 2,
+     "total_seconds": 425.5,
+     "steps": [
+      [
+       "create",
+       1.6
+      ],
+      [
+       "create",
+       0.0
+      ],
+      [
+       "first build",
+       188.4
+      ],
+      [
+       "edit 1 + build",
+       25.7
+      ],
+      [
+       "edit 2 + build",
+       20.5
+      ],
+      [
+       "edit 3 + build",
+       77.8
+      ],
+      [
+       "edit 4 + build",
+       25.4
+      ],
+      [
+       "edit 5 + build",
+       83.7
+      ],
+      [
+       "remove",
+       0.4
+      ]
+     ],
+     "left_kb": 2927584
+    },
+    {
+     "agent": 3,
+     "total_seconds": 425.1,
+     "steps": [
+      [
+       "create",
+       1.5
+      ],
+      [
+       "create",
+       0.1
+      ],
+      [
+       "first build",
+       189.8
+      ],
+      [
+       "edit 1 + build",
+       26.0
+      ],
+      [
+       "edit 2 + build",
+       20.2
+      ],
+      [
+       "edit 3 + build",
+       78.5
+      ],
+      [
+       "edit 4 + build",
+       24.2
+      ],
+      [
+       "edit 5 + build",
+       80.9
+      ],
+      [
+       "remove",
+       0.4
+      ]
+     ],
+     "left_kb": 2931552
+    }
+   ],
+   "peak_rss_kb": 16318176,
+   "mean_rss_kb": 5887253,
+   "peak_processes": 62,
+   "samples": 391,
+   "peak_disk_kb": 3810344,
+   "disk_kb_at_end": 3361464
+  },
+  "xcfs (defaults)": {
+   "wall_seconds": 92.3,
+   "agents": [
+    {
+     "agent": 1,
+     "total_seconds": 92.3,
+     "steps": [
+      [
+       "checkout",
+       0.4
+      ],
+      [
+       "first build",
+       14.8
+      ],
+      [
+       "edit 1 + check",
+       19.2
+      ],
+      [
+       "edit 2 + check",
+       2.6
+      ],
+      [
+       "edit 3 + check",
+       3.1
+      ],
+      [
+       "edit 4 + check",
+       23.0
+      ],
+      [
+       "edit 5 + check",
+       2.1
+      ],
+      [
+       "final build",
+       25.3
+      ],
+      [
+       "release",
+       1.7
+      ]
+     ],
+     "decisions": [
+      {
+       "step": "first build",
+       "ok": true,
+       "driver": "session",
+       "swift_driver": "api-digests",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 1 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 2 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 3 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 4 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 5 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "final build",
+       "ok": true,
+       "driver": "session",
+       "swift_driver": "api-digests",
+       "skipped_scripts": []
+      }
+     ]
+    },
+    {
+     "agent": 2,
+     "total_seconds": 92.3,
+     "steps": [
+      [
+       "checkout",
+       0.4
+      ],
+      [
+       "first build",
+       14.7
+      ],
+      [
+       "edit 1 + check",
+       19.1
+      ],
+      [
+       "edit 2 + check",
+       2.6
+      ],
+      [
+       "edit 3 + check",
+       3.1
+      ],
+      [
+       "edit 4 + check",
+       23.1
+      ],
+      [
+       "edit 5 + check",
+       2.1
+      ],
+      [
+       "final build",
+       25.2
+      ],
+      [
+       "release",
+       1.8
+      ]
+     ],
+     "decisions": [
+      {
+       "step": "first build",
+       "ok": true,
+       "driver": "session",
+       "swift_driver": "api-digests",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 1 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 2 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 3 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 4 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 5 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "final build",
+       "ok": true,
+       "driver": "session",
+       "swift_driver": "api-digests",
+       "skipped_scripts": []
+      }
+     ]
+    },
+    {
+     "agent": 3,
+     "total_seconds": 92.3,
+     "steps": [
+      [
+       "checkout",
+       0.4
+      ],
+      [
+       "first build",
+       14.7
+      ],
+      [
+       "edit 1 + check",
+       19.1
+      ],
+      [
+       "edit 2 + check",
+       2.6
+      ],
+      [
+       "edit 3 + check",
+       3.1
+      ],
+      [
+       "edit 4 + check",
+       23.0
+      ],
+      [
+       "edit 5 + check",
+       2.1
+      ],
+      [
+       "final build",
+       25.3
+      ],
+      [
+       "release",
+       1.8
+      ]
+     ],
+     "decisions": [
+      {
+       "step": "first build",
+       "ok": true,
+       "driver": "session",
+       "swift_driver": "api-digests",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 1 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 2 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 3 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 4 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 5 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "final build",
+       "ok": true,
+       "driver": "session",
+       "swift_driver": "api-digests",
+       "skipped_scripts": []
+      }
+     ]
+    }
+   ],
+   "warm_seconds": 378.1,
+   "warm_peak_rss_kb": 8584000,
+   "wall_with_warm_seconds": 470.4,
+   "peak_rss_kb": 6041856,
+   "mean_rss_kb": 2657723,
+   "peak_processes": 31,
+   "samples": 86,
+   "peak_disk_kb": 133748,
+   "disk_kb_at_end": 43980
+  },
+  "xcfs (defaults), the next 3 agents on the same pool": {
+   "wall_seconds": 89.8,
+   "warm_seconds": 66.4,
+   "warm_peak_rss_kb": 2148000,
+   "wall_with_warm_seconds": 156.2,
+   "agents": [
+    {
+     "agent": 1,
+     "total_seconds": 89.8,
+     "steps": [
+      [
+       "checkout",
+       0.4
+      ],
+      [
+       "first build",
+       13.4
+      ],
+      [
+       "edit 1 + check",
+       18.8
+      ],
+      [
+       "edit 2 + check",
+       2.1
+      ],
+      [
+       "edit 3 + check",
+       2.9
+      ],
+      [
+       "edit 4 + check",
+       23.0
+      ],
+      [
+       "edit 5 + check",
+       2.1
+      ],
+      [
+       "final build",
+       25.4
+      ],
+      [
+       "release",
+       1.5
+      ]
+     ]
+    },
+    {
+     "agent": 2,
+     "total_seconds": 89.7,
+     "steps": [
+      [
+       "checkout",
+       0.4
+      ],
+      [
+       "first build",
+       13.4
+      ],
+      [
+       "edit 1 + check",
+       19.0
+      ],
+      [
+       "edit 2 + check",
+       2.1
+      ],
+      [
+       "edit 3 + check",
+       2.8
+      ],
+      [
+       "edit 4 + check",
+       23.0
+      ],
+      [
+       "edit 5 + check",
+       2.1
+      ],
+      [
+       "final build",
+       25.3
+      ],
+      [
+       "release",
+       1.6
+      ]
+     ]
+    },
+    {
+     "agent": 3,
+     "total_seconds": 89.7,
+     "steps": [
+      [
+       "checkout",
+       0.4
+      ],
+      [
+       "first build",
+       13.5
+      ],
+      [
+       "edit 1 + check",
+       18.9
+      ],
+      [
+       "edit 2 + check",
+       2.1
+      ],
+      [
+       "edit 3 + check",
+       2.9
+      ],
+      [
+       "edit 4 + check",
+       23.1
+      ],
+      [
+       "edit 5 + check",
+       2.1
+      ],
+      [
+       "final build",
+       25.3
+      ],
+      [
+       "release",
+       1.6
+      ]
+     ]
+    }
+   ],
+   "peak_rss_kb": 5464240,
+   "mean_rss_kb": 1950979,
+   "peak_processes": 31,
+   "samples": 84,
+   "peak_disk_kb": 141144,
+   "disk_kb_at_end": 49736
+  },
+  "xcfs (defaults) beside a warm-up of 2 slots": {
+   "wall_seconds": 80.6,
+   "agents": [
+    {
+     "agent": 1,
+     "total_seconds": 80.6,
+     "steps": [
+      [
+       "checkout",
+       0.3
+      ],
+      [
+       "first build",
+       12.1
+      ],
+      [
+       "edit 1 + check",
+       17.3
+      ],
+      [
+       "edit 2 + check",
+       2.6
+      ],
+      [
+       "edit 3 + check",
+       2.6
+      ],
+      [
+       "edit 4 + check",
+       20.6
+      ],
+      [
+       "edit 5 + check",
+       2.1
+      ],
+      [
+       "final build",
+       21.4
+      ],
+      [
+       "release",
+       1.6
+      ]
+     ],
+     "decisions": [
+      {
+       "step": "first build",
+       "ok": true,
+       "driver": "session",
+       "swift_driver": "api-digests",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 1 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 2 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 3 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 4 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "edit 5 + check",
+       "ok": true,
+       "driver": "session",
+       "skipped_scripts": []
+      },
+      {
+       "step": "final build",
+       "ok": true,
+       "driver": "session",
+       "swift_driver": "api-digests",
+       "skipped_scripts": []
+      }
+     ]
+    }
+   ],
+   "warm_seconds": 138.7,
+   "warm_peak_rss_kb": 7823520,
+   "wall_with_warm_seconds": 219.3,
+   "peak_rss_kb": 7853376,
+   "mean_rss_kb": 1398962,
+   "peak_processes": 48,
+   "samples": 283,
+   "peak_disk_kb": 6347500,
+   "disk_kb_at_end": 6347888
+  }
+ },
+ "tasks": {}
+}

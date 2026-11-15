@@ -1,0 +1,58 @@
+{
+ "profile": "Element X iOS (arm64, zero-config)",
+ "agents": 3,
+ "started": "20261115-014123",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "0a8a3c4"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {
+  "plain": {
+   "total_seconds": 299.4,
+   "steps": [
+    [
+     "create",
+     2.4
+    ],
+    [
+     "first build",
+     146.9
+    ],
+    [
+     "edit 1 + build",
+     27.9
+    ],
+    [
+     "edit 2 + build",
+     13.1
+    ],
+    [
+     "edit 3 + build",
+     43.2
+    ],
+    [
+     "edit 4 + build",
+     24.6
+    ],
+    [
+     "edit 5 + build",
+     40.5
+    ],
+    [
+     "remove",
+     0.4
+    ]
+   ],
+   "left_kb": 5266156,
+   "disk_kb_after": 4796428
+  }
+ },
+ "concurrent": {}
+}
