@@ -4,7 +4,7 @@ class Xcfs < Formula
   desc "Worktrees, a pool of pre-built slots and build sessions for parallel agents on Xcode projects"
   homepage "https://github.com/PatrickSCLin/xcfs"
   url "https://github.com/PatrickSCLin/xcfs/archive/refs/tags/v0.2.0.tar.gz"
-  sha256 "REPLACE_WITH_THE_RELEASE_TARBALL_SHA256"
+  sha256 "4167e2be07179809cf6219599891079a583dc4b6375896b3ae81c97a00e0c21c"
   license "MIT"
   head "https://github.com/PatrickSCLin/xcfs.git", branch: "main"
 
