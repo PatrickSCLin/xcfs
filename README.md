@@ -224,8 +224,8 @@ changed interface really affects, built in the background on first use — see [
 checkout, with each checkout's own paths kept out of its keys so a slot replays what another compiled. `"dependencies"`
 keeps the checkout's sources at their real paths and shares what lies outside them (packages, Clang modules);
 `"all"` maps the whole checkout, so every compile job is shared, but `#filePath` at run time reads `/^checkout/…`,
-which breaks tests that find files next to their source (fixtures, snapshot tests); xcfs maps test failure locations
-back. Either uses Xcode's own Swift driver, and a fresh pool then warms one slot first and the others from the cache.
+which breaks tests that find files next to their source (fixtures, snapshot tests), and lldb needs a source map,
+which each build's JSON gives (`lldb_source_map`); xcfs maps test failure locations back. Either uses Xcode's own Swift driver, and a fresh pool then warms one slot first and the others from the cache.
 Measured on Ice Cubes with `"all"`: a second slot's warm-up 84–88 → 35–38 s; a new pool the next day 312–321 → 173 s
 and a third of the memory; three slots following the baseline 15–20 % faster; incremental builds within 0–4 s of no
 cache; but three agents' first batch on a fresh pool still 352–355 s against 284–302 s for plain worktrees. See

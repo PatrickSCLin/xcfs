@@ -91,6 +91,14 @@ def unmap_paths(ctx, diagnostics):
     return diagnostics
 
 
+def debug_hint(ctx, r):
+    """With the whole checkout mapped, the debug info names /^checkout/...: lldb needs a source map to show the source
+    and to resolve a breakpoint given by a real path (as Xcode gives them)."""
+    if compile_cache_mode(ctx.entry) == "all":
+        r["lldb_source_map"] = "settings set target.source-map %s %s" % (CHECKOUT, ctx.root)
+    return r
+
+
 def simulator_record():
     """The simulators xcfs created: {udid: {name, root, created}}. gc only ever removes simulators listed here."""
     return os.path.join(state.state_dir(), "simulators.json")
@@ -363,7 +371,7 @@ class XcodeAdapter(Adapter):
             r = xcode_session.build(self, ctx, name, conf, args)
             if XcodeAdapter.swift_driver_decision:
                 r["swift_driver"] = XcodeAdapter.swift_driver_decision
-            return r
+            return debug_hint(ctx, r)
         if isinstance(ctx.entry.get("skipScripts"), list) and ctx.entry["skipScripts"]:
             from ..util import warn
             warn("skipScripts applies to the session driver only; this xcodebuild build runs every script phase")
@@ -371,7 +379,7 @@ class XcodeAdapter(Adapter):
         r.pop("_lines", None)
         if XcodeAdapter.swift_driver_decision:
             r["swift_driver"] = XcodeAdapter.swift_driver_decision
-        return r
+        return debug_hint(ctx, r)
 
     def check(self, ctx, files, args):
         name, conf = self.conf(ctx.entry, args.get("config"))

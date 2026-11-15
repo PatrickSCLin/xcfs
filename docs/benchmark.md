@@ -208,6 +208,18 @@ Two modes, because mapping paths changes what the program sees at run time:
 - `"dependencies"` keeps the checkout's sources at their real paths and shares what lies outside them (packages,
   Clang modules): those tests pass, and fewer jobs are shared (Swift 165/308 on a second slot).
 
+Checked on the sample project, mode by mode:
+
+| | off | `"dependencies"` | `"all"` |
+|---|---|---|---|
+| a test reading a fixture next to its source, or writing a snapshot there | passes | passes | fails |
+| compile errors (`xcfs build`, `xcfs check`) | real paths | real paths | real paths |
+| a test failure's location | real path | real path | mapped back by xcfs |
+| lldb: a breakpoint by real path (as Xcode sets them), showing the source | works | works | needs `settings set target.source-map /^checkout <checkout>`; xcfs prints it in each build's JSON (`lldb_source_map`) |
+| `#fileID` (and so `fatalError`, `assert` messages in Swift 6 modules) | real | real | unchanged |
+| `#file` in a Swift 5 module (messages, logs), source paths in a symbolicated crash | real | real | `/^checkout/…` |
+| the project's own `OTHER_SWIFT_FLAGS` | kept | kept | kept (xcfs's flags follow `$(inherited)`) |
+
 Either needs Xcode's own Swift driver: the experimental driver's compile jobs are not cached at all, and switching a
 cache-warmed slot to it recompiled everything (1,582 tasks, 53.7 s), so the two do not combine.
 

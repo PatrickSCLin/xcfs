@@ -1613,6 +1613,9 @@ def t66_compile_cache_settings():
     assert "compileCache must be" in " ".join(a.validate(dict(entry, compileCache="yes")))
     assert not [p for p in a.validate(dict(entry, compileCache="dependencies")) if "compileCache" in p]
     # a test failure's #filePath in the mapped form points back into the checkout
+    assert xa.debug_hint(ctx(dict(entry, compileCache="all")), {})["lldb_source_map"] == \
+        "settings set target.source-map /^checkout %s" % c.root
+    assert "lldb_source_map" not in xa.debug_hint(ctx(dict(entry, compileCache="dependencies")), {})
     d = xa.unmap_paths(c, [{"file": "/^checkout/Tests/T.swift"}, {"file": "/^build/x.swift"}, {"file": "/elsewhere/y"}])
     assert [x["file"] for x in d] == [c.root + "/Tests/T.swift", c.build_dir + "/x.swift", "/elsewhere/y"], d
 
