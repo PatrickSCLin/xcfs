@@ -1,0 +1,157 @@
+{
+ "name": "Ice Cubes (arm64, three agents, real tasks)",
+ "description": "https://github.com/Dimillian/IceCubesApp. Three agents at the same time, each with a small task defined in advance and judged by a build and the package's own tests: a public helper added to Models (12 packages depend on it), a computed property added to Timeline's filter enum, a helper added to Env (most feature packages depend on it). Each task first writes code that does not compile (a typo, a non-exhaustive switch, an optional not unwrapped), fixes it, adds a unit test, runs the package's tests and builds the app. Plain: git worktree + the README's setup, xcodebuild into the default DerivedData, tests on the simulator named in the command (as an agent would write it). xcfs: slots warmed first (the warm-up is timed and reported), xcfs check / build / test (each checkout its own simulator). One architecture (ARCHS=arm64).",
+ "agents": 3,
+ "plain": {
+  "create": [
+   "git worktree add -q -b {branch} {dest}",
+   "cd {dest} && cp IceCubesApp.xcconfig.template IceCubesApp.xcconfig && sed -i '' 's/^DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM =/' IceCubesApp.xcconfig"
+  ],
+  "build": "xcodebuild build -project IceCubesApp.xcodeproj -scheme IceCubesApp -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
+  "remove": "git worktree remove --force {dest} && git branch -D {branch}",
+  "test": "xcodebuild test -project IceCubesApp.xcodeproj -scheme {scheme} -destination 'platform=iOS Simulator,name=iPhone 18 Pro' CODE_SIGNING_ALLOWED=NO ARCHS=arm64"
+ },
+ "xcfs": {
+  "config": {
+   "version": 1,
+   "carry": [
+    "IceCubesApp.xcconfig"
+   ],
+   "toolchains": [
+    {
+     "adapter": "xcode",
+     "project": "IceCubesApp.xcodeproj",
+     "scheme": "IceCubesApp",
+     "configurations": {
+      "sim-debug": {
+       "configuration": "Debug",
+       "destination": "generic/platform=iOS Simulator"
+      }
+     },
+     "buildSettings": {
+      "CODE_SIGNING_ALLOWED": "NO",
+      "ARCHS": "arm64"
+     }
+    }
+   ]
+  },
+  "variants": {
+   "defaults": {},
+   "defaults-without-driver-patch": {
+    "swiftDriver": "native"
+   }
+  }
+ },
+ "tasks": [
+  {
+   "name": "Models: display name or handle",
+   "test": "ModelsTests",
+   "steps": [
+    {
+     "name": "add the helper (with a typo)",
+     "verify": "check",
+     "expect": "fail",
+     "edit": {
+      "file": "Packages/Models/Sources/Models/Account.swift",
+      "find": "  public var fullAccountName: String {",
+      "replace": "  public static func displayNameOrHandle(_ displayName: String?, acct: String) -> String {\n    if let displayName, !displayName.trimmingCharacters(in: .whitespaces).isEmpty { return displayNam }\n    return \"@\" + acct\n  }\n\n  public var displayNameOrHandle: String {\n    Account.displayNameOrHandle(displayName, acct: acct)\n  }\n\n  public var fullAccountName: String {"
+     }
+    },
+    {
+     "name": "fix the typo",
+     "verify": "check",
+     "edit": {
+      "file": "Packages/Models/Sources/Models/Account.swift",
+      "find": "{ return displayNam }",
+      "replace": "{ return displayName }"
+     }
+    },
+    {
+     "name": "add a unit test and run the package's tests",
+     "verify": "test",
+     "edit": {
+      "file": "Packages/Models/Tests/ModelsTests/AccountDisplayNameTests.swift",
+      "create": "import Testing\n\n@testable import Models\n\n@Test\nfunc displayNameFallsBackToHandle() {\n  #expect(Account.displayNameOrHandle(\"Ada\", acct: \"ada\") == \"Ada\")\n  #expect(Account.displayNameOrHandle(\"  \", acct: \"ada\") == \"@ada\")\n  #expect(Account.displayNameOrHandle(nil, acct: \"ada@example.com\") == \"@ada@example.com\")\n}\n"
+     }
+    },
+    {
+     "name": "build the app",
+     "verify": "build"
+    }
+   ]
+  },
+  {
+   "name": "Timeline: remote filters",
+   "test": "TimelineTests",
+   "steps": [
+    {
+     "name": "add isRemote (switch not exhaustive)",
+     "verify": "check",
+     "expect": "fail",
+     "edit": {
+      "file": "Packages/Timeline/Sources/Timeline/TimelineFilter.swift",
+      "append": "\nextension TimelineFilter {\n  public var isRemote: Bool {\n    switch self {\n    case .remoteLocal: return true\n    case .home, .local, .federated: return false\n    }\n  }\n}\n"
+     }
+    },
+    {
+     "name": "make the switch exhaustive",
+     "verify": "check",
+     "edit": {
+      "file": "Packages/Timeline/Sources/Timeline/TimelineFilter.swift",
+      "find": "    case .home, .local, .federated: return false\n",
+      "replace": "    default: return false\n"
+     }
+    },
+    {
+     "name": "add a unit test and run the package's tests",
+     "verify": "test",
+     "edit": {
+      "file": "Packages/Timeline/Tests/TimelineTests/TimelineFilterRemoteTests.swift",
+      "create": "import Testing\n\n@testable import Timeline\n\n@MainActor\n@Test\nfunc remoteFiltersAreRemote() {\n  #expect(TimelineFilter.remoteLocal(server: \"me.dm\", filter: .local).isRemote)\n  #expect(!TimelineFilter.home.isRemote)\n}\n"
+     }
+    },
+    {
+     "name": "build the app",
+     "verify": "build"
+    }
+   ]
+  },
+  {
+   "name": "Env: shortest duration at least N seconds",
+   "test": "EnvTests",
+   "steps": [
+    {
+     "name": "add atLeast(seconds:) (an optional not unwrapped)",
+     "verify": "check",
+     "expect": "fail",
+     "edit": {
+      "file": "Packages/Env/Sources/Env/Duration.swift",
+      "append": "\nextension Duration {\n  /// The shortest preset that lasts at least `seconds` (never .infinite or .custom).\n  public static func atLeast(seconds: Int) -> Duration? {\n    allCases.filter { $0 != .infinite && $0 != .custom }\n      .sorted { $0.rawValue < $1.rawValue }\n      .first { $0.rawValue >= seconds }.rawValue\n  }\n}\n"
+     }
+    },
+    {
+     "name": "return the duration",
+     "verify": "check",
+     "edit": {
+      "file": "Packages/Env/Sources/Env/Duration.swift",
+      "find": "      .first { $0.rawValue >= seconds }.rawValue\n",
+      "replace": "      .first { $0.rawValue >= seconds }\n"
+     }
+    },
+    {
+     "name": "add a unit test and run the package's tests",
+     "verify": "test",
+     "edit": {
+      "file": "Packages/Env/Tests/DurationTests.swift",
+      "create": "import Testing\n\n@testable import Env\n\n@MainActor\n@Test\nfunc durationAtLeast() {\n  #expect(Env.Duration.atLeast(seconds: 1) == .fiveMinutes)\n  #expect(Env.Duration.atLeast(seconds: 3600) == .oneHour)\n  #expect(Env.Duration.atLeast(seconds: 10_000_000) == nil)\n}\n"
+     }
+    },
+    {
+     "name": "build the app",
+     "verify": "build"
+    }
+   ]
+  }
+ ],
+ "taskRounds": 2
+}

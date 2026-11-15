@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR]
-           [--phases plain,xcfs,round,round-xcfs,round-plain,concurrent,concurrent-plain,overlap]
+           [--phases plain,xcfs,round,round-xcfs,round-plain,concurrent,concurrent-plain,overlap,tasks,tasks-plain]
            [--xcfs PATH] [--reuse-from RESULTS.json]   (sides not in --phases are taken from that earlier run)
 
 Compare N parallel checkouts made the plain way (git worktree + the project's own setup and build) with the same N
@@ -44,7 +44,7 @@ for k in ("CLAUDE_CODE_SESSION_ID",):
 # A cache every checkout shares (a build tool's disk cache, say): the profile's commands find it in $XCFS_BENCH_CACHE.
 ENV["XCFS_BENCH_CACHE"] = os.path.realpath(arg("--cache", os.path.join(WORK, "shared-cache")))
 RESULTS = {"profile": PROFILE["name"], "agents": N, "started": STAMP, "machine": {}, "plain": {}, "xcfs": {},
-           "round": {}, "concurrent": {}}
+           "round": {}, "concurrent": {}, "tasks": {}}
 VARIANTS = PROFILE["xcfs"].get("variants") or {"xcfs": {}}
 
 
@@ -150,20 +150,31 @@ class MemorySampler(threading.Thread):
 
     def __init__(self):
         super().__init__(daemon=True)
-        self.samples, self.done = [], threading.Event()
+        self.samples, self.done, self.free0 = [], threading.Event(), free_kb()
+        self.min_free = self.free0
 
     def run(self):
         while not self.done.wait(1.0):
             table = process_table()
             pids, kb = processes_for(WORK, table, roots=[p for p, (pp, _, _) in table.items() if pp == os.getpid()])
             self.samples.append((kb, len(pids)))
+            if kb > getattr(self, "peak_kb", 0):   # what the memory is, at its peak
+                self.peak_kb, by = kb, {}
+                for p in pids:
+                    if p in table:
+                        name = os.path.basename(table[p][2].split(" ", 1)[0])
+                        by[name] = by.get(name, 0) + table[p][1]
+                self.peak_by = sorted(by.items(), key=lambda kv: -kv[1])[:6]
+            self.min_free = min(self.min_free, free_kb())
 
     def stop(self):
         self.done.set()
         self.join()
         kbs = [k for k, _ in self.samples] or [0]
         return {"peak_rss_kb": max(kbs), "mean_rss_kb": int(sum(kbs) / len(kbs)),
-                "peak_processes": max([n for _, n in self.samples] or [0]), "samples": len(self.samples)}
+                "peak_processes": max([n for _, n in self.samples] or [0]), "samples": len(self.samples),
+                "peak_disk_kb": self.free0 - self.min_free, "disk_kb_at_end": self.free0 - free_kb(),
+                "peak_by_process": getattr(self, "peak_by", [])}
 
 
 def owned_caches(path):
@@ -398,7 +409,7 @@ def plain_round(agent=""):
             steps.append(("create", t))
     t, code, _ = shell(fmt(P["build"], dest=dest), dest, log)
     steps.append(("first build", t))
-    base = int(time.time() * 1000) % 10 ** 9 * 10 + int(agent or 0) * 1000
+    base = int(time.time() * 1000) % 10 ** 9 * 10 + int((agent or "0").split("-")[0]) * 1000
     seen = set()
     for i, e in enumerate(round_edits(), 1):
         if e["name"] in seen:  # the same edit again (5 edits from a shorter list): start that file afresh
@@ -443,7 +454,9 @@ def xcfs_variant_env(d, overrides):
     cfg_dir = os.path.join(d, "config", "xcfs")
     os.makedirs(cfg_dir, exist_ok=True)
     json.dump(cfg, open(os.path.join(cfg_dir, os.path.basename(SOURCE) + ".json"), "w"), indent=1)
-    json.dump({"buildTimeout": 6 * 3600, "warmOnRelease": False}, open(os.path.join(cfg_dir, "settings.json"), "w"))
+    json.dump(dict({"buildTimeout": 6 * 3600, "warmOnRelease": False}, **PROFILE["xcfs"].get("settings", {}),
+                   **json.loads(os.environ.get("XCFS_BENCH_SETTINGS", "{}"))),
+              open(os.path.join(cfg_dir, "settings.json"), "w"))
 
 
 def xcfs_round(variant, agent=""):
@@ -466,7 +479,7 @@ def xcfs_round(variant, agent=""):
     t, code, _, out = xcfs("build", wt, log_name=log)
     steps.append(("first build", t))
     note("first build", code, out)
-    base = int(time.time() * 1000) % 10 ** 9 * 10 + int(agent or 0) * 1000
+    base = int(time.time() * 1000) % 10 ** 9 * 10 + int((agent or "0").split("-")[0]) * 1000
     seen = set()
     for i, e in enumerate(round_edits(), 1):
         if e["name"] in seen:
@@ -545,7 +558,10 @@ def run_concurrent_xcfs(variant, overrides, overlap=False):
     what the agent loses to a warm-up running beside it."""
     global XENV
     xcfs_variant_env(os.path.join(WORK, ("overlap-xcfs-" if overlap else "concurrent-xcfs-") + variant), overrides)
-    t, code, _, out = xcfs("pool", "warm", SOURCE, "--slots", "1" if overlap else str(N), log_name="concurrent-warm")
+    sampler = MemorySampler()
+    sampler.start()
+    tw, code, _, out = xcfs("pool", "warm", SOURCE, "--slots", "1" if overlap else str(N), log_name="concurrent-warm")
+    warm_mem = sampler.stop()
     if code != 0:
         raise SystemExit("warm-up failed: %s" % out.get("error"))
     sampler = MemorySampler()
@@ -567,10 +583,172 @@ def run_concurrent_xcfs(variant, overrides, overlap=False):
         else:
             agents.append({"agent": i, "total_seconds": r[1], "steps": r[0], "decisions": r[2]})
     key = "xcfs (%s)%s" % (variant, " beside a warm-up of %d slots" % (N - 1) if overlap else "")
-    RESULTS["concurrent"][key] = dict({"wall_seconds": wall, "agents": agents}, **mem)
+    RESULTS["concurrent"][key] = dict({"wall_seconds": wall, "agents": agents, "warm_seconds": tw,
+                                       "warm_peak_rss_kb": warm_mem["peak_rss_kb"],
+                                       "warm_peak_by_process": warm_mem.get("peak_by_process"),
+                                       "wall_with_warm_seconds": round(tw + wall, 1)}, **mem)
+    if not overlap and int(PROFILE.get("taskRounds", 1)) > 1:   # the next agents on the same pool
+        sampler = MemorySampler()
+        sampler.start()
+        tw2, code, _, out = xcfs("pool", "warm", SOURCE, log_name="concurrent-warm")
+        warm2 = sampler.stop()
+        sampler = MemorySampler()
+        sampler.start()
+        results, wall2 = concurrently(lambda a: xcfs_round(variant, a + "-r2"), N)
+        mem2 = sampler.stop()
+        RESULTS["concurrent"][key + ", the next %d agents on the same pool" % N] = dict(
+            {"wall_seconds": wall2, "warm_seconds": tw2, "warm_peak_rss_kb": warm2["peak_rss_kb"],
+             "wall_with_warm_seconds": round(tw2 + wall2, 1),
+             "agents": [{"agent": i, "total_seconds": r[1], "steps": r[0]} if not isinstance(r, BaseException)
+                        else {"agent": i, "failed": str(r)} for i, r in enumerate(results, 1)]}, **mem2)
+        say("concurrent[%s, next agents]: re-warm %.1fs, then %.1fs" % (key, tw2, wall2))
     say("concurrent[%s]: %s, peak %s of build processes" % (
         key, ", ".join("%s s" % a.get("total_seconds", "failed") for a in agents), gb(mem["peak_rss_kb"])))
     xcfs("pool", "resize", SOURCE, "0", log_name="concurrent-warm")
+    XENV = {}
+
+
+# ------------------------------------------------------------------ real tasks, agents at the same time
+def apply_task_edit(root, e, n):
+    path = os.path.join(root, e["file"])
+    if "create" in e:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, "w").write(fmt(e["create"], n=n))
+    else:
+        apply_edit(root, e, n)
+
+
+def run_task_steps(root, task, n, verify, log):
+    """Edit and verify, step by step; each step says whether its verification should pass. Returns step rows."""
+    rows = []
+    for st in task["steps"]:
+        if st.get("edit"):
+            apply_task_edit(root, st["edit"], n)
+        kind = st["verify"]
+        t, ok = verify(kind, os.path.join(root, st["edit"]["file"]) if st.get("edit") else None, task)
+        want = st.get("expect", "ok") == "ok"
+        rows.append({"step": st["name"], "verify": kind, "seconds": t, "ok": ok, "as_expected": ok == want})
+        say("  [%s] %s: %s %.1fs%s" % (task["name"], st["name"], kind, t, "" if ok == want else " UNEXPECTED"))
+    subprocess.run(["git", "-C", root, "checkout", "--", "."], capture_output=True)   # the agent would commit
+    subprocess.run(["git", "-C", root, "clean", "-fdq"], capture_output=True)
+    return rows
+
+
+def plain_task(agent):
+    """One agent's task the plain way: worktree + setup, first build, each step verified by xcodebuild (a check is a
+    build; a test runs the task's test scheme on the simulator the profile names), removal."""
+    P, task = PROFILE["plain"], PROFILE["tasks"][int(agent) - 1]
+    dest = os.path.join(WORK, "%s-wt-task%s" % (os.path.basename(SOURCE), agent))
+    branch, log = "xcfs-bench/task" + agent, "task-plain" + agent
+    t0, rows = time.time(), []
+    with CREATE_LOCK:
+        tc = sum(shell(fmt(c, dest=dest, branch=branch), SOURCE, log)[0] for c in P["create"])
+    tb, code, _ = shell(fmt(P["build"], dest=dest), dest, log)
+    rows.append({"step": "first build", "verify": "build", "seconds": tb, "ok": code == 0, "as_expected": code == 0})
+
+    def verify(kind, f, task):
+        cmd = fmt(P["test"], dest=dest, scheme=task["test"]) if kind == "test" else fmt(P["build"], dest=dest)
+        t, code, _ = shell(cmd, dest, log)
+        return t, code == 0
+    rows += run_task_steps(dest, task, int(time.time()) % 100000 * 10 + int(agent), verify, log)
+    with CREATE_LOCK:
+        tr = shell(fmt(P["remove"], dest=dest, branch=branch), SOURCE, log)[0]
+    return {"agent": int(agent), "task": task["name"], "create_seconds": round(tc, 1), "remove_seconds": tr,
+            "total_seconds": round(time.time() - t0, 1), "steps": rows, "left": owned_caches(dest)}
+
+
+def xcfs_task(variant, agent):
+    task = PROFILE["tasks"][int(agent.split("-")[0]) - 1]
+    log = "task-xcfs-%s%s" % (variant, agent)
+    t0, rows = time.time(), []
+    tc, code, _, out = xcfs("checkout", SOURCE, "xcfs-bench/task-%s%s" % (variant, agent), "--wait", "3600",
+                            log_name=log)
+    if code != 0:
+        raise SystemExit("checkout failed: %s" % out.get("error"))
+    wt = out["worktree"]
+    tb, code, _, out = xcfs("build", wt, log_name=log)
+    rows.append({"step": "first build", "verify": "build", "seconds": tb, "ok": code == 0, "as_expected": code == 0})
+
+    def verify(kind, f, task):
+        if kind == "check":
+            t, code, _, _ = xcfs("check", f, log_name=log)
+        elif kind == "test":
+            t, code, _, _ = xcfs("test", wt, "--scheme", task["test"], log_name=log)
+        else:
+            t, code, _, _ = xcfs("build", wt, log_name=log)
+        return t, code == 0
+    rows += run_task_steps(wt, task, int(time.time()) % 100000 * 10 + int(agent.split("-")[0]), verify, log)
+    tr, code, _, out = xcfs("release", wt, "--no-warm", "--prune-branch", log_name=log)
+    return {"agent": int(agent.split("-")[0]), "task": task["name"], "create_seconds": tc, "remove_seconds": tr,
+            "total_seconds": round(time.time() - t0, 1), "steps": rows, "release_ok": code == 0}
+
+
+def summarize_tasks(results):
+    agents = []
+    for i, r in enumerate(results, 1):
+        if isinstance(r, BaseException):
+            agents.append({"agent": i, "failed": str(r)})
+            continue
+        r = dict(r)
+        r["wait_seconds"] = round(sum(x["seconds"] for x in r["steps"]), 1)
+        r["unexpected"] = sum(1 for x in r["steps"] if not x["as_expected"])
+        agents.append(r)
+    return agents
+
+
+def run_tasks_plain():
+    sampler = MemorySampler()
+    sampler.start()
+    results, wall = concurrently(plain_task, len(PROFILE["tasks"]))
+    mem = sampler.stop()
+    agents = summarize_tasks(results)
+    left = [a.pop("left") for a in agents if "left" in a]
+    for a in agents:
+        if "steps" in a:
+            a["left_kb"] = 0
+    RESULTS["tasks"]["plain"] = dict({"wall_seconds": wall, "agents": agents,
+                                      "left_kb": du_kb(*[c for l in left for c in l])}, **mem)
+    say("tasks[plain]: %.1fs wall, peak memory %s, peak disk %s" % (wall, gb(mem["peak_rss_kb"]), gb(mem["peak_disk_kb"])))
+    for i, l in enumerate(left, 1):
+        for c in l:
+            subprocess.run(["chmod", "-R", "u+w", c], capture_output=True)
+            shutil.rmtree(c, ignore_errors=True)
+        subprocess.run(["git", "-C", SOURCE, "branch", "-D", "xcfs-bench/task%d" % i], capture_output=True)
+
+
+def run_tasks_xcfs(variant, overrides):
+    """The pool is warmed first (timed: before any agent asks, or the price of the first agents' wait if it is not
+    done in advance), then the agents work from it at the same time."""
+    global XENV
+    xcfs_variant_env(os.path.join(WORK, "tasks-xcfs-" + variant), overrides)
+    n = len(PROFILE["tasks"])
+    sampler = MemorySampler()
+    sampler.start()
+    tw, code, _, out = xcfs("pool", "warm", SOURCE, "--slots", str(n), log_name="tasks-warm")
+    if code != 0:
+        sampler.stop()
+        raise SystemExit("warm-up failed: %s" % out.get("error"))
+    warm_mem = sampler.stop()
+    for rnd in range(1, int(PROFILE.get("taskRounds", 1)) + 1):
+        if rnd > 1:   # the next agents on the same pool: the slots were released; warmed again first (timed)
+            sampler = MemorySampler()
+            sampler.start()
+            tw, code, _, out = xcfs("pool", "warm", SOURCE, log_name="tasks-warm")
+            warm_mem = sampler.stop()
+        sampler = MemorySampler()
+        sampler.start()
+        results, wall = concurrently(lambda a: xcfs_task(variant, a + ("" if rnd == 1 else "-r%d" % rnd)), n)
+        mem = sampler.stop()
+        key = "xcfs (%s)%s" % (variant, "" if rnd == 1 else ", the next %d agents on the same pool" % n)
+        RESULTS["tasks"][key] = dict({"warm_seconds": tw, "warm_peak_rss_kb": warm_mem["peak_rss_kb"],
+                                      "warm_peak_disk_kb": warm_mem["peak_disk_kb"], "wall_seconds": wall,
+                                      "wall_with_warm_seconds": round(tw + wall, 1), "agents": summarize_tasks(results)},
+                                     **mem)
+        say("tasks[%s]: warm %.1fs, then %.1fs wall (%.1fs with the warm-up), peak memory %s" % (
+            key, tw, wall, tw + wall, gb(mem["peak_rss_kb"])))
+    f0 = free_kb()
+    xcfs("pool", "resize", SOURCE, "0", log_name="tasks-warm")
+    RESULTS["tasks"][key]["reclaimed_kb_at_retire"] = free_kb() - f0
     XENV = {}
 
 
@@ -645,15 +823,39 @@ def report():
         L += ["## Agents at the same time", "",
               "Each agent does the round above, all at once (plain: worktree creation and removal serialized, as git's "
               "locks would). Memory: resident memory of the processes the benchmark runs (with build services, compilers and xcfs build sessions), sampled every second.", "",
-              "| side | wall time | each agent | peak memory (processes) | mean memory |", "|---|---|---|---|---|"]
+              "| side | warm-up before the agents | wall time | wall time incl. warm-up | each agent | "
+              "peak memory while the agents work (processes) | peak memory during the warm-up | mean memory |",
+              "|---|---|---|---|---|---|---|---|"]
         for side, r in RESULTS["concurrent"].items():
             if "failed" in r:
                 L.append("| %s | failed | %s | | |" % (side, r["failed"][:200]))
                 continue
-            L.append("| %s | %.1f s | %s | %s (%d) | %s |" % (
-                side, r["wall_seconds"], ", ".join("%.1f s" % a["total_seconds"] if "total_seconds" in a else "failed"
-                                                   for a in r["agents"]),
-                gb(r["peak_rss_kb"]), r["peak_processes"], gb(r["mean_rss_kb"])))
+            L.append("| %s | %s | %.1f s | %.1f s | %s | %s (%d) | %s | %s |" % (
+                side, "%.1f s" % r["warm_seconds"] if "warm_seconds" in r else "-", r["wall_seconds"],
+                r.get("wall_with_warm_seconds", r["wall_seconds"]),
+                ", ".join("%.1f s" % a["total_seconds"] if "total_seconds" in a else "failed" for a in r["agents"]),
+                gb(r["peak_rss_kb"]), r["peak_processes"], gb(r.get("warm_peak_rss_kb")) if "warm_peak_rss_kb" in r else "-",
+                gb(r["mean_rss_kb"])))
+        L.append("")
+    if RESULTS.get("tasks"):
+        L += ["## Real tasks, agents at the same time", "",
+              "Each agent: a checkout, a first build, its task's steps (each edit verified: plain by a build or the "
+              "task's tests; xcfs by `xcfs check`, `xcfs build` or `xcfs test`), removal. Waiting = the sum of the "
+              "agent's build, check and test times. Unexpected = a verification that passed or failed against the "
+              "task's definition.", "",
+              "| side | warm-up (before agents) | wall time | wall time incl. warm-up | each agent: total / waiting | "
+              "unexpected | peak memory | peak disk | left behind |", "|---|---|---|---|---|---|---|---|---|"]
+        for side, r in RESULTS["tasks"].items():
+            if "failed" in r:
+                L.append("| %s | failed: %s | | | | | | | |" % (side, r["failed"][:200]))
+                continue
+            L.append("| %s | %s | %.1f s | %s | %s | %d | %s | %s | %s |" % (
+                side, "%.1f s" % r["warm_seconds"] if "warm_seconds" in r else "-", r["wall_seconds"],
+                "%.1f s" % r["wall_with_warm_seconds"] if "wall_with_warm_seconds" in r else "%.1f s" % r["wall_seconds"],
+                ", ".join("%.0f / %.0f s" % (a["total_seconds"], a["wait_seconds"]) if "total_seconds" in a else "failed"
+                          for a in r["agents"]),
+                sum(a.get("unexpected", 1) for a in r["agents"]), gb(r["peak_rss_kb"]), gb(r["peak_disk_kb"]),
+                gb(r.get("left_kb", 0))))
         L.append("")
     L += ["## Edit loop in the first checkout", "", head, sep]
     steps = []
@@ -716,6 +918,15 @@ def main():
                 run_xcfs(name, overrides)
         if "round-plain" in PHASES:
             run_round_plain()
+        if "tasks" in PHASES or "tasks-plain" in PHASES:
+            run_tasks_plain()
+        for name, overrides in VARIANTS.items():
+            if "tasks" in PHASES or "tasks:" + name in PHASES:
+                try:
+                    run_tasks_xcfs(name, overrides)
+                except SystemExit as e:
+                    RESULTS["tasks"]["xcfs (%s)" % name] = {"failed": str(e)}
+                    say("tasks[xcfs %s]: FAILED: %s" % (name, e))
         if "concurrent" in PHASES or "concurrent-plain" in PHASES:
             run_concurrent_plain()
         for name, overrides in VARIANTS.items():
