@@ -55,10 +55,14 @@ Checked with Claude Code 2.1.325: `claude -w <name>` in a repository with these 
 worktree on `worktree-<name>`; the hook's `cwd` is the directory Claude Code was started in. A non-interactive run
 (`claude -p`) leaves its worktree in place when it exits; the session-end hook returns it.
 
-Install for Claude Code: merge [examples/agent-hooks/claude-code-settings.json](../examples/agent-hooks/claude-code-settings.json)
-(both worktree hooks and the session-end hook) into the `hooks` of `~/.claude/settings.json` for every project, or of
-a repository's `.claude/settings.json` for one. `xcfs` must be on the `PATH` the hooks run with (or write its absolute
-path). Without Claude Code, any tool or script can call the same two commands with the same JSON.
+Install for Claude Code: `xcfs hook install --apply` adds both worktree hooks and the session-end hook to
+`~/.claude/settings.json` (every project); `xcfs hook install <repo> --apply` to a repository's
+`.claude/settings.json` (one project). Without `--apply` it only shows what it would add. Hooks that are not xcfs's
+are kept; when another tool's worktree hook is installed it refuses, since the agent tool takes a worktree from one
+command only. `xcfs hook uninstall --apply` takes xcfs's hooks out again, `xcfs hook status` shows what is installed.
+What it writes is [examples/agent-hooks/claude-code-settings.json](../examples/agent-hooks/claude-code-settings.json),
+which can be merged by hand as well. `xcfs` must be on the `PATH` the hooks run with. Without Claude Code, any tool or
+script can call the same commands with the same JSON.
 
 For people and agents that run `git worktree add` themselves, `xcfs adopt <worktree>` takes such a worktree under
 management afterwards (cleanup, build output outside the tree), and `xcfs checkout <repo> <branch>` prints a built
@@ -74,24 +78,10 @@ When the session ends, remove every worktree it opened and return every slot it 
 uncommitted work. The ones with uncommitted work
 are kept and listed under `left` in the result; the command still exits 0.
 
-For Claude Code, in `settings.json` (the hook receives the session id as JSON on stdin):
-
-```json
-{
-  "hooks": {
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "jq -r '.session_id // empty' | { read -r sid; [ -n \"$sid\" ] && command -v xcfs >/dev/null && mkdir -p \"$HOME/.local/state/xcfs\" && xcfs reap --session \"$sid\" --apply --prune-branch --json > \"$HOME/.local/state/xcfs/last-reap.json\" 2>&1; true; }"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+For Claude Code this is the `SessionEnd` hook `xcfs hook session-end`, installed by `xcfs hook install` with the two
+above. It reads the session id from the JSON on stdin, runs `xcfs reap --session <id> --apply --prune-branch`, writes
+the result to `last-reap.json` in xcfs's state directory (`~/.local/state/xcfs`), and exits 0 whatever happened, so
+that a session can always end.
 
 A session-start hook can show `last-reap.json` once, so the next session learns which worktrees were left behind and
 why.

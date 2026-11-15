@@ -29,9 +29,12 @@ Building (in a worktree, a slot, or any checkout; output never inside the source
   xcfs run [path] [--config NAME]                               build, install on the checkout's simulator, launch
 
 Agent tools
-  xcfs hook worktree-create | worktree-remove                    for a tool's worktree hooks (Claude Code's
-                                                                WorktreeCreate/WorktreeRemove): JSON on stdin; create
-                                                                prints the path of a built slot or a new worktree
+  xcfs hook worktree-create | worktree-remove | session-end      for a tool's hooks (Claude Code's WorktreeCreate,
+                                                                WorktreeRemove, SessionEnd): JSON on stdin; create
+                                                                prints the path of a built slot or a new worktree;
+                                                                session-end returns what the session opened
+  xcfs hook install | uninstall | status [repo] [--apply]       put those hooks in Claude Code's settings (the user's,
+                                                                or <repo>/.claude/settings.json), or take them out
 
 Maintenance
   xcfs gc [--apply] [--foreign] [--stale-days N]                reclaim what xcfs owns; --foreign also looks at caches

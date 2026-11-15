@@ -20,8 +20,8 @@ Agents and scripts depend on xcfs's output, so this is what a release keeps, and
   loudly on an earlier one.
 - **The promises about deletion:** nothing without `--apply`, nothing that holds unsaved work, nothing xcfs did not
   create.
-- **The hook interface:** `xcfs hook worktree-create` and `worktree-remove` read the JSON an agent tool sends on
-  stdin (`name`, `cwd`, `session_id`; `worktree_path`).
+- **The hook interface:** `xcfs hook worktree-create`, `worktree-remove` and `session-end` read the JSON an agent
+  tool sends on stdin (`name`, `cwd`, `session_id`; `worktree_path`; `session_id`).
 
 ## Not stable
 

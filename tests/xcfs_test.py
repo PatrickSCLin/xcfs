@@ -1731,6 +1731,70 @@ def t69_session_idle_time_is_a_setting():
             open(settings, "w").write(saved_settings)
 
 
+@test
+def t70_hooks_are_installed_and_removed_without_touching_others():
+    home = SB + "/claude70"; os.makedirs(home)
+    E = dict(toy_env(), CLAUDE_CONFIG_DIR=home)
+    path = home + "/settings.json"
+    mine = {"type": "command", "command": "say done"}
+    old = "jq -r '.session_id // empty' | { read -r sid; [ -n \"$sid\" ] && xcfs reap --session \"$sid\" --apply; true; }"
+    json.dump({"model": "x", "hooks": {"Stop": [{"hooks": [mine]}],
+                                       "SessionEnd": [{"hooks": [mine, {"type": "command", "command": old}]}]}}, open(path, "w"))
+    before = open(path).read()
+    # a dry run by default: it says what it would do and writes nothing
+    r = xcfs("hook", "install", env=E)
+    assert r["_code"] == 0 and not r["applied"] and len(r["changes"]) == 3 and open(path).read() == before, r
+    assert any(c.startswith("replace SessionEnd") for c in r["changes"]), r["changes"]
+    r = xcfs("hook", "install", "--apply", env=E)
+    got = json.load(open(path))
+    assert r["applied"] and got["model"] == "x" and got["hooks"]["Stop"] == [{"hooks": [mine]}], got
+    cmds = lambda ev: [h["command"] for g in got["hooks"].get(ev, []) for h in g["hooks"]]
+    assert cmds("WorktreeCreate") == ["xcfs hook worktree-create"] and cmds("WorktreeRemove") == ["xcfs hook worktree-remove"]
+    assert cmds("SessionEnd") == ["say done", "xcfs hook session-end"], "the earlier session-end line is replaced: %s" % cmds("SessionEnd")
+    assert xcfs("hook", "status", env=E)["installed"] is True
+    r = xcfs("hook", "install", "--apply", env=E)
+    assert r["changes"] == [] and not r["applied"], "installing twice changes nothing: %s" % r
+    # someone else's worktree hook: refused, nothing written
+    got["hooks"]["WorktreeCreate"] = [{"hooks": [{"type": "command", "command": "other-tool make"}]}]
+    json.dump(got, open(path, "w")); before = open(path).read()
+    r = xcfs("hook", "install", "--apply", env=E)
+    assert r["_code"] != 0 and "other-tool make" in r["error"] and open(path).read() == before, r
+    # uninstall takes out xcfs's commands and nothing else
+    r = xcfs("hook", "uninstall", "--apply", env=E)
+    got = json.load(open(path))
+    assert r["applied"] and cmds("WorktreeCreate") == ["other-tool make"] and cmds("SessionEnd") == ["say done"], got
+    assert "WorktreeRemove" not in got["hooks"] and got["hooks"]["Stop"] == [{"hooks": [mine]}], got
+    # a repository's own settings, created when missing; a settings file that is not JSON is left alone
+    repo = mkrepo("r70")
+    r = xcfs("hook", "install", repo, "--apply", env=E)
+    assert r["applied"] and os.path.realpath(r["settings"]) == os.path.realpath(repo + "/.claude/settings.json"), r
+    assert len(json.load(open(repo + "/.claude/settings.json"))["hooks"]) == 3
+    open(path, "w").write("{ not json")
+    r = xcfs("hook", "install", "--apply", env=E)
+    assert r["_code"] != 0 and open(path).read() == "{ not json", r
+
+
+@test
+def t71_session_end_hook_returns_what_the_session_opened():
+    E = toy_env(); repo = toy_repo("r71", slots=1)
+
+    def hook(sub, data):
+        r = subprocess.run([PY, XCFS, "hook", sub], input=data if isinstance(data, str) else json.dumps(data),
+                           capture_output=True, text=True, env=E)
+        return r.returncode, r.stdout, r.stderr
+    clean = hook("worktree-create", {"name": "a", "cwd": repo, "session_id": "S71"})[1].strip()
+    dirty = hook("worktree-create", {"name": "b", "cwd": repo, "session_id": "S71"})[1].strip()
+    other = hook("worktree-create", {"name": "c", "cwd": repo, "session_id": "T71"})[1].strip()
+    open(dirty + "/toy.txt", "a").write("wip\n")
+    code, out, err = hook("session-end", {"session_id": "S71"})
+    assert code == 0 and out == "", (code, out, err)
+    assert not os.path.exists(clean) and os.path.isdir(dirty) and os.path.isdir(other), (clean, dirty, other)
+    last = json.load(open(E["XCFS_STATE"] + "/last-reap.json"))
+    assert last["session"] == "S71" and last["left"] == [dirty], last
+    # it never fails: a session must be able to end
+    assert hook("session-end", "not json")[0] == 0 and hook("session-end", {})[0] == 0
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

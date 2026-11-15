@@ -5,6 +5,10 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs hook install | uninstall | status [repo] [--apply]`: put the Claude Code hooks in the user's or a
+  repository's settings, or take them out; other hooks are kept, nothing is written without `--apply`.
+- `xcfs hook session-end`: the session-end hook as a command (no `jq` needed); the earlier `xcfs reap` line in a
+  settings file is replaced by `xcfs hook install`.
 - README: what xcfs solves for parallel agents, with benchmark charts drawn from `bench/results`
   (`scripts/charts.py`).
 - `CONTRIBUTING.md`, `SECURITY.md`, this file; `docs/stability.md` (what is stable); `docs/xcode-versions.md` (which

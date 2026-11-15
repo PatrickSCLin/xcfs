@@ -73,15 +73,24 @@ slot's session quits and nothing stays resident (`sessionIdleMinutes`); 6.0 GB o
 **Claude Code.** Two hooks hand every worktree Claude Code creates — `claude --worktree <name>` (`claude -w`), a
 subagent with `isolation: "worktree"`, the `EnterWorktree` tool, a background session — to xcfs: a built slot when
 the pool has a free one, else a new xcfs worktree, on `worktree-<name>`, recorded under the session. A session-end hook
-returns everything the session opened. In `~/.claude/settings.json` (every project) or a repository's
-`.claude/settings.json` ([examples/agent-hooks/claude-code-settings.json](examples/agent-hooks/claude-code-settings.json)):
+returns everything the session opened. One command installs the three:
+
+```
+xcfs hook install            # shows what it would add to ~/.claude/settings.json (every project)
+xcfs hook install --apply    # writes it; hooks that are not xcfs's are kept
+xcfs hook install ~/src/app --apply   # or into one repository's .claude/settings.json
+```
+
+It refuses when another tool's worktree hook is installed, `xcfs hook uninstall --apply` takes them out again, and
+`xcfs hook status` shows what is there. What it writes
+([examples/agent-hooks/claude-code-settings.json](examples/agent-hooks/claude-code-settings.json)):
 
 ```json
 {
   "hooks": {
     "WorktreeCreate": [{ "hooks": [{ "type": "command", "command": "xcfs hook worktree-create" }] }],
     "WorktreeRemove": [{ "hooks": [{ "type": "command", "command": "xcfs hook worktree-remove" }] }],
-    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "jq -r '.session_id // empty' | { read -r sid; [ -n \"$sid\" ] && xcfs reap --session \"$sid\" --apply --prune-branch --json >/dev/null 2>&1; true; }" }] }]
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "xcfs hook session-end" }] }]
   }
 }
 ```
@@ -101,7 +110,7 @@ xcfs reap --session "$SESSION" --apply --prune-branch --json # the session ends
 
 `reap` lists what it left (uncommitted work) under `left` and exits 0, so a hook does not fail. Or call the hook
 commands themselves (`xcfs hook worktree-create` reads `{"name", "cwd", "session_id"}` on stdin and prints
-the path). For people and tools used to `git worktree add`, a shell function keeps the habit:
+the path; `xcfs hook session-end` reads `{"session_id"}` and runs that `reap`). For people and tools used to `git worktree add`, a shell function keeps the habit:
 `xwt() { cd "$(xcfs checkout "$(git rev-parse --show-toplevel)" "$1" --json | jq -r .worktree)"; }`.
 [docs/agents.md](docs/agents.md) has instructions to paste into an agent's instruction file.
 
@@ -222,6 +231,8 @@ through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
 | `xcfs run [path] [--config NAME]` | Build, install on the checkout's simulator, launch. |
 | **agent tools** | |
 | `xcfs hook worktree-create \| worktree-remove` | For a tool's own worktree hooks (Claude Code's `WorktreeCreate`/`WorktreeRemove`): JSON on stdin; create prints the path of a built slot or a new xcfs worktree. See [docs/agents.md](docs/agents.md#worktrees-an-agent-tool-creates-by-itself). |
+| `xcfs hook session-end` | For a tool's session-end hook (Claude Code's `SessionEnd`): JSON with `session_id` on stdin; removes the session's clean worktrees and returns its clean slots (`reap --session ID --apply --prune-branch`), records what was left in `last-reap.json` in the state directory, and always exits 0. |
+| `xcfs hook install \| uninstall \| status [repo] [--apply]` | Put the three hooks in Claude Code's settings — the user's, or `<repo>/.claude/settings.json` — or take them out. Shows the changes; writes only with `--apply`; keeps every hook that is not xcfs's; refuses when another tool's worktree hook is installed. |
 | **maintenance** | |
 | `xcfs gc [--apply] [--foreign] [--stale-days N]` | Repair interrupted operations, return clean slots whose lease went stale, drop unused dependency snapshots and the build output of vanished checkouts. `--foreign` also reports (with `--apply`, removes) orphaned or stale global DerivedData xcfs did not create. |
 | `xcfs doctor [path] [--session-check]` | Environment, hygiene and toolchain checks; `--session-check` runs the build-session regression check. |
@@ -442,7 +453,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 69 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 71 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```
