@@ -1,5 +1,7 @@
 # xcfs
 
+[![tests](https://github.com/PatrickSCLin/xcfs/actions/workflows/tests.yml/badge.svg)](https://github.com/PatrickSCLin/xcfs/actions/workflows/tests.yml)
+
 **A file-system layer for agentic iOS development: several AI agents, each in its own git worktree of one Xcode
 project, building features in parallel — without a cold build per worktree, without filling the disk, and without
 stepping on each other.**

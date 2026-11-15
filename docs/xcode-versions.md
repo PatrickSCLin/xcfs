@@ -22,6 +22,9 @@ that is selected, whether it can be used; when it cannot, builds go the plain wa
 "Not run" means nobody has tried it yet, not that it fails: a report from another version is welcome
 ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 
+The end-to-end tests (no Xcode needed) also run in CI on GitHub's macOS runners, with their current Python 3 and
+with the 3.9 of the command-line tools; the first run, on macOS 26.7 with Python 3.15.2 and 3.9.6, passed.
+
 ## When a new Xcode (or beta) appears
 
 1. Select it (`xcode-select` or `DEVELOPER_DIR`) and run `xcfs doctor --session-check`: the build session's
