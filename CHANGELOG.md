@@ -5,8 +5,17 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
-- Fix: the experimental driver's wrapper quotes the frontend's path for the shell, so an Xcode or cache path with
-  quotes, `$` or backquotes works (spaces and non-ASCII already did; Xcode takes such a `SWIFT_EXEC` too, checked).
+### Security
+
+- The experimental driver's wrapper (only written with `"swiftDriver": "patched"`) put the frontend's path inside
+  double quotes: a backquote or `$(...)` in the selected Xcode's path ran as a shell command on every Swift compile,
+  and a quote broke the wrapper. The path is now quoted for the shell. Spaces and non-ASCII already worked, and Xcode
+  takes such a `SWIFT_EXEC` too (checked).
+
+### Changed
+
+- README: the quick start installs the Claude Code hooks; the intro names the plugin and the other agent tools; the
+  warm-up memory figures say which side they come from; `XCFS_SWIFT_DRIVER` in the environment table.
 - Test t65 judges the frontend gate by when the jobs started, not by total time (it failed once on a slow CI runner).
 
 ## 0.3.0 — 2026-11-16

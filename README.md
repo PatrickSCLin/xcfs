@@ -8,8 +8,9 @@ stepping on each other.**
 
 Each agent gets a checkout that is already built (a slot of a pool kept at the baseline), an incremental build session,
 a one-file compile check, its own simulator, and a cleanup that removes everything the checkout made and nothing else.
-It plugs into Claude Code's worktree and session hooks, so `claude --worktree` and subagents with worktree isolation
-get xcfs checkouts with no change in how anyone works.
+It plugs into Claude Code's worktree and session hooks (one command, or the Claude Code plugin), so
+`claude --worktree` and subagents with worktree isolation get xcfs checkouts with no change in how anyone works; other
+agent tools (Codex, Cursor, Gemini CLI, Aider, …) drive the same commands through `--json`.
 
 `xcfs` is the tool's name, not a kernel file system: git worktrees, APFS clones and Xcode's own build service; no root,
 no kernel extension, Xcode unmodified. **v0.3.0**, Python 3 standard library only (3.9 or later), MIT;
@@ -54,8 +55,8 @@ or three runs.
   <img alt="Peak memory while the agents work and what removal leaves behind" src="docs/img/agents-memory-disk-light.svg">
 </picture>
 
-The same runs. xcfs's warm-up itself peaks at 21–25 GB (Ice Cubes) and 10 GB (Wikipedia) while it builds three slots
-side by side; `warmJobs` builds fewer at once (a smaller machine; not measured on one).
+The same runs. xcfs's warm-up itself peaks at 24–25 GB on Ice Cubes (10 GB on Wikipedia, with the experimental driver)
+while it builds three slots side by side; `warmJobs` builds fewer at once (a smaller machine; not measured on one).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/zero-config-round-dark.svg">
@@ -102,8 +103,8 @@ through xcfs, come as a Claude Code plugin instead: `claude plugin marketplace a
 ```
 
 Removal refuses when a worktree holds uncommitted work, and the agent tool then keeps it; commits stay on their
-branches, and with `--prune-branch` a branch xcfs created that never got a commit is deleted. Claude Code does not run the remove hook for a subagent's worktree: the session-end hook (or
-`xcfs reap --older-than 3`) returns those.
+branches, and with `--prune-branch` a branch xcfs created that never got a commit is deleted. Claude Code does not
+run the remove hook for a subagent's worktree: the session-end hook (or `xcfs reap --older-than 3`) returns those.
 
 **Other agent tools** call the same commands, with `--json` for machine-readable results:
 
@@ -116,7 +117,8 @@ xcfs reap --session "$SESSION" --apply --prune-branch --json # the session ends
 
 `reap` lists what it left (uncommitted work) under `left` and exits 0, so a hook does not fail. Or call the hook
 commands themselves (`xcfs hook worktree-create` reads `{"name", "cwd", "session_id"}` on stdin and prints
-the path; `xcfs hook session-end` reads `{"session_id"}` and runs that `reap`). For people and tools used to `git worktree add`, a shell function keeps the habit:
+the path; `xcfs hook session-end` reads `{"session_id"}` and runs that `reap`). For people and tools used to
+`git worktree add`, a shell function keeps the habit:
 `xwt() { cd "$(xcfs checkout "$(git rev-parse --show-toplevel)" "$1" --json | jq -r .worktree)"; }`.
 [docs/agents.md](docs/agents.md) has the contract (steps, fields, exit codes), and
 [examples/agent-instructions](examples/agent-instructions/README.md) a block for any tool's instruction file (`AGENTS.md`,
@@ -128,12 +130,13 @@ the path; `xcfs hook session-end` reads `{"session_id"}` and runs that `reap`). 
 brew install PatrickSCLin/xcfs/xcfs
 xcfs init ~/src/app --user                       # detect the project, scheme, platform; save a config for you only
 xcfs doctor ~/src/app                            # check the machine and the project
-xcfs pool warm ~/src/app --slots 3 --background  # build three slots at the baseline
-xcfs checkout ~/src/app feature/x                # a built slot for this branch; prints its path
+xcfs pool warm ~/src/app --slots 3 --background  # build three slots at the baseline (xcfs pool status --watch)
+xcfs hook install --apply                        # Claude Code: its worktrees now come from xcfs
 ```
 
-Then `xcfs build`, `xcfs check <file>`, `xcfs test`, `xcfs run` inside it, `xcfs release` when done — or install the
-hooks above and let the agent tool do it.
+Then start agents as usual (`claude -w feature-x`, subagents with worktree isolation), or by hand:
+`xcfs checkout ~/src/app feature/x` prints a built slot's path; `xcfs build`, `xcfs check <file>`, `xcfs test`,
+`xcfs run` inside it; `xcfs release` when done. `xcfs stats` later shows the full builds nobody waited for.
 
 ## When it does not help much
 
@@ -164,7 +167,7 @@ hooks above and let the agent tool do it.
   Objective-C, …) every object file of the incremental build is compared with a clean build of the same sources: no
   difference on Ice Cubes (9 steps, Xcode 27.2 and 27.1) or Wikipedia (6 steps)
   ([details](docs/benchmark.md#is-an-incremental-build-the-same-as-a-clean-one)).
-- **The experimental driver is self-tested** before it is used (19 edits and undos, byte for byte against clean builds,
+- **The experimental driver (opt-in) is self-tested** before it is used (19 edits and undos, byte for byte against clean builds,
   and a check that it narrows rebuilds at all); a driver that fails, a release it does not fit, or a tag that moved,
   means Xcode's own driver ([its notes](lib/xcfs/adapters/swiftdriver/README.md)).
 - **The build session is checked** once per Xcode version before it is used, and builds fall back to `xcodebuild` when
@@ -384,6 +387,7 @@ state, from one lease to the next; returning a slot keeps its server (and the an
 | `XCFS_POOL_ROOT` | overrides `poolRoot` |
 | `XCFS_DD_ROOT` | where `rm` and `gc` look for global DerivedData (default `~/Library/Developer/Xcode/DerivedData`) |
 | `XCFS_DRIVER` | overrides the Xcode `driver` (`xcodebuild`, `session`, `auto`) |
+| `XCFS_SWIFT_DRIVER` | overrides `swiftDriver` (`native`, `patched`) |
 | `XCFS_SESSION`, `CLAUDE_CODE_SESSION_ID` | session id when `--session` is not given |
 
 ## The pool
