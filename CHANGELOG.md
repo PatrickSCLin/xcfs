@@ -5,6 +5,7 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs pool status --watch`: a warm-up's step, elapsed time and an estimate from the last one, until it is done.
 - `xcfs init` recognizes XcodeGen and Tuist projects (the generated project is seeded, keyed by its spec) and suggests
   `seedKey` from the tracked lock files.
 - `xcfs checkout` of a slot that was never built says how to keep slots built (`hint` in the JSON).

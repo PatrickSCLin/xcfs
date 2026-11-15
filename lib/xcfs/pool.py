@@ -222,13 +222,19 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
             results.append({"slot": slot, "index": row["index"], "ok": True, "seconds": 0, "already_warm": True})
             say("  slot %d is already warm at its baseline" % row["index"])
         todo = [(p, s) for p, s in todo if (p, s) not in current]
+        def step(slot, what):   # for `xcfs pool status`: where a warm-up is
+            with state.registry() as reg:
+                if slot in reg["slots"]:
+                    reg["slots"][slot]["step"] = what
+
         def warm_one(slot):
             with state.registry() as reg:
                 row = reg["slots"].get(slot)
                 if not row or row["state"] not in ("idle", "cold"):
                     return  # leased or retired meanwhile
                 prev = row["state"]
-                row.update(state="warming", pid=os.getpid())
+                t0 = time.time()
+                row.update(state="warming", pid=os.getpid(), started=now_iso(), step="to the baseline")
                 row = dict(row)
             try:
                 code, why = worktree.unsaved_work(row["src"], worktree.repos_of(row, row["src"]), row.get("carried"))
@@ -244,15 +250,18 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
                     if bdir and os.path.isdir(bdir):
                         trash_and_delete(bdir, os.path.join(slot, worktree.TRASH))
                 waited = 0
+                if foreground_busy(repo, slot):
+                    step(slot, "waiting for an agent's build")
                 while foreground_busy(repo, slot) and waited < 1800:
                     time.sleep(2)
                     waited += 2
                 say("  warming slot %d at %s ..." % (row["index"], revs["."][:10]))
+                step(slot, "building")
                 r = builds.operate("warm", row["src"], {"timeout": timeout or settings["buildTimeout"]})
                 with state.registry(write=False) as reg:
                     version = reg["builds"].get(row["src"], {}).get("versions", {})
                 w = {"revs": revs, "ok": bool(r.get("ok")), "at": now_iso(), "seconds": round(r.get("seconds", 0), 1),
-                     "versions": version}
+                     "wall_seconds": round(time.time() - t0, 1), "versions": version}
                 if not r.get("ok"):
                     w["error"] = "; ".join(d.get("message", "") for d in r.get("diagnostics", [])[:3]) or "build failed"
                 results.append({"slot": slot, "index": row["index"], "ok": w["ok"], "seconds": w["seconds"],
@@ -262,7 +271,8 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
                 with state.registry() as reg:
                     if slot in reg["slots"]:
                         reg["slots"][slot].update(state="idle", warm=w, baseline_stale=stale, repos=row["repos"])
-                        reg["slots"][slot].pop("pid", None)
+                        for k in ("pid", "started", "step"):
+                            reg["slots"][slot].pop(k, None)
                         reg["slots"][slot].pop("used_since_warm", None)
             except BaseException as e:
                 with state.registry() as reg:
@@ -270,7 +280,8 @@ def warm(repo, cfg, settings, slot_filter=None, count=None, clean=False, fetch=F
                         reg["slots"][slot].update(state="cold" if prev == "cold" else "idle",
                                                   warm=dict(reg["slots"][slot].get("warm") or {}, ok=False,
                                                             error=str(e)[:300], at=now_iso()))
-                        reg["slots"][slot].pop("pid", None)
+                        for k in ("pid", "started", "step"):
+                            reg["slots"][slot].pop(k, None)
                 if isinstance(e, Fail):
                     results.append({"slot": slot, "index": row["index"], "ok": False, "error": str(e)})
                     say("  slot %d: %s" % (row["index"], e))
@@ -480,6 +491,15 @@ def release_matching(sid, cutoff, apply, prune_branch, everything=False):
 
 
 # ------------------------------------------------------------------ status / resize / gc
+def fmt_secs(s):
+    s = int(s)
+    return "%dm%02ds" % (s // 60, s % 60) if s >= 60 else "%ds" % s
+
+
+def busy(rows):
+    return any(r["state"] in ("creating", "warming") for r in rows)
+
+
 def status(repo=None):
     settings = state.settings()
     rows = []
@@ -491,6 +511,11 @@ def status(repo=None):
             cfg = config.load_config(pr, validate=False) if os.path.isdir(pr) else {}
             targets[pr] = target_slots(pr, cfg, reg, settings)
     now = time.time()
+    took = {}   # how long this project's warm-ups took last time: the estimate for one under way
+    for s in slots.values():
+        w = s.get("warm") or {}
+        if w.get("ok") and (w.get("wall_seconds") or w.get("seconds")):
+            took.setdefault(s["project"], []).append(w.get("wall_seconds") or w["seconds"])
     for pr in projects:
         try:
             revs = current_baselines(pr, config.load_config(pr, validate=False)) if os.path.isdir(pr) else {}
@@ -506,17 +531,28 @@ def status(repo=None):
             r = {"project": pr, "slot": p, "index": s["index"], "worktree": s["src"], "state": state_,
                  "warm": bool(w.get("ok")), "warm_at": w.get("at"), "at_baseline": bool(w.get("revs") == revs and revs),
                  "baseline_stale": s.get("baseline_stale", False), "warm_error": w.get("error")}
+            progress = ""
+            if s["state"] == "warming" and s.get("started") and not state_.endswith("(interrupted)"):
+                el = max(0, now - iso_epoch(s["started"]))
+                prev_w = s.get("warm") or {}
+                est = (prev_w.get("wall_seconds") or prev_w.get("seconds")) if prev_w.get("ok") else \
+                    max(took.get(pr) or [0]) or None
+                est = est if est and est > 0 else None
+                r.update(step=s.get("step"), elapsed_seconds=round(el), estimate_seconds=est)
+                progress = "  [%s, %s%s]" % (s.get("step") or "warming", fmt_secs(el),
+                                             " of about %s" % fmt_secs(est) if est else ", first warm-up: no estimate")
             if lease:
                 r.update(session=lease.get("session", ""), branch=lease.get("branch"), leased_at=lease.get("at"),
                          idle_hours=round(idle_h, 1), stale_lease=idle_h >= settings["leaseHours"])
             rows.append(r)
-            say("  %-24s slot %d  %-18s %s%s%s" % (os.path.basename(pr), s["index"], state_,
+            say("  %-24s slot %d  %-18s %s%s%s%s" % (os.path.basename(pr), s["index"], state_,
                                                    ("warm" + ("" if r["at_baseline"] else ", behind baseline")) if r["warm"]
                                                    else "cold",
                                                    "  [%s, session %s, idle %.1fh%s]" % (lease.get("branch"),
                                                    (lease.get("session") or "-")[:8], idle_h,
                                                    ", STALE" if r.get("stale_lease") else "") if lease else "",
-                                                   "  (%s)" % w["error"][:60] if w.get("error") else ""))
+                                                   "  (%s)" % w["error"][:60] if w.get("error") else "",
+                                                   progress))
         say("  %-24s %d of %d slot(s)" % (os.path.basename(pr), sum(1 for r in rows if r["project"] == pr), targets[pr]))
     if not projects:
         say("no pools. create one with `xcfs pool warm <repo>` (or just `xcfs checkout <repo> <branch>`).")

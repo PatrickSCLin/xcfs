@@ -16,7 +16,8 @@ Pool (slots at fixed paths, kept built at their baseline)
                                                                 lease a slot and switch it to <branch>; prints its path
   xcfs release [path] [--prune-branch] [--discard-ignored] [--no-warm]
                                                                 return the slot (refuses if anything would be lost)
-  xcfs pool status [repo]                                       slots, leases, warm state
+  xcfs pool status [repo] [--watch]                             slots, leases, warm state; a warm-up's step, time and
+                                                                estimate (--watch: until no slot is warming)
   xcfs pool warm <repo> [--slots N] [--slot PATH] [--clean] [--fetch] [--background]
                                                                 create missing slots; bring idle ones to their baseline
                                                                 and build them
@@ -71,7 +72,7 @@ class Args:
              "wait"}
     MULTI = {"only"}
     FLAGS = {"apply", "dry-run", "json", "discard-ignored", "foreign", "sizes", "status", "all", "prune-branch",
-             "release", "write", "user", "force", "clean", "fetch", "background", "no-warm", "build", "help", "session-check"}
+             "release", "write", "user", "force", "clean", "fetch", "background", "no-warm", "build", "help", "session-check", "watch"}
 
     def __init__(self, argv):
         self.pos, self.opt, self.flags = [], {}, set()
@@ -176,6 +177,19 @@ def cmd_pool(a):
     settings = state.settings()
     if sub == "status":
         repo = config.main_checkout(config.toplevel(phys(rest[0]))) if rest else None
+        if a.flag("watch") and not a.flag("json"):   # until no slot is being created or warmed
+            import time
+            tty = sys.stdout.isatty()
+            while True:
+                if tty:
+                    print("\033[H\033[J", end="")
+                print(time.strftime("%H:%M:%S"), "(Ctrl-C to stop)")
+                res = pool.status(repo)
+                if not pool.busy(res.get("slots", [])):
+                    break
+                time.sleep(3)
+            a.result(**res)
+            return
         a.result(**pool.status(repo))
     elif sub == "warm":
         if not rest:

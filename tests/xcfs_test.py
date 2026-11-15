@@ -1884,6 +1884,28 @@ def t74_init_knows_generated_projects():
     assert c["seed"] == ["App.xcodeproj"] and c["seedKey"] == ["Tuist/Package.resolved", "Project.swift"], c
 
 
+@test
+def t75_pool_status_shows_a_warm_up_under_way():
+    E = toy_env(); repo = toy_repo("r75", slots=1)
+    first = dict(E, TOY_SLEEP="1.5", TOY_LOG=SB + "/toy75.log")
+    assert xcfs("pool", "warm", repo, env=first)["_code"] == 0  # the first warm-up: its time is the estimate
+    s = xcfs("checkout", repo, "w75", env=E)
+    assert xcfs("release", s["worktree"], "--no-warm", env=E)["_code"] == 0
+    slow = dict(E, TOY_SLEEP="4", TOY_LOG=SB + "/toy75.log")
+    p = subprocess.Popen([PY, XCFS, "pool", "warm", repo, "--clean"], env=slow, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+    try:
+        assert wait_for(lambda: any(r.get("step") == "building" for r in xcfs("pool", "status", repo, env=E)["slots"]), 20)
+        row = xcfs("pool", "status", repo, env=E)["slots"][0]
+        assert row["state"] == "warming" and row["elapsed_seconds"] >= 0 and row["estimate_seconds"] >= 1, row
+        w = subprocess.run([PY, XCFS, "pool", "status", repo, "--watch"], env=E, capture_output=True, text=True, timeout=60)
+        assert w.returncode == 0 and "building" in w.stdout and "of about" in w.stdout, w.stdout[-600:]
+    finally:
+        p.wait(60)
+    row = xcfs("pool", "status", repo, env=E)["slots"][0]
+    assert row["state"] == "idle" and "step" not in row and row["warm"], row
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

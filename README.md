@@ -226,7 +226,7 @@ through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
 | **pool** | |
 | `xcfs checkout <repo> <branch> [--from REF] [--session ID] [--wait S] [--build]` | Lease the best free slot (built at the current baseline with the current toolchain first; a new one if the pool is not full), switch it to the branch, print its path. Exit 10 when every slot is taken. |
 | `xcfs release [path] [--prune-branch] [--discard-ignored] [--no-warm]` | Return the slot: refuses if anything would be lost, goes back to the baseline, rebuilds there in the background. |
-| `xcfs pool status [repo]` | Slots, their state, leases (stale ones flagged), whether they are built at the current baseline. |
+| `xcfs pool status [repo] [--watch]` | Slots, their state, leases (stale ones flagged), whether they are built at the current baseline; for a warm-up under way, its step, how long it has run and how long the last one took. `--watch` repeats it until no slot is being created or warmed. |
 | `xcfs pool warm <repo> [--slots N] [--slot PATH] [--clean] [--fetch] [--background]` | Create missing slots; bring idle ones to the baseline and build them. |
 | `xcfs pool resize <repo> N` | Change the number of slots; idle extras are retired now, leased ones when returned. |
 | **building** (in a worktree, a slot, or any checkout) | |
@@ -459,7 +459,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 74 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 75 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```
