@@ -131,6 +131,11 @@ def report(res, op):
         for k in ("tests", "failures", "app", "pid", "against"):
             if r.get(k) not in (None, ""):
                 bits.append("%s=%s" % (k, r[k]))
+        b = r.get("breakdown")
+        if b:
+            bits.append("(pif %.1fs, session start %.1fs, planning %.1fs, tasks %.1fs; compile %.1fs and link %.1fs of task "
+                        "time)" % (b["pif_seconds"], b["session_start_seconds"], b["planning_seconds"], b["tasks_seconds"],
+                                   b["compile_task_seconds"], b["link_task_seconds"]))
         if r.get("log"):
             bits.append("log: %s" % r["log"])
         say("%s: %s" % (op, "  ".join(bits)))

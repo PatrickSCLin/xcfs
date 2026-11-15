@@ -29,7 +29,7 @@ Agents and scripts depend on xcfs's output, so this is what a release keeps, and
 - Human-readable output (everything without `--json`).
 - The layout of the state, cache and pool directories, and the registry's format: use `xcfs ls --json` and
   `xcfs pool status --json`, not the files. A release migrates what an earlier one wrote, or says so.
-- Fields of `--json` results not named above, `doctor`'s checks and their wording.
+- Fields of `--json` results not named above (`breakdown` and `timing` among them), `doctor`'s checks and their wording.
 - The adapter protocol for external adapters (`xcfs-adapter-<name>`): it has been used by the built-in adapters and a
   test adapter only, and will change when a second real toolchain needs it.
 - The experimental Swift driver: which Xcode releases it applies to, its cache, and its settings beyond

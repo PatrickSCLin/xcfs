@@ -1952,6 +1952,23 @@ def t77_stats_from_the_local_history():
                                       "full_build_seconds"} for l in lines), "no paths or names in the history"
 
 
+@test
+def t78_session_build_time_is_broken_down():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode_session import breakdown
+    from xcfs import builds
+    b = breakdown(10.0, 1.5, 0.5, 7.0, {"planning_seconds": 2.0, "task_seconds_by_kind": {
+        "SwiftCompile": [4, 9.0], "SwiftDriver": [1, 1.0], "Ld": [1, 0.75], "CopySwiftLibs": [1, 0.2]}})
+    assert b == {"pif_seconds": 1.5, "session_start_seconds": 0.5, "planning_seconds": 2.0, "tasks_seconds": 5.0,
+                 "other_seconds": 1.0, "compile_task_seconds": 10.0, "link_task_seconds": 0.75}, b
+    assert breakdown(1.0, 0.1, 0.0, 0.9, {})["planning_seconds"] == 0.0
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        builds.report({"ok": True, "seconds": 10.0, "toolchain": "xcode", "breakdown": b}, "build")
+    assert "pif 1.5s, session start 0.5s, planning 2.0s, tasks 5.0s" in buf.getvalue(), buf.getvalue()
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

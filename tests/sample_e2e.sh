@@ -179,7 +179,10 @@ out=$("${XCFS}" new "${src}" feature/session --json) || fail "new failed: ${out}
 swt=$(json "${out}" worktree)
 report() { python3 -c 'import json, sys
 d = json.loads(sys.argv[1]); print("%-34s %5.2fs  compile tasks %-3s description reused %s" % (sys.argv[2], d["seconds"], d.get("compile_tasks"), d.get("reused_description")))
-assert d.get("driver") == "session", d' "$1" "$2"; }
+b = d.get("breakdown") or {}
+print("%-34s pif %.2fs, session start %.2fs, planning %.2fs, tasks %.2fs, other %.2fs" % ("", b.get("pif_seconds", -1), b.get("session_start_seconds", -1), b.get("planning_seconds", -1), b.get("tasks_seconds", -1), b.get("other_seconds", -1)))
+assert d.get("driver") == "session", d
+assert b and abs(sum(b[k] for k in ("pif_seconds", "session_start_seconds", "tasks_seconds", "planning_seconds", "other_seconds")) - d["seconds"]) < 0.5, (d["seconds"], b)' "$1" "$2"; }
 out=$("${XCFS}" build "${swt}" --json) || fail "session cold build failed: ${out}"; report "${out}" "cold build"
 out=$("${XCFS}" build "${swt}" --json) || fail "session no-op failed: ${out}"; report "${out}" "no-op"
 [ "$(json "${out}" compile_tasks)" = 0 ] || fail "a no-op compiled something"

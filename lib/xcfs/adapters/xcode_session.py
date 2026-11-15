@@ -829,12 +829,27 @@ def test_targets(ctx, pif, scheme):
     return []
 
 
+def breakdown(total, pif, start, build, timing):
+    """Where a build's wall time went: the project description (PIF), starting the session, planning, the build's own
+    tasks, and the rest (requests, waiting). Task time by kind is summed over parallel tasks, so it is CPU-like time,
+    not wall time."""
+    planning = max(0.0, timing.get("planning_seconds") or 0)
+    kinds = {k: v[1] for k, v in (timing.get("task_seconds_by_kind") or {}).items()}
+    compile_s = sum(v for k, v in kinds.items() if k.startswith(("Swift", "Compile", "Clang", "Precompile")))
+    link_s = sum(v for k, v in kinds.items() if k.startswith(("Ld", "Link")))
+    return {"pif_seconds": round(pif, 2), "session_start_seconds": round(start, 2), "planning_seconds": round(planning, 2),
+            "tasks_seconds": round(max(0.0, build - planning), 2),
+            "other_seconds": round(max(0.0, total - pif - start - build), 2),
+            "compile_task_seconds": round(compile_s, 2), "link_task_seconds": round(link_s, 2)}
+
+
 def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None):
     """A build through the session. With test_scheme: build that scheme's test targets (into the same DerivedData,
     so whatever the last build made is reused); None when it has none the session can find."""
     t0 = time.time()
     scheme = adapter.scheme(ctx)
     pif_path, exported = export_pif(adapter, ctx, scheme)
+    t_pif = time.time() - t0
     setting = ctx.entry.get("skipScripts", "auto")
     if isinstance(setting, list):
         skip, skip_why = setting, "configured"
@@ -862,7 +877,9 @@ def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None):
     env = {"PATH": "/usr/bin:" + os.environ.get("PATH", "")}
     if ext:
         env["EXTERNAL_TOOLCHAINS_DIR"] = ext
+    t1 = time.time()
     sp = ensure_daemon(adapter, ctx, cwd, env)
+    t_start = time.time() - t1
     timeout = args.get("timeout") or 3600
     try:
         out = call(sp, {"op": "build", "pif": pif_path, "request": rfile, "target": target,
@@ -878,6 +895,7 @@ def session_build(adapter, ctx, name, conf, args, files=None, test_scheme=None):
            "pif_exported": exported, "reused_description": out.get("reused_description", False),
            "compile_tasks": out.get("compiled", 0), "result": out["result"], "timing": out.get("timing"),
            "skipped_scripts": skipped, "skipped_scripts_reason": skip_why if skipped else None}
+    res["breakdown"] = breakdown(res["seconds"], t_pif, t_start, out.get("seconds", 0), out.get("timing") or {})
     if targets:
         res["test_targets"] = targets
     if out.get("message"):

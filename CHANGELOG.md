@@ -5,6 +5,8 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- Session builds report where their time went (`breakdown`: PIF, session start, planning, tasks, other; compile and
+  link task time).
 - Benchmarks: three agents on an empty pool without a warm-up (`bench.py --phases tasks-cold`): slower than plain
   worktrees and than warming first; the quick start keeps the warm-up.
 - `xcfs stats [--days N]`: checkouts handed out built, the full builds not waited for, builds and checks, from a
