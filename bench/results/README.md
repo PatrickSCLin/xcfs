@@ -29,6 +29,9 @@ Three agents, real tasks (`icecubes-tasks.json`): plain `tasks-icecubes-v4-rep1`
 (`v4-rep1`, `-rep3`, `-rep4` hold the defaults before the gate). Agents at the same time: `concurrent2-*` (slots warmed
 one after another), `concurrent3-*` (side by side). Warm-up memory with and without the gate: `warmjobs-icecubes-*`.
 
+The plain test run killed on the shared simulator: `tasks-icecubes-v2-rep2` (an earlier run of the same tasks;
+`-rep1` the one before it).
+
 Wikipedia, three agents: `tasks-wikipedia-rep1`, `-rep2`. A pool at rest: `pool-idle-icecubes.json`.
 
 Shared compilation cache: `tasks-icecubes-cache-rep*`, `tasks-icecubes-overlap-rep*` (three agents),

@@ -1,132 +1,199 @@
 # xcfs
 
-**Several AI agents developing one iOS app at the same time, without waiting on cold builds and without filling the
-disk.** Each agent gets its own checkout of the Xcode project: a slot of a pool that is already built, an incremental
-build session, a one-file compile check, its own simulator, and nothing left behind when it is done.
+**A file-system layer for agentic iOS development: several AI agents, each in its own git worktree of one Xcode
+project, building features in parallel — without a cold build per worktree, without filling the disk, and without
+stepping on each other.**
+
+Each agent gets a checkout that is already built (a slot of a pool kept at the baseline), an incremental build session,
+a one-file compile check, its own simulator, and a cleanup that removes everything the checkout made and nothing else.
+It plugs into Claude Code's worktree and session hooks, so `claude --worktree` and subagents with worktree isolation
+get xcfs checkouts with no change in how anyone works.
+
+`xcfs` is the tool's name, not a kernel file system: git worktrees, APFS clones and Xcode's own build service; no root,
+no kernel extension, Xcode unmodified. **v0.2.0**, Python 3 standard library only (3.9 or later), MIT;
+[docs/design.md](docs/design.md) says what is measured, what is planned and what is not verified.
+
+## The problems it solves
+
+Measured on public apps, three agents at once unless noted ([docs/benchmark.md](docs/benchmark.md), raw results in
+[bench/results](bench/results/README.md)):
+
+| when several agents each get a worktree | plain `git worktree` + `xcodebuild` | xcfs |
+|---|---|---|
+| every new worktree builds from nothing | every batch waits for cold builds: 284–302 s on Ice Cubes, 375–387 s on Wikipedia | slots stay built; the next batch on a pool: 111–121 s, 187–203 s |
+| DerivedData outlives the worktree | 1.5 GB per worktree left in the global DerivedData (Ice Cubes), 2.9 GB (Wikipedia) | build output lives with the checkout and goes with it: nothing left |
+| memory | 24–25 GB, 15–16 GB at the peak | 8–12 GB, 5–8 GB |
+| agents test on the simulator they all name | a test run killed by another agent's: 1 of 6 runs (Ice Cubes), 2 of 6 (Wikipedia) | one simulator per checkout: none |
+| dependencies resolved and fetched again for every worktree | each worktree resolves its packages, installs its pods | the dependency layer is cloned in (APFS clonefile, blocks shared) |
+| `xcodebuild`'s fixed cost on every build | a no-op build: 5.9 s (Ice Cubes, one agent) | a persistent build session: 0.9 s; `xcfs check` compiles one file in 1–4 s |
+| a public declaration in a widely imported module recompiles everything that imports it | 25 s (Ice Cubes), 35 s (Wikipedia) | 6 s, 15 s with the optional experimental Swift driver |
+| cleanup scripts guess by path or age | `rm -rf` and hope | a registry: nothing with unsaved work, nothing xcfs did not create, is deleted |
+
+## Benchmarks
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/agents-wall-time-dark.svg">
+  <img alt="Three agents, real tasks: wall time per batch, plain worktrees against xcfs" src="docs/img/agents-wall-time-light.svg">
+</picture>
+
+Three agents start at once, each with a task defined in advance: add a function, get a compile error, fix it, add a
+unit test, run it, build the app. The pool pays its warm-up once (three slots: 280–301 s on Ice Cubes, 278–279 s on
+Wikipedia), so the first batch on a fresh pool is slower than plain worktrees; every later batch is 1.8–2.7× faster.
+MacBook Pro, M1 Max, 64 GB, macOS 27.2, Xcode 27.2, one architecture; whiskers are the range over two runs.
+[Tables and method](docs/benchmark.md#three-agents-real-tasks-at-the-same-time).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/agents-memory-disk-dark.svg">
+  <img alt="Peak memory while the agents work and what removal leaves behind" src="docs/img/agents-memory-disk-light.svg">
+</picture>
+
+The same runs. xcfs's warm-up itself peaks at 21–25 GB (Ice Cubes) and 10 GB (Wikipedia) while it builds three slots
+side by side; `warmJobs` builds fewer at once (a smaller machine; not measured on one).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/zero-config-round-dark.svg">
+  <img alt="One agent's round of work on six public apps with zero configuration" src="docs/img/zero-config-round-light.svg">
+</picture>
+
+Six public apps, four of them never built while xcfs was developed, each with a config that only names the project, the
+scheme and the destination. One agent's round: checkout, build, five edits each checked, a final build, cleanup. Plain:
+three runs each; xcfs: the run after the fixes those apps led to (two on Ice Cubes). 3–10× less time, no build
+failed, and plain worktrees left 1.5–6 GB behind each, xcfs nothing.
+[Table](docs/benchmark.md#zero-configuration-on-projects-xcfs-was-not-developed-on).
+
+A pool at rest (three Ice Cubes slots): 2.3 GB resident and no CPU while idle; after 30 minutes without a build each
+slot's session quits and nothing stays resident (`sessionIdleMinutes`); 6.0 GB on disk for the three.
+[Details](docs/benchmark.md#a-pool-at-rest). The charts are drawn from the raw results by `scripts/charts.py`.
+
+## Use it with an AI agent
+
+**Claude Code.** Two hooks hand every worktree Claude Code creates — `claude --worktree <name>` (`claude -w`), a
+subagent with `isolation: "worktree"`, the `EnterWorktree` tool, a background session — to xcfs: a built slot when
+the pool has a free one, else a new xcfs worktree, on `worktree-<name>`, recorded under the session. A session-end hook
+returns everything the session opened. In `~/.claude/settings.json` (every project) or a repository's
+`.claude/settings.json` ([examples/agent-hooks/claude-code-settings.json](examples/agent-hooks/claude-code-settings.json)):
+
+```json
+{
+  "hooks": {
+    "WorktreeCreate": [{ "hooks": [{ "type": "command", "command": "xcfs hook worktree-create" }] }],
+    "WorktreeRemove": [{ "hooks": [{ "type": "command", "command": "xcfs hook worktree-remove" }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "jq -r '.session_id // empty' | { read -r sid; [ -n \"$sid\" ] && xcfs reap --session \"$sid\" --apply --prune-branch --json >/dev/null 2>&1; true; }" }] }]
+  }
+}
+```
+
+Removal refuses when a worktree holds uncommitted work, and the agent tool then keeps it; commits stay on their
+branches, and with `--prune-branch` a branch xcfs created that never got a commit is deleted. Claude Code does not run the remove hook for a subagent's worktree: the session-end hook (or
+`xcfs reap --older-than 3`) returns those.
+
+**Other agent tools** call the same commands, with `--json` for machine-readable results:
 
 ```
-xcfs checkout ~/src/app feature/x      # lease a slot that is already built at the baseline; prints its path
-xcfs build                             # incremental build; diagnostics as JSON with --json
-xcfs check Sources/Feature/View.swift  # compile-check one file
-xcfs test && xcfs run                  # on the slot's own simulator
-xcfs release                           # back to the pool; rebuilt at the baseline in the background
+xcfs checkout <repo> <branch> --session "$SESSION" --json    # a built slot; prints its path
+xcfs build --json / xcfs check <files> --json / xcfs test --json
+xcfs release --prune-branch --json                           # done with the task
+xcfs reap --session "$SESSION" --apply --prune-branch --json # the session ends
 ```
 
-With Claude Code, two hooks make every worktree it creates (`claude --worktree`, subagents with worktree isolation)
-an xcfs slot, with no change to how anyone works: see [docs/agents.md](docs/agents.md).
+`reap` lists what it left (uncommitted work) under `left` and exits 0, so a hook does not fail. Or call the hook
+commands themselves (`xcfs hook worktree-create` reads `{"name", "cwd", "session_id"}` on stdin and prints
+the path). For people and tools used to `git worktree add`, a shell function keeps the habit:
+`xwt() { cd "$(xcfs checkout "$(git rev-parse --show-toplevel)" "$1" --json | jq -r .worktree)"; }`.
+[docs/agents.md](docs/agents.md) has instructions to paste into an agent's instruction file.
 
-`xcfs` is the name of the tool, not a file system: it uses git worktrees and APFS clones, needs no root, installs no
-kernel extension and does not modify Xcode.
+## Quick start
 
-**Status: v0.2.** Python 3 (standard library only, 3.9 or later). Everything below is implemented and tested; see
-[docs/design.md](docs/design.md) for what is measured, what is planned and what is not verified.
+```
+brew install PatrickSCLin/xcfs/xcfs
+xcfs init ~/src/app --user                       # detect the project, scheme, platform; save a config for you only
+xcfs doctor ~/src/app                            # check the machine and the project
+xcfs pool warm ~/src/app --slots 3 --background  # build three slots at the baseline
+xcfs checkout ~/src/app feature/x                # a built slot for this branch; prints its path
+```
 
-## What it is worth
+Then `xcfs build`, `xcfs check <file>`, `xcfs test`, `xcfs run` inside it, `xcfs release` when done — or install the
+hooks above and let the agent tool do it.
 
-Three agents start at once on one app, each with a real task judged by a build and its own new test (add a function,
-get a compile error, fix it, add a unit test, run it, build the app). Plain: `git worktree add` and `xcodebuild`, as
-an agent would. Two apps, ranges over clean repeated runs
-([details](docs/benchmark.md#three-agents-real-tasks-at-the-same-time)):
-
-| | Ice Cubes: plain worktrees | Ice Cubes: xcfs | Wikipedia iOS: plain worktrees | Wikipedia iOS: xcfs |
-|---|---|---|---|---|
-| the next three agents on the same pool (warm-up of the released slots included) | 284–302 s | **111–121 s** | 375–387 s | **187–203 s** |
-| the first three agents on a fresh pool, warm-up included | 284–302 s | 408–419 s — **slower** | 375–387 s | 520–537 s — **slower** |
-| memory while the agents work | 24–25 GB | 8–12 GB | 15–16 GB | 7–8 GB |
-| left on disk afterwards | 1.5 GB of DerivedData per worktree | nothing | 2.9 GB per worktree | nothing |
-| tests run at the same time | one shared simulator: a test run was killed by another's once in six | one simulator per checkout | one shared simulator: killed twice in six | one simulator per checkout |
-
-The pool is warmed once and reused: from the second batch of agents on, xcfs is 1.8–2.7× faster; the very first batch
-on a fresh pool pays for the warm-up (280–301 s for three Ice Cubes slots, 278–279 s for Wikipedia) and is slower
-than plain worktrees. On four more apps xcfs was not developed on, one agent's round of work (checkout, build, five
-edits each checked, a final build) took 3–9× less time with the default configuration
-([zero-configuration table](docs/benchmark.md#zero-configuration-on-projects-xcfs-was-not-developed-on)).
-
-**What a pool costs while nobody uses it** (three Ice Cubes slots, measured at 0, 5, 25 and 35 minutes idle): 2.3 GB
-resident (each slot's build session: the build service ≈730 MB, `swbuild` and the session ≈40 MB) and no CPU; after
-30 minutes without a build the sessions quit and nothing stays resident (`sessionIdleMinutes`); the next build starts
-one again. On disk, 6.0 GB on the volume for the three (per slot: checkout 0.08 GB, build output 1.5 GB, its simulator
-0.3 GB). During the warm-up itself, three slots built side by side peak at 21–25 GB on Ice Cubes and 10 GB on
-Wikipedia; `warmJobs` builds fewer at once (a smaller machine; not measured on one).
-
-**Where it does not help much:**
+## When it does not help much
 
 - **One checkout, day to day.** Without parallel checkouts there is no pool to reuse; what remains is the build
   session (a no-op build 5.9 → 0.9 s, a small edit 8 → 3–4 s on Ice Cubes) and `xcfs check`.
+- **The first batch on a fresh pool**, as above: the warm-up costs more than plain worktrees' cold builds.
 - **CI.** Fresh machines and one build per job: no pool survives between jobs, and remote build caches are out of
   scope ([docs/build-systems.md](docs/build-systems.md)).
-- **The first batch on a fresh pool**, as above.
 - **Bazel projects:** incremental builds are Bazel's own; xcfs helps with the wait for a checkout and with cleanup.
 
-**Optional acceleration: an experimental Swift driver.** On Xcode 27.x (Swift 6.4), xcfs builds a patched
-swift-driver in the background and uses it once it passes a correctness self-test: after a public declaration is
-added to a widely imported module, it recompiles only the files that use what changed (Ice Cubes 25 → 6 s, Wikipedia
-35 → 15 s). It is on by default where it applies and off everywhere else; `"swiftDriver": "native"` turns it off. In the
-three-agent tasks it made the next batches faster (111–121 vs 138–151 s) and the fresh pool's warm-up slower (408–419
-vs 354–376 s, warm-up included). Incremental builds with it are checked against clean builds on real apps
-([oracle](docs/benchmark.md#is-an-incremental-build-the-same-as-a-clean-one)). See
-[its notes](lib/xcfs/adapters/swiftdriver/README.md) and [docs/incremental-swift.md](docs/incremental-swift.md).
+## Requirements
 
-## Why
+- macOS on APFS, git, `python3` 3.9 or later (the one in the Xcode command-line tools works); measured on Apple
+  silicon.
+- Xcode for the Xcode adapter; the persistent build session uses the `swbuild` tool inside Xcode
+  ([Build session](#build-session)).
+- A repository, its worktrees and its pool on one APFS volume; `xcfs` refuses rather than silently copying in full.
+- Optional: the experimental Swift driver applies to Xcode 27.x (Swift 6.4) only; elsewhere builds use Xcode's own
+  driver.
 
-Running several agents on one repository means several checkouts. With an Xcode project each checkout brings its own
-dependency layer (gigabytes), its own DerivedData bound to the checkout's absolute path, a cold build (minutes on a
-large app), and an `xcodebuild` fixed overhead on every incremental build (≈35 s before the first compile task on a
-large app). Cleanup scripts then guess — by path prefix, by directory mtime, by "is any build running anywhere".
+## Correctness
 
-`xcfs` addresses each part:
+- **Incremental equals clean**, checked on real apps with `bench/oracle.py`: after each of a series of edits (a stored
+  property added to an `@Observable` class, an enum case that breaks callers, `@objc` changes across Swift and
+  Objective-C, …) every object file of the incremental build is compared with a clean build of the same sources: no
+  difference on Ice Cubes (9 steps, Xcode 27.2 and 27.1) or Wikipedia (6 steps)
+  ([details](docs/benchmark.md#is-an-incremental-build-the-same-as-a-clean-one)).
+- **The experimental driver is self-tested** before it is used (19 edits and undos, byte for byte against clean builds,
+  and a check that it narrows rebuilds at all); a driver that fails, a release it does not fit, or a tag that moved,
+  means Xcode's own driver ([its notes](lib/xcfs/adapters/swiftdriver/README.md)).
+- **The build session is checked** once per Xcode version before it is used, and builds fall back to `xcodebuild` when
+  the check fails.
+- **Nothing is deleted without `--apply`**, nothing that holds unsaved work, nothing xcfs did not create.
 
-| | how |
+## Install
+
+From the source instead of Homebrew:
+
+```
+git clone https://github.com/PatrickSCLin/xcfs ~/src/xcfs
+ln -s ~/src/xcfs/bin/xcfs ~/.local/bin/xcfs     # any directory on PATH
+xcfs --version
+```
+
+`brew install --HEAD PatrickSCLin/xcfs/xcfs` installs `main`. `bin/xcfs` finds its code in `../lib` (or `../libexec`).
+To install one file instead (a dotfiles manager, a package manager), build it: `scripts/build-single-file.sh` writes
+`dist/xcfs`, the whole tool as a Python zip application. A release: tag it (`vX.Y.Z`, matching `lib/xcfs/__init__.py`),
+then `scripts/homebrew-formula.sh X.Y.Z` fills the formula's url and sha256 from the tarball GitHub serves for the tag;
+copy it into the tap as `Formula/xcfs.rb`.
+
+What runs on its own: on the first build with an Xcode of the Swift 6.4 line, xcfs builds a patched
+[swift-driver](https://github.com/swiftlang/swift-driver) in the background (`git clone` of the release tag — for the
+releases the patch was made on, only if the tag points at the known commit; `git apply`; `swift build`; a correctness
+self-test; one to two minutes, about 400 MB in `~/Library/Caches/xcfs/swift-driver`, plus the per-module digests it
+keeps there), and uses it for Swift compilation once the self-test has passed. Until then, and whenever anything does
+not fit, builds use Xcode's own driver. `"swiftDriver": "native"` in a configuration (or `XCFS_SWIFT_DRIVER=native`)
+turns it off; `xcfs doctor` shows its state.
+
+## How it works
+
+| problem | how |
 |---|---|
 | dependency layer | cloned with APFS clonefile (shares blocks), from a snapshot that matches the lock files |
 | cold builds | a **pool** of slots at fixed paths, kept built at the baseline; handing one out costs only the difference |
 | fixed overhead | a **persistent build session** that keeps the build service and the build description alive |
 | build output | outside the source tree, one directory per checkout and configuration, removed with the checkout |
+| simulators | one per checkout, created and first booted during the slot's warm-up, deleted with the checkout |
 | cleanup | a registry of what xcfs created; nothing is deleted that holds unsaved work or is not provably its own |
+
+**The experimental Swift driver.** On Xcode 27.x (Swift 6.4), xcfs builds a patched swift-driver in the background
+and uses it once it passes its self-test: after a public declaration is added to a widely imported module, it
+recompiles only the files that use what changed (Ice Cubes 25 → 6 s, Wikipedia 35 → 15 s). It is on by default where it
+applies and off everywhere else. In the three-agent tasks it made the next batches faster (111–121 vs 138–151 s) and
+the fresh pool's warm-up slower (408–419 vs 354–376 s, warm-up included). See
+[its notes](lib/xcfs/adapters/swiftdriver/README.md) and [docs/incremental-swift.md](docs/incremental-swift.md).
 
 Measured on a large app (≈1,800 targets) with prototypes of the same mechanisms: a no-op build 34–36 s → ≈4 s, a
 function-body edit 37–39 s → 6–7 s, the first build of a new checkout ≈285 s → 4–50 s from an up-to-date slot. On the
 small [sample](examples/generic-sample): cold build 9 s, no-op 0.15 s, an edit 0.9 s, a single-file check 0.5 s
 through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
-
-## Requirements
-
-- macOS on APFS, git, `python3` 3.9 or later (the one in the Xcode command-line tools works).
-- Xcode for the Xcode adapter. The persistent session uses the `swbuild` tool inside Xcode; see
-  [Build session](#build-session).
-- A repository, its worktrees and its pool on one APFS volume; `xcfs` refuses rather than silently copying in full.
-
-## Install
-
-```
-git clone <this repository> ~/src/xcfs
-ln -s ~/src/xcfs/bin/xcfs ~/.local/bin/xcfs     # any directory on PATH
-xcfs --version
-```
-
-With Homebrew, from the tap (the formula is `packaging/homebrew/xcfs.rb`):
-
-```
-brew install PatrickSCLin/xcfs/xcfs            # the latest release
-brew install --HEAD PatrickSCLin/xcfs/xcfs     # main
-```
-
-Then, in a repository: `xcfs init <repo>` shows what it detects and the config it suggests (`--user` saves it for you
-only, `--write` as `.xcfs.json` in the repository), and `xcfs doctor <repo>` checks the machine.
-
-`bin/xcfs` finds its code in `../lib` (or `../libexec`). To install one file instead (a dotfiles manager, a package
-manager), build it: `scripts/build-single-file.sh` writes `dist/xcfs`, the whole tool as a Python zip application.
-A release: tag it (`vX.Y.Z`, matching `lib/xcfs/__init__.py`), then `scripts/homebrew-formula.sh X.Y.Z` fills the
-formula's url and sha256 from the tarball GitHub serves for the tag; copy it into the tap as `Formula/xcfs.rb`.
-
-What runs on its own: on the first build with an Xcode of the Swift 6.4 line, xcfs builds a patched
-[swift-driver](https://github.com/swiftlang/swift-driver) in the background (`git clone` of the release tag — for the
-releases the patch was made on, only if the tag points at the known commit; `git apply`; `swift build`; a correctness self-test; one to two
-minutes, about 400 MB in `~/Library/Caches/xcfs/swift-driver`, plus the per-module digests it keeps there, about
-1 GB after the benchmarks below), and uses it for Swift compilation once the self-test
-has passed. Until then, and whenever anything does not fit, builds use Xcode's own driver. `"swiftDriver": "native"`
-in a configuration (or `XCFS_SWIFT_DRIVER=native`) turns it off; `xcfs doctor` shows its state. See
-[its notes](lib/xcfs/adapters/swiftdriver/README.md).
 
 ## Commands
 
@@ -333,20 +400,6 @@ build of that checkout: upstream modules are not rebuilt, so a pass means "these
 built", not "the app builds". The result says so in `against`. With `xcodebuild` it is a full build reported for the
 given files. Use `xcfs build` before concluding that everything compiles.
 
-## Using it from an agent
-
-```
-xcfs checkout <repo> <branch> --session "$SESSION" --json   # or: xcfs new <repo> <branch> for a plain worktree
-xcfs build --json / xcfs check <files> --json / xcfs test --json
-xcfs release --prune-branch --json                          # done with the task
-xcfs reap --session "$SESSION" --apply --prune-branch --json  # the session ends (from a hook)
-```
-
-`reap` removes the session's clean worktrees and returns its clean slots; commits stay on their branches, and with
-`--prune-branch` a branch xcfs created that never got a commit is deleted. Anything with uncommitted work is left and
-listed under `left`, and the exit code stays 0 so a hook does not fail. [docs/agents.md](docs/agents.md) has
-instructions to paste into an agent's instruction file and a session-end hook.
-
 ## What `xcfs` refuses to do
 
 Each of these is covered by a test in [tests/xcfs_test.py](tests/xcfs_test.py):
@@ -396,19 +449,17 @@ Xcode, a fake `swbuild` for the session's failure modes, and mount a small disk 
 `sample_e2e.sh` needs Xcode with an iOS Simulator runtime, `xcodegen` and CocoaPods; it creates and deletes a
 simulator.
 
-## Benchmark
+## Running the benchmarks
 
 `bench/bench.py <profile> --source <clone>` sets up N parallel checkouts of a real project twice — as plain
 `git worktree`s with the project's own setup, and as xcfs slots — and measures the time until an agent can build, the
-first build, disk, resident memory, an edit loop, and what removal leaves behind. A profile (`bench/profiles/`) says
-how the project is set up, built and edited; the harness knows no project.
+first build, disk, resident memory, an edit loop, and what removal leaves behind; `--phases tasks` runs the three-agent
+tasks above, and `bench/pool-idle.py` what a pool costs at rest. A profile (`bench/profiles/`) says how the project is
+set up, built and edited; the harness knows no project. Every run writes its raw results to
+[bench/results](bench/results/README.md), and `scripts/charts.py` draws the charts above from them.
 
-Measured with the defaults alone — no option set — on six public apps, four of them never built while xcfs was
-developed. One agent's round of work (a checkout, a build, five edits each checked, a final build, cleanup): Kickstarter
-312.0 → 33.2 s, Element X 299.2 → 57.4 s, Signal 323.8 → 101.2 s, Home Assistant 537.8 → 98.9 s, Ice Cubes 161.8 →
-17.1 s, Wikipedia iOS 255.6 → 82.0 s (plain worktree → xcfs). The build session and the experimental Swift driver took
-effect on every project and no build failed; plain worktrees left 1.5–6 GB behind each, xcfs nothing. Builds that recompile many modules
-still take the compiler's time, and on a Bazel app (Telegram-iOS) incremental builds are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
+Builds that recompile many modules still take the compiler's time, and on a Bazel app (Telegram-iOS) incremental builds
+are Bazel's. Details and caveats: [docs/benchmark.md](docs/benchmark.md).
 
 ## Design
 
