@@ -61,6 +61,40 @@ agent's first test (~30 s idle, far more under load); the slots of a fresh pool 
 gate of four places per core, 40 on the 10-core machine, keeps it at 22–25 GB, for a warm-up of 280–301 instead of
 217 s).
 
+### Wikipedia iOS
+
+The same design on a larger app with Swift and Objective-C ([profile](../bench/profiles/wikipedia-ios-tasks.json)):
+a wikitext helper and a URL helper added to `WMFData` (imported by ~300 app files), a layout helper added to
+`WMFComponents`; each task runs its own new test class (`-only-testing`, `xcfs test --only`). Two runs each:
+
+| | plain worktrees | xcfs, defaults |
+|---|---|---|
+| warm-up before the agents (a fresh pool) | — | 278–279 s |
+| the agents' wall time, warm-up excluded | 375–387 s | 241–259 s |
+| **a fresh pool, warm-up included** | **375–387 s** | **520–537 s** (slower) |
+| **the next three agents** (warm-up of the released slots included) | **375–387 s** | **187–203 s** |
+| peak memory while the agents work | 15.3–15.7 GB | 7.1–8.2 GB |
+| peak memory during the warm-up | — | 10.2–10.3 GB |
+| left on disk after removal | 8.8–8.9 GB of global DerivedData | nothing |
+| builds or tests with an unexpected result | 2 of 6 test runs ("Test crashed with signal kill while preparing to run tests": the shared simulator) | 0 |
+
+### A pool at rest
+
+Three Ice Cubes slots warmed, then left alone ([bench/pool-idle.py](../bench/pool-idle.py)):
+
+| minutes idle | processes of the pool | resident memory | CPU used since the previous sample |
+|---|---|---|---|
+| 0, 5, 25 | 9: per slot the build service (≈730 MB), `swbuild` (20 MB), the xcfs session (23 MB) | 2.3 GB | 0 s |
+| 35 | none: a session quits after 30 minutes without a build (`sessionIdleMinutes`), its `swbuild` and build service with it | 0 | 0 s |
+
+Disk: 6.0 GB taken on the volume by the three slots (free space before and after, so blocks shared by clones count
+once); per slot, logically, 0.08 GB of checkout, 1.5 GB of build output and 0.25–0.36 GB for its simulator.
+
+For a machine with less memory (not measured on one): the warm-up peak scales with the slots built at once and with
+the experimental driver's frontend places; on Ice Cubes, three slots at once peaked at 22 GB (four places per core,
+the default) or 17 GB (two per core, `XCFS_FRONTEND_JOBS`), at 276 and 327 s; `"warmJobs": 1` builds one slot at a
+time.
+
 ### Agents at the same time: the round of work
 
 The same comparison with the round of work above (no tests), three agents at once. Ranges over two runs:

@@ -1,0 +1,156 @@
+{
+ "name": "Wikipedia iOS (arm64, three agents, real tasks)",
+ "description": "https://github.com/wikimedia/wikipedia-ios: Swift and Objective-C, local packages WMFData (imported by ~300 app files) and WMFComponents. Three agents at the same time, each with a small task judged by a build and its own new unit test: a wikitext helper and a URL helper in WMFData, a layout helper in WMFComponents. Each task first writes code that does not compile, fixes it, adds a test class, runs that class and builds the app. Plain: git worktree + scripts/setup_bundle_id ci, xcodebuild into the default DerivedData, tests on the simulator named in the command. xcfs: a pool warmed first (timed), then xcfs check / build / test. One architecture.",
+ "agents": 3,
+ "taskRounds": 2,
+ "plain": {
+  "create": [
+   "git worktree add -q -b {branch} {dest}",
+   "cd {dest} && scripts/setup_bundle_id ci"
+  ],
+  "build": "xcodebuild build -project Wikipedia.xcodeproj -scheme Wikipedia -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
+  "remove": "git worktree remove --force {dest} && git branch -D {branch}",
+  "test": "xcodebuild test -project Wikipedia.xcodeproj -scheme {scheme} -destination 'platform=iOS Simulator,name=iPhone 18 Pro' CODE_SIGNING_ALLOWED=NO ARCHS=arm64{only}"
+ },
+ "xcfs": {
+  "config": {
+   "version": 1,
+   "carry": [
+    "Configurations/OpenSourceDebug.xcconfig"
+   ],
+   "toolchains": [
+    {
+     "adapter": "xcode",
+     "project": "Wikipedia.xcodeproj",
+     "scheme": "Wikipedia",
+     "configurations": {
+      "sim-debug": {
+       "configuration": "Debug",
+       "destination": "generic/platform=iOS Simulator"
+      }
+     },
+     "buildSettings": {
+      "CODE_SIGNING_ALLOWED": "NO",
+      "ARCHS": "arm64"
+     }
+    }
+   ]
+  },
+  "variants": {
+   "defaults": {}
+  }
+ },
+ "tasks": [
+  {
+   "name": "WMFData: wikitext heading level",
+   "test": "WMFData",
+   "only": "WMFDataTests/WikitextHeadingLevelTests",
+   "steps": [
+    {
+     "name": "add headingLevel(of:) (a typo)",
+     "verify": "check",
+     "expect": "fail",
+     "edit": {
+      "file": "WMFData/Sources/WMFData/Utility/WMFWikitextUtils.swift",
+      "append": "\nextension WMFWikitextUtils {\n    /// The level of a wikitext heading line (\"== History ==\" is 2), or nil when the line is not one.\n    public static func headingLevel(of line: String) -> Int? {\n        let trimmed = line.trimmingCharacters(in: .whitespaces)\n        let lead = trimmed.prefix(while: { $0 == \"=\" }).cout\n        let trail = trimmed.reversed().prefix(while: { $0 == \"=\" }).count\n        guard lead >= 2, lead == trail, trimmed.count > lead * 2 else { return nil }\n        return lead\n    }\n}\n"
+     }
+    },
+    {
+     "name": "fix the typo",
+     "verify": "check",
+     "edit": {
+      "file": "WMFData/Sources/WMFData/Utility/WMFWikitextUtils.swift",
+      "find": "}).cout\n",
+      "replace": "}).count\n"
+     }
+    },
+    {
+     "name": "add a test class and run it",
+     "verify": "test",
+     "edit": {
+      "file": "WMFData/Tests/WMFDataTests/WikitextHeadingLevelTests.swift",
+      "create": "import XCTest\n@testable import WMFData\n\nfinal class WikitextHeadingLevelTests: XCTestCase {\n    func testHeadingLevels() {\n        XCTAssertEqual(WMFWikitextUtils.headingLevel(of: \"== History ==\"), 2)\n        XCTAssertEqual(WMFWikitextUtils.headingLevel(of: \"=== Early life ===\"), 3)\n        XCTAssertNil(WMFWikitextUtils.headingLevel(of: \"Plain text\"))\n        XCTAssertNil(WMFWikitextUtils.headingLevel(of: \"== unbalanced =\"))\n    }\n}\n"
+     }
+    },
+    {
+     "name": "build the app",
+     "verify": "build"
+    }
+   ]
+  },
+  {
+   "name": "WMFComponents: grid spacing",
+   "test": "WMFComponents",
+   "only": "WMFComponentsTests/WMFCardGridSpacingTests",
+   "steps": [
+    {
+     "name": "add spacing(forColumns:) (switch not exhaustive)",
+     "verify": "check",
+     "expect": "fail",
+     "edit": {
+      "file": "WMFComponents/Sources/WMFComponents/Utility/WMFCardGridColumns.swift",
+      "append": "\nextension WMFCardGridColumns {\n    /// The spacing between cards for a column count.\n    static func spacing(forColumns columns: Int) -> CGFloat {\n        switch columns {\n        case 1: return 16\n        case 2, 3: return 12\n        }\n    }\n}\n"
+     }
+    },
+    {
+     "name": "make the switch exhaustive",
+     "verify": "check",
+     "edit": {
+      "file": "WMFComponents/Sources/WMFComponents/Utility/WMFCardGridColumns.swift",
+      "find": "        case 2, 3: return 12\n        }\n",
+      "replace": "        case 2, 3: return 12\n        default: return 8\n        }\n"
+     }
+    },
+    {
+     "name": "add a test suite and run it",
+     "verify": "test",
+     "edit": {
+      "file": "WMFComponents/Tests/WMFComponentsTests/WMFCardGridSpacingTests.swift",
+      "create": "import Testing\nimport UIKit\n@testable import WMFComponents\n\n@MainActor\n@Suite\nstruct WMFCardGridSpacingTests {\n    @Test\n    func spacingShrinksWithColumns() {\n        #expect(WMFCardGridColumns.spacing(forColumns: 1) == 16)\n        #expect(WMFCardGridColumns.spacing(forColumns: 3) == 12)\n        #expect(WMFCardGridColumns.spacing(forColumns: 4) == 8)\n    }\n}\n"
+     }
+    },
+    {
+     "name": "build the app",
+     "verify": "build"
+    }
+   ]
+  },
+  {
+   "name": "WMFData: mobile host",
+   "test": "WMFData",
+   "only": "WMFDataTests/URLMobileHostTests",
+   "steps": [
+    {
+     "name": "add wmf_isMobileWikipediaHost (a method that does not exist)",
+     "verify": "check",
+     "expect": "fail",
+     "edit": {
+      "file": "WMFData/Sources/WMFData/Utility/WMFURLUtils.swift",
+      "append": "\nextension URL {\n    /// Whether the host is a mobile Wikipedia host (en.m.wikipedia.org).\n    public var wmf_isMobileWikipediaHost: Bool {\n        guard let host = host()?.lowercase() else { return false }\n        return host.contains(\".m.\") && host.hasSuffix(\"wikipedia.org\")\n    }\n}\n"
+     }
+    },
+    {
+     "name": "fix the call",
+     "verify": "check",
+     "edit": {
+      "file": "WMFData/Sources/WMFData/Utility/WMFURLUtils.swift",
+      "find": "host()?.lowercase()",
+      "replace": "host()?.lowercased()"
+     }
+    },
+    {
+     "name": "add a test class and run it",
+     "verify": "test",
+     "edit": {
+      "file": "WMFData/Tests/WMFDataTests/URLMobileHostTests.swift",
+      "create": "import XCTest\n@testable import WMFData\n\nfinal class URLMobileHostTests: XCTestCase {\n    func testMobileHosts() {\n        XCTAssertTrue(URL(string: \"https://en.m.wikipedia.org/wiki/Swift\")!.wmf_isMobileWikipediaHost)\n        XCTAssertFalse(URL(string: \"https://en.wikipedia.org/wiki/Swift\")!.wmf_isMobileWikipediaHost)\n    }\n}\n"
+     }
+    },
+    {
+     "name": "build the app",
+     "verify": "build"
+    }
+   ]
+  }
+ ]
+}

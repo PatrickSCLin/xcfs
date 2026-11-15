@@ -647,7 +647,9 @@ def plain_task(agent):
     rows.append({"step": "first build", "verify": "build", "seconds": tb, "ok": code == 0, "as_expected": code == 0})
 
     def verify(kind, f, task):
-        cmd = fmt(P["test"], dest=dest, scheme=task["test"]) if kind == "test" else fmt(P["build"], dest=dest)
+        cmd = fmt(P["test"], dest=dest, scheme=task["test"],
+                  only=" -only-testing:" + task["only"] if task.get("only") else "") if kind == "test" \
+            else fmt(P["build"], dest=dest)
         t, code, _ = shell(cmd, dest, log)
         return t, code == 0
     rows += run_task_steps(dest, task, int(time.time()) % 100000 * 10 + int(agent), verify, log)
@@ -673,7 +675,8 @@ def xcfs_task(variant, agent):
         if kind == "check":
             t, code, _, _ = xcfs("check", f, log_name=log)
         elif kind == "test":
-            t, code, _, _ = xcfs("test", wt, "--scheme", task["test"], log_name=log)
+            t, code, _, _ = xcfs("test", wt, "--scheme", task["test"],
+                                 *(("--only", task["only"]) if task.get("only") else ()), log_name=log)
         else:
             t, code, _, _ = xcfs("build", wt, log_name=log)
         return t, code == 0

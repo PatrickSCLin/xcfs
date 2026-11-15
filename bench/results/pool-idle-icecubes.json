@@ -1,0 +1,95 @@
+{
+ "profile": "Ice Cubes (arm64 only, zero-config)",
+ "slots": 3,
+ "warm_seconds": 331.6,
+ "disk_used_kb": 6292656,
+ "parts": [
+  {
+   "slot": 1,
+   "checkout_kb": 86932,
+   "build_kb": 1561124,
+   "simulator_kb": 264512
+  },
+  {
+   "slot": 2,
+   "checkout_kb": 86932,
+   "build_kb": 1562836,
+   "simulator_kb": 381984
+  },
+  {
+   "slot": 3,
+   "checkout_kb": 86932,
+   "build_kb": 1564544,
+   "simulator_kb": 349236
+  }
+ ],
+ "samples": [
+  {
+   "minutes_idle": 0.0,
+   "processes": 9,
+   "rss_mb": 2323,
+   "cpu_seconds_since_previous_sample": 0.0,
+   "by_process": {
+    "SWBBuildService": {
+     "count": 3,
+     "rss_mb": 2193
+    },
+    "swbuild": {
+     "count": 3,
+     "rss_mb": 60
+    },
+    "xcfs build session": {
+     "count": 3,
+     "rss_mb": 70
+    }
+   }
+  },
+  {
+   "minutes_idle": 5.0,
+   "processes": 9,
+   "rss_mb": 2323,
+   "cpu_seconds_since_previous_sample": 0.0,
+   "by_process": {
+    "SWBBuildService": {
+     "count": 3,
+     "rss_mb": 2193
+    },
+    "swbuild": {
+     "count": 3,
+     "rss_mb": 60
+    },
+    "xcfs build session": {
+     "count": 3,
+     "rss_mb": 70
+    }
+   }
+  },
+  {
+   "minutes_idle": 25.0,
+   "processes": 9,
+   "rss_mb": 2323,
+   "cpu_seconds_since_previous_sample": 0.0,
+   "by_process": {
+    "SWBBuildService": {
+     "count": 3,
+     "rss_mb": 2193
+    },
+    "swbuild": {
+     "count": 3,
+     "rss_mb": 60
+    },
+    "xcfs build session": {
+     "count": 3,
+     "rss_mb": 70
+    }
+   }
+  },
+  {
+   "minutes_idle": 35.0,
+   "processes": 0,
+   "rss_mb": 0,
+   "cpu_seconds_since_previous_sample": 0.0,
+   "by_process": {}
+  }
+ ]
+}

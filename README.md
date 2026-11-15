@@ -23,24 +23,31 @@ kernel extension and does not modify Xcode.
 
 ## What it is worth
 
-Three agents start at once on [Ice Cubes](https://github.com/Dimillian/IceCubesApp), each with a real task judged by
-a build and the package's tests (add a function, get a compile error, fix it, add a unit test, run the tests, build the
-app). Plain: `git worktree add` and `xcodebuild`, as an agent would. Ranges over clean repeated runs
+Three agents start at once on one app, each with a real task judged by a build and its own new test (add a function,
+get a compile error, fix it, add a unit test, run it, build the app). Plain: `git worktree add` and `xcodebuild`, as
+an agent would. Two apps, ranges over clean repeated runs
 ([details](docs/benchmark.md#three-agents-real-tasks-at-the-same-time)):
 
-| | plain worktrees | xcfs |
-|---|---|---|
-| the next three agents on the same pool (warm-up of the released slots included) | 284–302 s | **111–121 s** |
-| the first three agents on a fresh pool, warm-up included | 284–302 s | 408–419 s — **slower** |
-| memory while the agents work | 24–25 GB | 8–12 GB |
-| left on disk afterwards | 1.5 GB of DerivedData per worktree | nothing |
-| tests run at the same time | one simulator for all; a test run was killed by another's once in six | one simulator per checkout |
+| | Ice Cubes: plain worktrees | Ice Cubes: xcfs | Wikipedia iOS: plain worktrees | Wikipedia iOS: xcfs |
+|---|---|---|---|---|
+| the next three agents on the same pool (warm-up of the released slots included) | 284–302 s | **111–121 s** | 375–387 s | **187–203 s** |
+| the first three agents on a fresh pool, warm-up included | 284–302 s | 408–419 s — **slower** | 375–387 s | 520–537 s — **slower** |
+| memory while the agents work | 24–25 GB | 8–12 GB | 15–16 GB | 7–8 GB |
+| left on disk afterwards | 1.5 GB of DerivedData per worktree | nothing | 2.9 GB per worktree | nothing |
+| tests run at the same time | one shared simulator: a test run was killed by another's once in six | one simulator per checkout | one shared simulator: killed twice in six | one simulator per checkout |
 
-The pool is warmed once and reused: from the second batch of agents on, xcfs is 2.3–2.7× faster; the very first batch on a
-fresh pool pays for the warm-up (280–301 s for three slots) and is slower than plain worktrees. On four more apps
-xcfs was not developed on, one agent's round of work (checkout, build, five edits each checked, a final build) took
-3–9× less time with the default configuration
+The pool is warmed once and reused: from the second batch of agents on, xcfs is 1.8–2.7× faster; the very first batch
+on a fresh pool pays for the warm-up (280–301 s for three Ice Cubes slots, 278–279 s for Wikipedia) and is slower
+than plain worktrees. On four more apps xcfs was not developed on, one agent's round of work (checkout, build, five
+edits each checked, a final build) took 3–9× less time with the default configuration
 ([zero-configuration table](docs/benchmark.md#zero-configuration-on-projects-xcfs-was-not-developed-on)).
+
+**What a pool costs while nobody uses it** (three Ice Cubes slots, measured at 0, 5, 25 and 35 minutes idle): 2.3 GB
+resident (each slot's build session: the build service ≈730 MB, `swbuild` and the session ≈40 MB) and no CPU; after
+30 minutes without a build the sessions quit and nothing stays resident (`sessionIdleMinutes`); the next build starts
+one again. On disk, 6.0 GB on the volume for the three (per slot: checkout 0.08 GB, build output 1.5 GB, its simulator
+0.3 GB). During the warm-up itself, three slots built side by side peak at 21–25 GB on Ice Cubes and 10 GB on
+Wikipedia; `warmJobs` builds fewer at once (a smaller machine; not measured on one).
 
 **Where it does not help much:**
 
@@ -264,6 +271,7 @@ state, from one lease to the next; returning a slot keeps its server (and the an
 | `warmOnRelease` | true | rebuild a returned slot at the baseline in the background |
 | `buildTimeout` | 3600 | seconds before a build is killed (exit 9) |
 | `warmJobs` | 0 | slots one warm-up builds side by side; 0 means one per 16 GB of memory (a 64 GB machine warms 3 at a time) |
+| `sessionIdleMinutes` | 30 | a checkout's build session (and its `swbuild` and build service, ≈0.7 GB resident) quits after this long unused; the next build starts it again |
 
 | variable | |
 |---|---|
@@ -377,7 +385,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 68 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 69 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```
