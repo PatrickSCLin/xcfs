@@ -160,7 +160,7 @@ session has its own request files; after every switch of the source set, clear
 | S1 hygiene | registry and reclaiming of every checkout; build output outside source trees; `doctor` checks; `xcfs build / check / test / run` | done (v0.2) |
 | S2 pool | the lifecycle above, driven by `xcodebuild` | done (v0.2) |
 | S3 persistent session | the Xcode adapter around `swbuild`: PIF export and caching, request generation, description reuse, `buildFiles`, timeouts and restarts, regression check | done (v0.2), off unless the config asks for it |
-| S3 refinements | patching the PIF instead of exporting it again (matters for large package graphs, where an export takes 11–25 s); reserved empty files so that adding a file does not rebuild the build description | not done |
+| S3 refinements | patching the PIF instead of exporting it again; reserved empty files so that adding a file does not rebuild the build description | not done, on purpose for now: on public mid-size apps the export after a new file takes 2.8–3.0 s (Ice Cubes, Wikipedia iOS; 11–25 s was measured on a large package graph), and a wrongly patched PIF builds the wrong thing. `xcfs session start` takes the first export (27 s and 47 s there, package resolution included) out of the first build |
 | S3b / S4 / S5 | shared slots; compile-cache stack; pre-built first-party modules | optional, not done |
 
 ## Edge cases

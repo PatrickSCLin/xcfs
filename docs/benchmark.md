@@ -287,6 +287,21 @@ batch on a fresh machine beat plain worktrees, and the agents' own edits lose th
 It stays off by default. In these runs the warm-up with the cache peaked at 8–10 GB against 21–23 GB without; the
 cache grew by ~200 MB per slot (1.3 GB after three slots of Ice Cubes); it lives in xcfs's cache directory.
 
+## Exporting the project description
+
+The build session reads the project as a PIF, exported by `xcodebuild` and cached by a key of the file list, the
+project and package definitions and the toolchain; a content edit keeps it, a new file exports it again. Measured with
+`xcfs session start` in a new worktree (Xcode 27.2, one run each):
+
+| | first export (packages resolved) | nothing changed | after a new Swift file in the app target |
+|---|---|---|---|
+| Ice Cubes | 27.0 s | 0.09 s | 2.9 s |
+| Wikipedia iOS | 46.9 s | 0.12 s | 3.2 s |
+
+So on these apps an agent that adds a file pays about 3 s once, and patching the PIF instead of exporting it again (a
+planned refinement) would save about that much; the first export belongs to the first build, or to
+`xcfs session start` before it.
+
 ## Is an incremental build the same as a clean one?
 
 Speed is worth nothing if an incremental build can leave something stale. [bench/oracle.py](../bench/oracle.py)
