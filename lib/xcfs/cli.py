@@ -45,6 +45,8 @@ Maintenance
                                                                 carried files; --write saves .xcfs.json, --user
                                                                 ~/.config/xcfs/<repo>.json
   xcfs trust <repo>                                             approve the commands a repository's config runs
+  xcfs stats [--days N]                                         what xcfs did here: checkouts handed out built, full
+                                                                builds not waited for, builds and checks (local only)
   xcfs uninstall [--apply]                                      everything xcfs made on this machine (worktrees, pools,
                                                                 caches, state, hooks) and, with --apply, its removal;
                                                                 what holds unsaved work is kept
@@ -68,7 +70,7 @@ from .util import Fail, NEXT, OUT, USAGE, phys, say
 
 
 class Args:
-    VALUE = {"session", "scheme", "from", "stale-days", "older-than", "config", "toolchain", "timeout", "only", "slot", "slots",
+    VALUE = {"days", "session", "scheme", "from", "stale-days", "older-than", "config", "toolchain", "timeout", "only", "slot", "slots",
              "wait"}
     MULTI = {"only"}
     FLAGS = {"apply", "dry-run", "json", "discard-ignored", "foreign", "sizes", "status", "all", "prune-branch",
@@ -224,7 +226,7 @@ def cmd_pool(a):
 
 
 COMMANDS = {"new": worktree.cmd_new, "rm": worktree.cmd_rm, "reap": worktree.cmd_reap, "adopt": worktree.cmd_adopt,
-            "ls": worktree.cmd_ls, "gc": maint.cmd_gc, "uninstall": maint.cmd_uninstall, "doctor": maint.cmd_doctor, "init": maint.cmd_init,
+            "ls": worktree.cmd_ls, "gc": maint.cmd_gc, "uninstall": maint.cmd_uninstall, "stats": maint.cmd_stats, "doctor": maint.cmd_doctor, "init": maint.cmd_init,
             "trust": maint.cmd_trust, "hook": hooks.cmd_hook, "build": cmd_build, "check": cmd_check, "test": cmd_test, "run": cmd_run,
             "checkout": cmd_checkout, "release": cmd_release, "pool": cmd_pool}
 

@@ -412,6 +412,8 @@ def checkout(repo, branch, start, session, settings, wait=0):
     warm_state = "warm at baseline" if at_base else \
         "warm at an older baseline" if w.get("ok") else "cold (first build is a full build)"
     say("slot %d: %s  [%s, %s]" % (row["index"], src, branch, warm_state))
+    state.record("checkout", warm=bool(w.get("ok")), at_baseline=at_base,
+                 full_build_seconds=w.get("seconds") if w.get("ok") else None)
     hint = None
     if not w.get("ok"):
         with state.registry(write=False) as reg:

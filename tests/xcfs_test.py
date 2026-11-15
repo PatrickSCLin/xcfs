@@ -1931,6 +1931,27 @@ def t76_failures_say_what_to_do_next():
     assert ad.advise({"ok": False, "diagnostics": [{"message": "cannot find 'x' in scope"}]}) is None
 
 
+@test
+def t77_stats_from_the_local_history():
+    E = dict(toy_env(), XCFS_STATE=SB + "/state77", XCFS_POOL_ROOT=SB + "/pool77")
+    repo = toy_repo("r77", slots=1)
+    if xcfs("new", repo, "s77-probe", env=E)["_code"] == 3:
+        assert xcfs("trust", repo, env=E)["_code"] == 0
+    assert xcfs("stats", env=E)["checkouts"] == 0
+    s = xcfs("checkout", repo, "s77", env=E)            # cold
+    assert xcfs("build", s["worktree"], env=E)["_code"] == 0
+    assert xcfs("release", s["worktree"], env=E)["_code"] == 0
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0
+    s = xcfs("checkout", repo, "s77b", env=E)           # built
+    r = xcfs("stats", env=E)
+    assert r["checkouts"] == 2 and r["checkouts_built"] == 1, r
+    assert r["operations"]["build"]["count"] >= 1 and r["operations"]["warm"]["count"] >= 1, r
+    assert xcfs("stats", "--days", "0", env=E)["checkouts"] == 0
+    lines = open(SB + "/state77/history.jsonl").read().splitlines()
+    assert all(set(json.loads(l)) <= {"event", "at", "kind", "ok", "seconds", "driver", "warm", "at_baseline",
+                                      "full_build_seconds"} for l in lines), "no paths or names in the history"
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

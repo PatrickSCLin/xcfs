@@ -354,3 +354,43 @@ def cmd_uninstall(a):
     a.result(applied=True, kept=[], removed=removed, hooks=hook_changes, worktrees=[p for p, _ in wts],
              slots=[s["src"] for _, s in slots])
     return 0
+
+
+# ------------------------------------------------------------------ stats
+def median(xs):
+    xs = sorted(xs)
+    return xs[len(xs) // 2] if xs else 0
+
+
+def cmd_stats(a):
+    """What xcfs did on this machine over the last days, from its own history (nothing is sent anywhere)."""
+    days = a.num("days", 7, float)
+    events = state.history(time.time() - days * 86400)
+    co = [e for e in events if e["event"] == "checkout"]
+    built = [e for e in co if e.get("warm")]
+    avoided = sum(e.get("full_build_seconds") or 0 for e in built)
+    ops = {}
+    for e in events:
+        if e["event"] in ("build", "check", "test", "run", "warm"):
+            ops.setdefault(e["event"], []).append(e)
+    say("the last %g day(s), from %s:" % (days, state.history_file()))
+    say("  checkouts handed out: %d, %d already built (%d at the current baseline), %d cold"
+        % (len(co), len(built), sum(1 for e in built if e.get("at_baseline")), len(co) - len(built)))
+    if built:
+        say("  full builds agents did not wait for: %d, about %s (each slot's own last full build)"
+            % (len(built), fmt_minutes(avoided)))
+    rows = {}
+    for op, es in sorted(ops.items()):
+        secs = [e.get("seconds") or 0 for e in es]
+        rows[op] = {"count": len(es), "failed": sum(1 for e in es if not e.get("ok")), "median_seconds": median(secs),
+                    "total_seconds": round(sum(secs), 1)}
+        say("  %-6s %4d, median %.1fs, %s in all%s" % (op, len(es), median(secs), fmt_minutes(sum(secs)),
+                                                      ", %d failed" % rows[op]["failed"] if rows[op]["failed"] else ""))
+    if not events:
+        say("  nothing recorded yet")
+    a.result(days=days, checkouts=len(co), checkouts_built=len(built), full_build_seconds_avoided=round(avoided, 1),
+             operations=rows)
+
+
+def fmt_minutes(secs):
+    return "%.1f h" % (secs / 3600) if secs >= 5400 else "%.0f min" % (secs / 60) if secs >= 90 else "%.0f s" % secs

@@ -8,7 +8,7 @@ release is supported.
 
 ## What xcfs runs and touches
 
-xcfs runs as the user who starts it: no root, no kernel extension, no telemetry, and no network access of its own
+xcfs runs as the user who starts it: no root, no kernel extension, no telemetry (`xcfs stats` reads a local history file), and no network access of its own
 beyond the two `git` operations below. The only processes it leaves running are a background warm-up of a pool and a
 checkout's build session, which quits after `sessionIdleMinutes` (30) unused.
 

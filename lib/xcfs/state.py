@@ -1,5 +1,5 @@
 """Where xcfs keeps its state, and the locks around it."""
-import contextlib, fcntl, os, time
+import contextlib, fcntl, json, os, time
 
 from .util import Fail, USAGE, phys, read_json, short_hash, write_json
 
@@ -133,3 +133,51 @@ def save_trust(key, info):
 
 def trusted(key):
     return key in (read_json(trust_file(), {}) or {})
+
+
+# ------------------------------------------------------------------ history (for `xcfs stats`; never leaves the machine)
+HISTORY_MAX = 4 * 2 ** 20
+
+
+def history_file():
+    return os.path.join(state_dir(), "history.jsonl")
+
+
+def record(event, **fields):
+    """Append one line about what happened (a build, a checkout). Kept small: the oldest half goes past 4 MB. Never
+    fails the operation it describes."""
+    try:
+        path = history_file()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        line = json.dumps(dict(fields, event=event, at=time.time()), ensure_ascii=False) + "\n"
+        with open(path, "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.write(line)
+            big = f.tell() > HISTORY_MAX
+            fcntl.flock(f, fcntl.LOCK_UN)
+        if big:
+            with named_lock("history", "trim"):
+                with open(path) as f:
+                    lines = f.readlines()
+                tmp = path + ".%d.tmp" % os.getpid()
+                with open(tmp, "w") as f:
+                    f.writelines(lines[len(lines) // 2:])
+                os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def history(since=0):
+    out = []
+    try:
+        with open(history_file()) as f:
+            for l in f:
+                try:
+                    e = json.loads(l)
+                except ValueError:
+                    continue
+                if e.get("at", 0) >= since:
+                    out.append(e)
+    except OSError:
+        pass
+    return out

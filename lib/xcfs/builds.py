@@ -108,6 +108,9 @@ def operate(op, path, args, toolchain=None):
                 break
     if not results:
         raise Fail("no toolchain of %s supports %s" % (loc["root"], op), USAGE)
+    state.record(op, kind=loc["kind"], ok=all(r.get("ok") for r in results),
+                 seconds=round(sum(r.get("seconds") or 0 for r in results), 2),
+                 driver=",".join(sorted({str(r.get("driver") or r.get("toolchain")) for r in results})))
     out = results[0] if len(results) == 1 else {"ok": all(r.get("ok") for r in results), "results": results}
     hints = [r["next"] for r in results if r.get("next")]
     if hints:
