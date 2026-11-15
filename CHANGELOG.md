@@ -5,6 +5,7 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs init` notes macOS, watchOS, visionOS and tvOS targets next to the iOS ones.
 - `docs/why-not-plain-worktrees.md`, with a new measurement: two worktrees sharing one DerivedData recompile everything
   each time the other one built (`bench/shared-deriveddata.sh`).
 - `bench/run-public.sh`: rerun the three-agent benchmark on a public app from a pinned commit.

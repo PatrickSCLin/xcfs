@@ -308,6 +308,14 @@ class XcodeAdapter(Adapter):
         name = "debug" if mac else "sim-debug"
         entry.setdefault("configurations", {name: {"configuration": "Debug", "destination": dest}})
         notes.append("platform %s (from SDKROOT: %s)" % ("macOS" if mac else "iOS Simulator", ", ".join(sorted(sdks)) or "none found"))
+        if not mac and "macosx" in sdks:
+            notes.append("the project also has macOS targets: add a configuration with \"destination\": "
+                         "\"platform=macOS\" if agents build them (`xcfs build --config <name>`)")
+        others = {"watchos": "watchOS", "xros": "visionOS", "appletvos": "tvOS"}
+        more = [others[s] for s in sorted(sdks) if s in others]
+        if more:
+            notes.append("%s targets too: only the configuration above is set up, and xcfs has not been verified "
+                         "with those destinations" % ", ".join(more))
         if not mac:
             entry.setdefault("buildSettings", {"CODE_SIGNING_ALLOWED": "NO"})
             notes.append("simulator builds without code signing (CODE_SIGNING_ALLOWED=NO)")

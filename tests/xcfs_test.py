@@ -1678,6 +1678,9 @@ def t68_init_detects_and_never_overwrites():
     assert json.load(open(user))["toolchains"][0]["scheme"] == "Shop"
     assert xcfs("init", r, "--user", "--force")["_code"] == 0, "--force rewrites it"
     os.remove(user)
+    open(r + "/Shop.xcodeproj/project.pbxproj", "w").write("SDKROOT = iphoneos;\nSDKROOT = macosx;\nSDKROOT = watchos;\n")
+    n = xcfs("init", r)["notes"]
+    assert any("platform=macOS" in x for x in n) and any("watchOS targets too" in x for x in n), n
     # a macOS project: no simulator, no signing override
     open(r + "/Shop.xcodeproj/project.pbxproj", "w").write("SDKROOT = macosx;\n")
     m = xcfs("init", r)["config"]["toolchains"][0]
