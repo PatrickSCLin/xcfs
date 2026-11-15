@@ -3,8 +3,8 @@
 class Xcfs < Formula
   desc "Pool of pre-built worktrees and build sessions for parallel agents on Xcode"
   homepage "https://github.com/PatrickSCLin/xcfs"
-  url "https://github.com/PatrickSCLin/xcfs/archive/refs/tags/v0.2.0.tar.gz"
-  sha256 "4167e2be07179809cf6219599891079a583dc4b6375896b3ae81c97a00e0c21c"
+  url "https://github.com/PatrickSCLin/xcfs/archive/refs/tags/v0.3.0.tar.gz"
+  sha256 "375f3137063aa5e1f8117f87cbdcd50c157ca89c7ac7e5a746a5f4e3791baca9"
   license "MIT"
   head "https://github.com/PatrickSCLin/xcfs.git", branch: "main"
 

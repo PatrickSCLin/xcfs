@@ -1573,26 +1573,27 @@ def t65_driver_frontends_go_through_a_shared_gate():
         "the driver finds the other tools next to the frontend"
     gate = r + "/frontend-bin/swift-frontend"
     assert not os.path.islink(gate) and os.access(gate, os.X_OK)
-    # one place: the second frontend starts when the first has ended
+    # one place: the second frontend starts when the first has ended. Judged by when each one started (written by the
+    # fake frontend), not by the total time, which a slow machine stretches.
     log = SB + "/t65/runs.log"
     real = SB + "/t65/fake-frontend"
-    open(real, "w").write("#!/bin/sh\necho start $(date +%s.%N 2>/dev/null || python3 -c 'import time;print(time.time())') >> " + log
-                          + "\nsleep 1\n")
+    open(real, "w").write("#!/bin/sh\npython3 -c 'import time; print(time.time())' >> " + log + "\nsleep 2\n")
     os.chmod(real, 0o755)
     env = dict(os.environ, XCFS_REAL_SWIFT_FRONTEND=real, XCFS_FRONTEND_JOBS="1")
-    t0 = time.time()
-    ps = [subprocess.Popen([gate, "-frontend", "-c"], env=env) for _ in range(2)]
-    [p.wait() for p in ps]
-    assert all(p.returncode == 0 for p in ps) and time.time() - t0 >= 1.9, "two compile jobs ran at once with one place"
-    t0 = time.time()
-    ps = [subprocess.Popen([gate, "-frontend", "-emit-module"], env=env) for _ in range(2)]
-    [p.wait() for p in ps]
-    assert time.time() - t0 < 1.9, "emitting a module never waits"
+
+    def gap(*args):
+        if os.path.exists(log):
+            os.remove(log)
+        ps = [subprocess.Popen([gate, "-frontend"] + list(args), env=env) for _ in range(2)]
+        [p.wait() for p in ps]
+        assert all(p.returncode == 0 for p in ps)
+        starts = sorted(float(x) for x in open(log).read().split())
+        assert len(starts) == 2, starts
+        return starts[1] - starts[0]
+    assert gap("-c") >= 1.9, "two compile jobs ran at once with one place"
+    assert gap("-emit-module") < 1.5, "emitting a module never waits"
     env["XCFS_FRONTEND_JOBS"] = "2"
-    t0 = time.time()
-    ps = [subprocess.Popen([gate, "-frontend", "-c"], env=env) for _ in range(2)]
-    [p.wait() for p in ps]
-    assert time.time() - t0 < 1.9, "two places: both at once"
+    assert gap("-c") < 1.5, "two places: both at once"
 
 
 @test
