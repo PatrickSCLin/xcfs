@@ -3,55 +3,55 @@
 What changed for people and scripts that use xcfs. The interface that is kept stable is listed in
 [docs/stability.md](docs/stability.md).
 
-## Unreleased
+## 0.3.0 — 2026-11-16
 
-- Fix: the remove and session-end hooks no longer refuse because the agent tool's own processes still have their
-  working directory in the worktree (found running the plugin in a live session).
-- A Claude Code plugin (`plugins/xcfs`, marketplace in `.claude-plugin/marketplace.json`): the three hooks and a skill
-  with the agent's instructions.
-- The SessionEnd hook gets a 60 s timeout (Claude Code gives SessionEnd hooks 1.5 s in all by default);
+### Changed
+
+- **The experimental Swift driver is opt-in.** By default builds use Xcode's own Swift driver, and xcfs no longer
+  clones or builds swift-driver on its own. Turn the patched driver on per project with `"swiftDriver": "patched"`
+  (or `XCFS_SWIFT_DRIVER=patched`); `"api-digests"`, its earlier name, still works. A config that says `"auto"` (the
+  default before 0.3) now means `"native"`, and `xcfs doctor` says so. A patched driver already built in
+  `~/Library/Caches/xcfs/swift-driver` is left there unused until a project asks for it; `xcfs uninstall` removes it.
+- The README and the benchmark pages show xcfs without the driver as the main numbers (on Ice Cubes the next batch of
+  three agents takes 138–151 s instead of 284–302 s with plain worktrees), and the driver as an option (111–121 s).
+  Numbers are relabelled, not measured again; Wikipedia's three-agent runs exist with the driver only and say so.
+- The SessionEnd hook has a 60 s timeout (Claude Code gives SessionEnd hooks 1.5 s in all by default);
   `xcfs hook install` updates an installed one.
-- `xcfs init` notes macOS, watchOS, visionOS and tvOS targets next to the iOS ones.
-- `docs/why-not-plain-worktrees.md`, with a new measurement: two worktrees sharing one DerivedData recompile everything
-  each time the other one built (`bench/shared-deriveddata.sh`).
-- `bench/run-public.sh`: rerun the three-agent benchmark on a public app from a pinned commit.
-- `xcfs session start [path]`: the build session and its project description ready, nothing built.
-- `xcfs pool status --json` has a `summary` per project for orchestrators: ready, free, leased and warming slots,
-  the slot a checkout would get, when the next warm-up should be done.
-- `examples/agent-instructions`: instructions for any agent tool's instruction file, and which file each tool reads;
-  `docs/agents.md` opens with the contract (steps, fields, exit codes).
-- `xcfs gc --sizes`: what xcfs holds on disk (pools, caches, worktrees) against the free space of each volume.
-- `maxSessions` setting: at most this many build sessions alive; the longest idle stops first.
-- `minFreeGB` setting: keep space free on the pool's volume by retiring other projects' idle slots, least recently
-  used first, instead of refusing a slot.
-- `xcfs doctor <checkout>` reports what is kept for that checkout: its build session (running or not), whether its
-  project description is current, its simulator.
-- Session builds report where their time went (`breakdown`: PIF, session start, planning, tasks, other; compile and
-  link task time).
-- Benchmarks: three agents on an empty pool without a warm-up (`bench.py --phases tasks-cold`): slower than plain
-  worktrees and than warming first; the quick start keeps the warm-up.
-- `xcfs stats [--days N]`: checkouts handed out built, the full builds not waited for, builds and checks, from a
-  local history (`history.jsonl` in the state directory; nothing is sent anywhere).
-- Refusals and failures carry `next`: what to do, by exit code, and for known Xcode build failures (full disk,
-  out-of-date precompiled module, simulator, signing, package or CocoaPods resolution, the build session).
-- `xcfs pool status --watch`: a warm-up's step, elapsed time and an estimate from the last one, until it is done.
-- `xcfs init` recognizes XcodeGen and Tuist projects (the generated project is seeded, keyed by its spec) and suggests
-  `seedKey` from the tracked lock files.
-- `xcfs checkout` of a slot that was never built says how to keep slots built (`hint` in the JSON).
-- `xcfs doctor` advises slot counts and parallel warm-ups for the machine's memory (`advice` in the JSON).
-- `docs/index.md`, `docs/llms.txt` and `docs/_config.yml`: a GitHub Pages site from `docs/`, and an index for
-  language models.
-- `xcfs uninstall [--apply]`: list everything xcfs made on the machine and remove it; what holds unsaved work is
-  kept.
-- `xcfs hook install | uninstall | status [repo] [--apply]`: put the Claude Code hooks in the user's or a
-  repository's settings, or take them out; other hooks are kept, nothing is written without `--apply`.
-- `xcfs hook session-end`: the session-end hook as a command (no `jq` needed); the earlier `xcfs reap` line in a
-  settings file is replaced by `xcfs hook install`.
-- README: what xcfs solves for parallel agents, with benchmark charts drawn from `bench/results`
-  (`scripts/charts.py`).
-- `CONTRIBUTING.md`, `SECURITY.md`, this file; `docs/stability.md` (what is stable); `docs/xcode-versions.md` (which
-  Xcode versions each part was run on, and the checklist for a new one).
+
+### Added
+
+- **Agent tools:** `xcfs hook install | uninstall | status [repo] [--apply]` for the Claude Code hooks (other hooks
+  kept, nothing written without `--apply`); `xcfs hook session-end` (no `jq` needed); a Claude Code plugin
+  (`plugins/xcfs`, marketplace `.claude-plugin/marketplace.json`: `claude plugin marketplace add PatrickSCLin/xcfs`,
+  `claude plugin install xcfs@xcfs`) with the hooks and a skill; `examples/agent-instructions` for any tool's
+  instruction file (`AGENTS.md`, `GEMINI.md`, …); `docs/agents.md` opens with the contract (steps, fields, exit codes);
+  `xcfs pool status --json` has a `summary` per project for orchestrators.
+- **First use:** `xcfs checkout` of a never-built slot says how to keep slots built (`hint`); `xcfs doctor` advises
+  slot counts and parallel warm-ups for the machine's memory (`advice`); `xcfs init` recognizes XcodeGen and Tuist
+  projects, suggests `seedKey` from tracked lock files and notes macOS, watchOS, visionOS and tvOS targets;
+  `xcfs pool status --watch` shows a warm-up's step, elapsed time and estimate.
+- **Diagnosis:** every refusal and failure carries `next`, what to do (by exit code, and for known Xcode build
+  failures: full disk, out-of-date precompiled module, simulator, signing, package or CocoaPods resolution, the build
+  session); session builds report where their time went (`breakdown`); `xcfs doctor <checkout>` reports its build
+  session, project description and simulator; `xcfs stats [--days N]` from a local history (nothing is sent anywhere).
+- **Resources:** `minFreeGB` (keep space free by retiring other projects' idle slots, least recently used first),
+  `maxSessions` (at most this many build sessions alive, the longest idle stops first), `xcfs gc --sizes`.
+- **Single checkout:** `xcfs session start [path]`: the build session and its project description ready, nothing
+  built.
+- **Leaving:** `xcfs uninstall [--apply]` lists everything xcfs made on the machine and removes it; what holds unsaved
+  work is kept.
+- **Benchmarks and docs:** charts drawn from the raw results (`scripts/charts.py`); `docs/why-not-plain-worktrees.md`
+  with a new measurement (two worktrees sharing one DerivedData recompile everything each time the other one built);
+  three agents without a warm-up (slower than plain worktrees and than warming first); the cost of exporting the
+  project description; `bench/run-public.sh` to rerun the three-agent benchmark on a public app;
+  `CONTRIBUTING.md`, `SECURITY.md`, this file, `docs/stability.md`, `docs/xcode-versions.md`; a GitHub Pages site and
+  `llms.txt` in `docs/`.
 - Tests run in CI on macOS with the current Python 3 and with 3.9.
+
+### Fixed
+
+- The remove and session-end hooks no longer refuse because the agent tool's own processes still have their working
+  directory in the worktree (found running the plugin in a live session).
 
 ## 0.2.0 — 2026-11-15
 
