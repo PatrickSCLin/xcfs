@@ -3,6 +3,12 @@
 What changed for people and scripts that use xcfs. The interface that is kept stable is listed in
 [docs/stability.md](docs/stability.md).
 
+## Unreleased
+
+- Fix: the experimental driver's wrapper quotes the frontend's path for the shell, so an Xcode or cache path with
+  quotes, `$` or backquotes works (spaces and non-ASCII already did; Xcode takes such a `SWIFT_EXEC` too, checked).
+- Test t65 judges the frontend gate by when the jobs started, not by total time (it failed once on a slow CI runner).
+
 ## 0.3.0 — 2026-11-16
 
 ### Changed

@@ -7,7 +7,7 @@ own install, keyed by its Swift build and its location, because the driver links
 driver is built, and whenever anything does not fit (another release line, a patch that does not apply, a failed
 build or self-test), builds use Xcode's own driver; the reason is in each build's JSON and in `xcfs doctor`.
 """
-import hashlib, json, os, pkgutil, re, subprocess, time
+import hashlib, json, os, pkgutil, re, shlex, subprocess, time
 
 from .. import state
 from ..util import read_json, run
@@ -27,7 +27,7 @@ WRAPPER = """#!/bin/sh
 # SWIFT_EXEC for Xcode (written by xcfs): the patched swift-driver, run against the frontend of the Xcode it was
 # built for, through frontend-bin/swift-frontend (a gate that bounds how many frontends run at once). wrapper 2
 D=$(cd "$(dirname "$0")" && pwd)
-export XCFS_REAL_SWIFT_FRONTEND="%(frontend)s"
+export XCFS_REAL_SWIFT_FRONTEND=%(frontend)s
 export SWIFT_DRIVER_SWIFT_FRONTEND_EXEC="$(cd "$D/.." && pwd)/frontend-bin/swift-frontend"
 export SWIFT_DRIVER_API_DIGEST_DIR="${SWIFT_DRIVER_API_DIGEST_DIR:-$(cd "$D/.." && pwd -P)/store}"
 exec "$D/swift-driver" --driver-mode=swiftc "$@"
@@ -153,7 +153,7 @@ def _refresh_wrapper(r, toolchain):
         if os.path.lexists(link):
             os.remove(link)
         os.symlink(target, link)
-    files = {os.path.join(r, "bin", "swiftc"): (WRAPPER % {"frontend": toolchain["frontend"]}).encode(),
+    files = {os.path.join(r, "bin", "swiftc"): (WRAPPER % {"frontend": shlex.quote(toolchain["frontend"])}).encode(),
              os.path.join(fbin, "swift-frontend"): pkgutil.get_data(__package__, "swiftdriver/frontend-gate.py")}
     for path, data in files.items():
         try:

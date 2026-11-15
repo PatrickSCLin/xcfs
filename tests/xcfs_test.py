@@ -1568,7 +1568,7 @@ def t65_driver_frontends_go_through_a_shared_gate():
     sd.refresh_wrapper(r, toolchain)
     sd.refresh_wrapper(r, toolchain)   # again: nothing changes, nothing fails
     w = open(r + "/bin/swiftc").read()
-    assert 'XCFS_REAL_SWIFT_FRONTEND="%s"' % toolchain["frontend"] in w and "frontend-bin/swift-frontend" in w, w
+    assert "XCFS_REAL_SWIFT_FRONTEND=" in w and "frontend-bin/swift-frontend" in w, w
     assert os.readlink(r + "/frontend-bin/swift-symbolgraph-extract") == tools + "/swift-symbolgraph-extract", \
         "the driver finds the other tools next to the frontend"
     gate = r + "/frontend-bin/swift-frontend"
@@ -2121,6 +2121,31 @@ def t85_the_agent_tools_own_processes_do_not_keep_its_worktree():
                             "print(hooks.tool_pid())' %s" % (PY, os.path.join(os.path.dirname(HERE), "lib"))],
                            capture_output=True, text=True)
     assert probe.stdout.strip() == str(os.getpid()), "the tool is above the shell the hook ran in: %s" % probe.stdout
+
+
+@test
+def t86_driver_wrapper_works_in_any_path():
+    """The experimental driver's wrapper and gate, installed and pointing at a frontend in paths with spaces, non-ASCII
+    and shell characters: every path arrives intact."""
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters import swift_driver as sd
+    base = SB + "/t86 \u5ba2 $HOME `x` \"q\" it's"
+    tools = base + "/Xcode \u00e9.app/usr/bin"
+    os.makedirs(tools)
+    out = base + "/out.txt"
+    open(tools + "/swift-frontend", "w").write("#!/bin/sh\nprintf '%s\\n' \"$0\" \"$@\" > \"$OUT\"\n")
+    os.chmod(tools + "/swift-frontend", 0o755)
+    r = base + "/install"
+    os.makedirs(r + "/bin")
+    sd.refresh_wrapper(r, {"frontend": tools + "/swift-frontend"})
+    # a stand-in for the patched swift-driver: runs the frontend it is told to, through the gate
+    open(r + "/bin/swift-driver", "w").write("#!/bin/sh\nexec \"$SWIFT_DRIVER_SWIFT_FRONTEND_EXEC\" -frontend -c \"$@\"\n")
+    os.chmod(r + "/bin/swift-driver", 0o755)
+    p = subprocess.run([r + "/bin/swiftc", "a b.swift"], env=dict(os.environ, OUT=out, XCFS_FRONTEND_JOBS="1"),
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    got = open(out).read().splitlines()
+    assert got == [tools + "/swift-frontend", "-frontend", "-c", "--driver-mode=swiftc", "a b.swift"], got
 
 
 def main():
