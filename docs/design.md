@@ -71,7 +71,7 @@ reclaiming; the time saved grows with the package graph.
 | direction | measured limit | verdict |
 |---|---|---|
 | A custom file system (FSKit, FUSE, NFS), a layered FS, macOS VMs | FSKit has no clone operation and no caller pid; layered FS mounts are Linux-only; two VMs per host | not done |
-| Compile-cache stack (CAS, path prefix mapping, patched build service, dedup) | pool warm-up 221 → 105 s, 1.2–1.9 GB saved per slot (one run on a large app with Xcode 27.0, the 105 s at another load than the 221 s; a second checkout's DerivedData had to have the same name for most hits); no help for day-to-day edits; needs a self-built build service for two incrementality fixes | optional, late; being re-measured on Xcode 27.2 |
+| Compile-cache stack (CAS, path prefix mapping, patched build service, dedup) | pool warm-up 221 → 105 s, 1.2–1.9 GB saved per slot (one run on a large app with Xcode 27.0, the 105 s at another load than the 221 s; a second checkout's DerivedData had to have the same name for most hits); no help for day-to-day edits; needs a self-built build service for two incrementality fixes | measured again on Xcode 27.2 without a patched build service: `compileCache` (off by default), see docs/benchmark.md |
 | Pre-built binaries for first-party modules | cold build 214–221 → 168 s, DerivedData 8.7 → 5.8 GB; edit times unchanged; packaging ≈26 min | only if CI produces them |
 | Restoring mtimes when switching back to a baseline | 19.1 s vs 19.9 s | no effect |
 | Moving private members into a `private extension` to avoid downstream rebuilds | same 11.6 s, same 4 modules | no effect without library evolution |

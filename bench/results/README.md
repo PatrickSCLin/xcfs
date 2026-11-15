@@ -29,4 +29,9 @@ Three agents, real tasks (`icecubes-tasks.json`): plain `tasks-icecubes-v4-rep1`
 (`v4-rep1`, `-rep3`, `-rep4` hold the defaults before the gate). Agents at the same time: `concurrent2-*` (slots warmed
 one after another), `concurrent3-*` (side by side). Warm-up memory with and without the gate: `warmjobs-icecubes-*`.
 
+Shared compilation cache: `tasks-icecubes-cache-rep*`, `tasks-icecubes-overlap-rep*` (three agents),
+`compile-cache/advance-*.json` (`bench/compile-cache-advance.py`: the baseline moves, a new pool the next day),
+`compile-cache/incremental-*.json` (one slot, same edits, off / dependencies / all),
+`oracle-ice-cubes-compile-cache-all-*.json`.
+
 Runs of the two-architecture tables and of Telegram-iOS were not kept.

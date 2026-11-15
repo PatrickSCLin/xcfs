@@ -1,0 +1,140 @@
+{
+ "profile": "Ice Cubes",
+ "steps": [
+  {
+   "edit": "a stored property is added to an @Observable class 15 files use (macro expansion, class layout)",
+   "incremental_ok": true,
+   "incremental_seconds": 100.5,
+   "clean_ok": true,
+   "clean_seconds": 188.1,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "a parameter of that class's method gains a default value",
+   "incremental_ok": true,
+   "incremental_seconds": 85.2,
+   "clean_ok": true,
+   "clean_seconds": 227.3,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "a public method's argument label changes (its callers break)",
+   "incremental_ok": false,
+   "incremental_seconds": 15.4,
+   "clean_ok": false,
+   "clean_seconds": 98.4,
+   "objects_compared": 0,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "an observed property's setter becomes private (a binding to it breaks)",
+   "incremental_ok": false,
+   "incremental_seconds": 41.1,
+   "clean_ok": false,
+   "clean_seconds": 115.7,
+   "objects_compared": 0,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "a private stored property is added to a struct other packages pass by value (layout)",
+   "incremental_ok": true,
+   "incremental_seconds": 55.6,
+   "clean_ok": true,
+   "clean_seconds": 128.0,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "an enum other packages switch over gains a case (they break)",
+   "incremental_ok": false,
+   "incremental_seconds": 22.1,
+   "clean_ok": false,
+   "clean_seconds": 78.7,
+   "objects_compared": 0,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "edit a function body in a leaf package (Timeline)",
+   "incremental_ok": true,
+   "incremental_seconds": 7.2,
+   "clean_ok": true,
+   "clean_seconds": 128.3,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "edit a function body in a package 12 others depend on (Models)",
+   "incremental_ok": true,
+   "incremental_seconds": 7.1,
+   "clean_ok": true,
+   "clean_seconds": 123.4,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  },
+  {
+   "edit": "add a public declaration to that package",
+   "incremental_ok": true,
+   "incremental_seconds": 57.4,
+   "clean_ok": true,
+   "clean_seconds": 128.0,
+   "objects_compared": 3230,
+   "driver": [
+    "session",
+    "session"
+   ],
+   "swift_driver": "native (configured)",
+   "differences": [],
+   "same_when_compiled_alone_in_the_clean_checkout": []
+  }
+ ]
+}

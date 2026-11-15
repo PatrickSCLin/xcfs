@@ -1,0 +1,61 @@
+{
+ "mode": "cache-dependencies",
+ "old": "2ad6e68",
+ "new": "98098b9",
+ "at the old baseline": {
+  "seconds": 227.6,
+  "peak_rss_gb": 11.9,
+  "peak_disk_gb": 3.0,
+  "slots": [
+   [
+    1,
+    85.8,
+    32.7,
+    null,
+    ""
+   ],
+   [
+    2,
+    126.3,
+    64.8,
+    null,
+    ""
+   ],
+   [
+    3,
+    128.0,
+    64.1,
+    null,
+    ""
+   ]
+  ]
+ },
+ "follows the new baseline": {
+  "seconds": 127.7,
+  "peak_rss_gb": 11.6,
+  "peak_disk_gb": 1.2,
+  "slots": [
+   [
+    1,
+    64.6,
+    null,
+    null,
+    ""
+   ],
+   [
+    2,
+    62.0,
+    null,
+    null,
+    ""
+   ],
+   [
+    3,
+    62.8,
+    null,
+    null,
+    ""
+   ]
+  ]
+ }
+}

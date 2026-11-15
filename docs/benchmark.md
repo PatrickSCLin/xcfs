@@ -190,6 +190,52 @@ Not included: NetNewsWire (its build needs a generated secrets file from a scrip
 Swift packages; CocoaPods is covered only by `examples/generic-sample`), and a Tuist project (it needs the Tuist binary).
 Profiles: `bench/profiles/{kickstarter,element-x,signal,home-assistant}.json`.
 
+## A shared compilation cache
+
+`"compileCache"` (experimental, off by default) gives every checkout one Xcode compilation cache, so a slot can
+replay what another slot compiled. Xcode's own prefix mapping was not enough: on a second Ice Cubes slot 306 of 308
+Swift compiles missed. Logging `swiftc`'s arguments in two slots showed why: Xcode maps a target's sources and
+intermediates, but the compiler's working directory (the checkout's project file) and the checkout's build directory
+still differ between slots. xcfs maps those too; then every compile job of a second and third slot hit (Swift
+308/308, emit-module 36/36, C 35/35, Clang modules all), and their warm-up went from 84–88 to 35–38 s.
+
+Two modes, because mapping paths changes what the program sees at run time:
+
+- `"all"` maps the whole checkout to `/^checkout`. Every compile job is shared, but `#filePath` and `#file` read
+  `/^checkout/…` at run time: a test reading a fixture next to its source failed (file not found) and one writing a
+  snapshot there failed (read-only root), as tests built on swift-snapshot-testing would. `#fileID` is unchanged,
+  compile errors keep their real paths, and xcfs maps test failure locations back.
+- `"dependencies"` keeps the checkout's sources at their real paths and shares what lies outside them (packages,
+  Clang modules): those tests pass, and fewer jobs are shared (Swift 165/308 on a second slot).
+
+Either needs Xcode's own Swift driver: the experimental driver's compile jobs are not cached at all, and switching a
+cache-warmed slot to it recompiled everything (1,582 tasks, 53.7 s), so the two do not combine.
+
+Correctness: the Ice Cubes oracle with `"all"` (the incremental side on the shared cache, each clean build on a new,
+empty one): 9 steps, no difference. Incremental builds on one slot, two runs each, off / `"dependencies"` / `"all"`:
+a function body 4.0–4.3 / 4.3–4.4 / 4.3–4.4 s, a public declaration in `Models` 26.6–27.0 / 29.2–30.7 / 30.2–30.6 s
+(37 more compile jobs and a longer dependency scan with the cache), a no-op 0.8–1.9 s throughout. The first edit after
+a slot was replayed recompiles that module once: swift-build #1810 fixes it, merged into `main` on 2026-10-02 and not
+in any 6.4 release branch, so not in Xcode 27.2.
+
+Where it pays, Ice Cubes, three slots, two runs each:
+
+| | defaults (experimental driver) | `"all"` | `"dependencies"` |
+|---|---|---|---|
+| the baseline moves on 15 commits (1.5 days of history): three slots follow it | 115–116 s, 12.8–13.5 GB | **93–98 s**, 8.6–8.9 GB | 117–123 s, 11.6–11.7 GB |
+| the baseline moves on 20 commits (5 days) | 105–117 s, 13.3–13.7 GB | **89–98 s**, 8.5–9.2 GB | 114–128 s, 11.6–11.7 GB |
+| a new pool the next day (the cache holds the previous baseline only) | 312–321 s, 19.6–23.2 GB | **173 s**, 6.3–7.3 GB | 198–199 s, 10.8–11.0 GB |
+| three agents' real tasks, a fresh pool, warm-up included | 408–419 s | 352–355 s | 387–398 s* |
+| the next three agents on that pool | 111–121 s | 117–153 s | 141–153 s* |
+
+\* before the simulator's first boot overlapped a cached build. Plain worktrees: 284–302 s for every batch.
+
+So the cache makes the pool cheaper to keep and to recreate (a new pool 45 % faster and with a third of the memory
+once the cache has seen the project; following the baseline 15–20 % faster), but it does not make the very first
+batch on a fresh machine beat plain worktrees, and the agents' own edits lose the experimental driver's narrowing.
+It stays off by default. In these runs the warm-up with the cache peaked at 8–10 GB against 21–23 GB without; the
+cache grew by ~200 MB per slot (1.3 GB after three slots of Ice Cubes); it lives in xcfs's cache directory.
+
 ## Is an incremental build the same as a clean one?
 
 Speed is worth nothing if an incremental build can leave something stale. [bench/oracle.py](../bench/oracle.py)

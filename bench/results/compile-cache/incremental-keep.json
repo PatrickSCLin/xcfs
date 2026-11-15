@@ -1,0 +1,585 @@
+[
+ {
+  "setting": "keep",
+  "rep": 1,
+  "step": "no-op",
+  "seconds": 1.8,
+  "ok": true,
+  "compile_tasks": 0,
+  "top_task_kinds": [
+   [
+    "ValidateEmbeddedBinary",
+    [
+     4,
+     2.58
+    ]
+   ],
+   [
+    "Copy",
+    [
+     16,
+     0.23
+    ]
+   ],
+   [
+    "CopySwiftLibs",
+    [
+     1,
+     0.08
+    ]
+   ],
+   [
+    "ClangStatCache",
+    [
+     1,
+     0.07
+    ]
+   ],
+   [
+    "CreateBuildDescription",
+    [
+     1,
+     0.06
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Validate IceCubesAppWidgetsExtensionExtension.appex",
+    0.65
+   ],
+   [
+    "Validate IceCubesShareExtension.appex",
+    0.65
+   ],
+   [
+    "Validate IceCubesNotifications.appex",
+    0.65
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 1,
+  "step": "function body, Models",
+  "seconds": 4.3,
+  "ok": true,
+  "compile_tasks": 4,
+  "top_task_kinds": [
+   [
+    "ValidateEmbeddedBinary",
+    [
+     4,
+     2.59
+    ]
+   ],
+   [
+    "Ld",
+    [
+     6,
+     2.16
+    ]
+   ],
+   [
+    "SwiftDriver",
+    [
+     1,
+     0.51
+    ]
+   ],
+   [
+    "SwiftEmitModule",
+    [
+     1,
+     0.49
+    ]
+   ],
+   [
+    "ExtractAppIntentsMetadata",
+    [
+     6,
+     0.45
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Validate IceCubesShareExtension.appex",
+    0.65
+   ],
+   [
+    "Validate IceCubesNotifications.appex",
+    0.65
+   ],
+   [
+    "Validate IceCubesAppWidgetsExtensionExtension.appex",
+    0.65
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 1,
+  "step": "function body, Models again",
+  "seconds": 4.3,
+  "ok": true,
+  "compile_tasks": 4,
+  "top_task_kinds": [
+   [
+    "ValidateEmbeddedBinary",
+    [
+     4,
+     2.57
+    ]
+   ],
+   [
+    "Ld",
+    [
+     6,
+     2.11
+    ]
+   ],
+   [
+    "SwiftDriver",
+    [
+     1,
+     0.5
+    ]
+   ],
+   [
+    "SwiftEmitModule",
+    [
+     1,
+     0.49
+    ]
+   ],
+   [
+    "ExtractAppIntentsMetadata",
+    [
+     6,
+     0.45
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Validate IceCubesShareExtension.appex",
+    0.64
+   ],
+   [
+    "Validate IceCubesAppWidgetsExtensionExtension.appex",
+    0.64
+   ],
+   [
+    "Validate IceCubesNotifications.appex",
+    0.64
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 1,
+  "step": "public declaration, Models",
+  "seconds": 30.7,
+  "ok": true,
+  "compile_tasks": 581,
+  "top_task_kinds": [
+   [
+    "SwiftCompile",
+    [
+     563,
+     107.18
+    ]
+   ],
+   [
+    "SwiftDriver",
+    [
+     18,
+     13.69
+    ]
+   ],
+   [
+    "SwiftEmitModule",
+    [
+     18,
+     10.23
+    ]
+   ],
+   [
+    "Ld",
+    [
+     18,
+     3.12
+    ]
+   ],
+   [
+    "ValidateEmbeddedBinary",
+    [
+     4,
+     2.65
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Compiling StatusRowExternalView.swift, StatusRowView.swift, StatusRowViewModel.swift, StatusActionBu",
+    3.67
+   ],
+   [
+    "Compiling EditorMode.swift, EditorStore.swift, EditorView.swift, MainView.swift, Namespace.swift, Pr",
+    3.4
+   ],
+   [
+    "Compiling AddRemoteTimelineView.swift, TimelineTab.swift, ExploreTab.swift, MessagesTab.swift",
+    2.98
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 1,
+  "step": "function body, Timeline",
+  "seconds": 3.6,
+  "ok": true,
+  "compile_tasks": 4,
+  "top_task_kinds": [
+   [
+    "Ld",
+    [
+     3,
+     0.73
+    ]
+   ],
+   [
+    "ValidateEmbeddedBinary",
+    [
+     1,
+     0.61
+    ]
+   ],
+   [
+    "SwiftDriver",
+    [
+     1,
+     0.51
+    ]
+   ],
+   [
+    "SwiftEmitModule",
+    [
+     1,
+     0.45
+    ]
+   ],
+   [
+    "SwiftCompile",
+    [
+     3,
+     0.28
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Validate IceCubesAppWidgetsExtensionExtension.appex",
+    0.61
+   ],
+   [
+    "Planning Swift module Timeline (arm64)",
+    0.51
+   ],
+   [
+    "Emitting module for Timeline",
+    0.45
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 2,
+  "step": "no-op",
+  "seconds": 0.9,
+  "ok": true,
+  "compile_tasks": 0,
+  "top_task_kinds": [
+   [
+    "ClangStatCache",
+    [
+     1,
+     0.16
+    ]
+   ],
+   [
+    "CreateBuildDescription",
+    [
+     1,
+     0.06
+    ]
+   ],
+   [
+    "ValidateCAS",
+    [
+     1,
+     0.0
+    ]
+   ],
+   [
+    "PruneExplicitPrecompiledModules",
+    [
+     3,
+     0.0
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Build stat cache for /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/D",
+    0.16
+   ],
+   [
+    "Create build description",
+    0.06
+   ],
+   [
+    "Validate CAS contents at <bench>/incr-timing/keep/cas/builtin",
+    0.0
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 2,
+  "step": "function body, Models",
+  "seconds": 4.4,
+  "ok": true,
+  "compile_tasks": 43,
+  "top_task_kinds": [
+   [
+    "SwiftCompile",
+    [
+     42,
+     3.65
+    ]
+   ],
+   [
+    "ValidateEmbeddedBinary",
+    [
+     4,
+     2.58
+    ]
+   ],
+   [
+    "Ld",
+    [
+     6,
+     2.26
+    ]
+   ],
+   [
+    "SwiftDriver",
+    [
+     1,
+     0.55
+    ]
+   ],
+   [
+    "SwiftEmitModule",
+    [
+     1,
+     0.49
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Validate IceCubesShareExtension.appex",
+    0.65
+   ],
+   [
+    "Validate IceCubesNotifications.appex",
+    0.64
+   ],
+   [
+    "Validate IceCubesActionExtension.appex",
+    0.64
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 2,
+  "step": "function body, Models again",
+  "seconds": 4.1,
+  "ok": true,
+  "compile_tasks": 4,
+  "top_task_kinds": [
+   [
+    "ValidateEmbeddedBinary",
+    [
+     4,
+     2.55
+    ]
+   ],
+   [
+    "Ld",
+    [
+     6,
+     2.26
+    ]
+   ],
+   [
+    "SwiftDriver",
+    [
+     1,
+     0.53
+    ]
+   ],
+   [
+    "SwiftEmitModule",
+    [
+     1,
+     0.49
+    ]
+   ],
+   [
+    "ExtractAppIntentsMetadata",
+    [
+     6,
+     0.47
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Validate IceCubesShareExtension.appex",
+    0.64
+   ],
+   [
+    "Validate IceCubesAppWidgetsExtensionExtension.appex",
+    0.64
+   ],
+   [
+    "Validate IceCubesNotifications.appex",
+    0.64
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 2,
+  "step": "public declaration, Models",
+  "seconds": 29.2,
+  "ok": true,
+  "compile_tasks": 581,
+  "top_task_kinds": [
+   [
+    "SwiftCompile",
+    [
+     563,
+     105.44
+    ]
+   ],
+   [
+    "SwiftDriver",
+    [
+     18,
+     13.72
+    ]
+   ],
+   [
+    "SwiftEmitModule",
+    [
+     18,
+     10.23
+    ]
+   ],
+   [
+    "Ld",
+    [
+     18,
+     2.61
+    ]
+   ],
+   [
+    "ValidateEmbeddedBinary",
+    [
+     4,
+     2.54
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Compiling StatusRowExternalView.swift, StatusRowView.swift, StatusRowViewModel.swift, StatusActionBu",
+    3.54
+   ],
+   [
+    "Compiling EditorMode.swift, EditorStore.swift, EditorView.swift, MainView.swift, Namespace.swift, Pr",
+    3.28
+   ],
+   [
+    "Compiling AddRemoteTimelineView.swift, TimelineTab.swift, ExploreTab.swift, MessagesTab.swift",
+    3.06
+   ]
+  ]
+ },
+ {
+  "setting": "keep",
+  "rep": 2,
+  "step": "function body, Timeline",
+  "seconds": 3.5,
+  "ok": true,
+  "compile_tasks": 4,
+  "top_task_kinds": [
+   [
+    "Ld",
+    [
+     3,
+     0.72
+    ]
+   ],
+   [
+    "ValidateEmbeddedBinary",
+    [
+     1,
+     0.6
+    ]
+   ],
+   [
+    "SwiftDriver",
+    [
+     1,
+     0.5
+    ]
+   ],
+   [
+    "SwiftEmitModule",
+    [
+     1,
+     0.44
+    ]
+   ],
+   [
+    "SwiftCompile",
+    [
+     3,
+     0.27
+    ]
+   ]
+  ],
+  "slowest": [
+   [
+    "Validate IceCubesAppWidgetsExtensionExtension.appex",
+    0.6
+   ],
+   [
+    "Planning Swift module Timeline (arm64)",
+    0.5
+   ],
+   [
+    "Emitting module for Timeline",
+    0.44
+   ]
+  ]
+ }
+]

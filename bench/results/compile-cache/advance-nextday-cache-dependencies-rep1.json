@@ -1,0 +1,61 @@
+{
+ "mode": "cache-dependencies",
+ "old": "f2ec6c1",
+ "new": "98098b9",
+ "at the old baseline": {
+  "seconds": 235.5,
+  "peak_rss_gb": 12.0,
+  "peak_disk_gb": 3.4,
+  "slots": [
+   [
+    1,
+    88.0,
+    35.0,
+    null,
+    ""
+   ],
+   [
+    2,
+    132.8,
+    72.0,
+    null,
+    ""
+   ],
+   [
+    3,
+    134.2,
+    71.0,
+    null,
+    ""
+   ]
+  ]
+ },
+ "a fresh pool the next day": {
+  "seconds": 198.8,
+  "peak_rss_gb": 11.0,
+  "peak_disk_gb": 6.1,
+  "slots": [
+   [
+    1,
+    84.3,
+    33.7,
+    null,
+    ""
+   ],
+   [
+    2,
+    112.2,
+    47.2,
+    null,
+    ""
+   ],
+   [
+    3,
+    112.6,
+    55.4,
+    null,
+    ""
+   ]
+  ]
+ }
+}

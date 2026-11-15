@@ -1,0 +1,61 @@
+{
+ "mode": "defaults",
+ "old": "f2ec6c1",
+ "new": "98098b9",
+ "at the old baseline": {
+  "seconds": 340.7,
+  "peak_rss_gb": 24.8,
+  "peak_disk_gb": -0.0,
+  "slots": [
+   [
+    1,
+    301.4,
+    86.3,
+    null,
+    ""
+   ],
+   [
+    3,
+    301.7,
+    85.2,
+    null,
+    ""
+   ],
+   [
+    2,
+    301.8,
+    85.9,
+    null,
+    ""
+   ]
+  ]
+ },
+ "a fresh pool the next day": {
+  "seconds": 312.0,
+  "peak_rss_gb": 19.6,
+  "peak_disk_gb": 4.2,
+  "slots": [
+   [
+    2,
+    309.2,
+    50.7,
+    null,
+    ""
+   ],
+   [
+    3,
+    309.9,
+    65.4,
+    null,
+    ""
+   ],
+   [
+    1,
+    310.5,
+    62.6,
+    null,
+    ""
+   ]
+  ]
+ }
+}

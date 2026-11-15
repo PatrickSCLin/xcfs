@@ -226,9 +226,10 @@ keeps the checkout's sources at their real paths and shares what lies outside th
 `"all"` maps the whole checkout, so every compile job is shared, but `#filePath` at run time reads `/^checkout/…`,
 which breaks tests that find files next to their source (fixtures, snapshot tests); xcfs maps test failure locations
 back. Either uses Xcode's own Swift driver, and a fresh pool then warms one slot first and the others from the cache.
-Measured on Ice Cubes: a second slot's warm-up 84–88 → 35–38 s with `"all"`; incremental builds within 0–4 s of no
-cache; three agents' first batch on a fresh pool 387–398 s against 408–419 s with the defaults and 284–302 s for plain
-worktrees. See [docs/benchmark.md](docs/benchmark.md#a-shared-compilation-cache)).
+Measured on Ice Cubes with `"all"`: a second slot's warm-up 84–88 → 35–38 s; a new pool the next day 312–321 → 173 s
+and a third of the memory; three slots following the baseline 15–20 % faster; incremental builds within 0–4 s of no
+cache; but three agents' first batch on a fresh pool still 352–355 s against 284–302 s for plain worktrees. See
+[docs/benchmark.md](docs/benchmark.md#a-shared-compilation-cache)).
 
 Bazel toolchain keys: `build`, `test`, `run`, `warm` (shell commands run in the checkout; `--config` appends
 arguments), `env`, `outputUserRoot`, `stopServerOnRelease`. The adapter owns each checkout's Bazel output base — kept
