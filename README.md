@@ -185,6 +185,11 @@ keeps there), and uses it for Swift compilation once the self-test has passed. U
 not fit, builds use Xcode's own driver. `"swiftDriver": "native"` in a configuration (or `XCFS_SWIFT_DRIVER=native`)
 turns it off; `xcfs doctor` shows its state.
 
+**Removing it.** `xcfs uninstall` lists everything xcfs made on the machine — its worktrees, pools, build output,
+dependency snapshots, the experimental driver's cache, simulators, its hooks in Claude Code's settings and its state —
+and `xcfs uninstall --apply` removes it. A worktree or slot that holds unsaved work is kept (exit 5; save the work and
+run it again); your configs stay. Then `brew uninstall xcfs`.
+
 ## How it works
 
 | problem | how |
@@ -238,6 +243,7 @@ through the session; a slot handed out in 0.3 s whose first build takes 1.2 s.
 | `xcfs doctor [path] [--session-check]` | Environment, hygiene and toolchain checks; `--session-check` runs the build-session regression check. |
 | `xcfs init [repo] [--write \| --user] [--force]` | Detect what the repository needs and suggest a config: the project or workspace, the scheme (the one named after it, else one that builds an app), the platform and a configuration for it, git-ignored settings files to carry, dependency directories to seed. Prints what it found and the next commands. `--write` saves `.xcfs.json` in the repository, `--user` saves `~/.config/xcfs/<repo>.json` and leaves the repository untouched; an existing config is never overwritten without `--force`. |
 | `xcfs trust <repo>` | Approve the commands a repository's config runs. |
+| `xcfs uninstall [--apply]` | List everything xcfs made on this machine — worktrees, pools, build output, dependency snapshots, the experimental driver's cache, simulators, its hooks in Claude Code's settings, its state — and with `--apply` remove it. A worktree or slot with unsaved work is kept, with the state that knows about it (exit 5). Configs and the program itself are left. |
 
 Every command takes `--json` and then prints exactly one JSON object. **Nothing is deleted without `--apply`**
 (`release` and `pool resize` only return or retire slots, which hold nothing that is not rebuildable; they refuse
@@ -453,7 +459,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 71 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 72 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

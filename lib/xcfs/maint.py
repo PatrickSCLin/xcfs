@@ -1,10 +1,10 @@
-"""Maintenance commands: gc, doctor, init, trust."""
+"""Maintenance commands: gc, doctor, init, trust, uninstall."""
 import json, os, shutil, subprocess, time
 
-from . import builds, config, pool, seed, state, worktree
+from . import builds, config, hooks, pool, seed, state, worktree
 from .adapter import adapters_for, all_cache_adapters, builtin_adapters
-from .util import ERROR, Fail, USAGE, background_delete, du_kb, fs_type, human, phys, pid_alive, run, same_apfs_volume, say, \
-    trash_and_delete, under, users_of
+from .util import DIRTY, ERROR, IN_USE, Fail, USAGE, background_delete, du_kb, fs_type, human, phys, pid_alive, run, same_apfs_volume, say, \
+    trash_and_delete, under, users_of, warn
 
 
 def cmd_gc(a):
@@ -207,3 +207,121 @@ def cmd_trust(a):
     config.trust(repo, cfg)
     say("approved. Changing those commands asks again.")
     a.result(trusted=repo, commands=[c for _, c in cmds])
+
+
+# ------------------------------------------------------------------ uninstall
+def own_dir(path):
+    """A directory xcfs may delete as a whole (its state, its cache): never a home directory, a volume root or
+    anything above the home directory, wherever an environment variable points."""
+    p, home = phys(path), phys(os.path.expanduser("~"))
+    return os.path.isdir(p) and p != home and not under(home, p) and len(p.strip("/").split("/")) >= 3
+
+
+def cmd_uninstall(a):
+    """Everything xcfs made on this machine and, with --apply, its removal: worktrees, pools, build output, dependency
+    snapshots, what adapters created (simulators, build caches of their own), the hooks in the agent tool's settings,
+    the state. A worktree or slot with unsaved work is kept, and then so is the state that knows about it (exit 5):
+    save the work and run it again. Configs (written by the user) and the program itself are left."""
+    apply = a.flag("apply")
+    settings = state.settings()
+    with state.registry(write=False) as reg:
+        wts = sorted((p, dict(r)) for p, r in reg["worktrees"].items())
+        slots = sorted((p, dict(s)) for p, s in reg["slots"].items())
+        repos = sorted(set(reg["pools"]) | {s["project"] for _, s in slots})
+        built = sorted((root, dict(rec)) for root, rec in reg["builds"].items())
+    busy = [s["src"] for _, s in slots if s["state"] in ("creating", "warming", "retiring") and pid_alive(s.get("pid"))]
+    if busy:
+        raise Fail("a pool is being warmed (%s): wait for it or stop it, then run this again" % busy[0], IN_USE)
+    try:
+        hook_path = hooks.settings_file(None)
+        hook_new, hook_changes = hooks.planned(hooks.load_settings(hook_path), False)
+    except Fail as e:
+        hook_path, hook_new, hook_changes = None, None, []
+        warn("hooks not looked at: %s" % e)
+    pool_dirs = [d for d in (pool.pool_dir(r, settings) for r in repos) if os.path.isdir(d)]
+    cache, st = state.cache_dir(), state.state_dir()
+
+    def unsaved(root, row):
+        if not os.path.isdir(root):
+            return ""
+        code, why = worktree.unsaved_work(root, worktree.repos_of(row, root), row.get("carried"))
+        return why if code else ""
+    say("worktrees: %d" % len(wts))
+    for p, r in wts:
+        why = unsaved(p, r)
+        say("  %s%s" % (p, "  (kept: %s)" % why if why else ""))
+    say("pool slots: %d in %d pool(s)" % (len(slots), len(repos)))
+    for p, s in slots:
+        why = unsaved(s["src"], s) if s["state"] == "leased" else ""
+        say("  %s  %s%s" % (s["src"], s["state"], "  (kept: %s)" % why if why else ""))
+    for d in pool_dirs:
+        say("pool directory: %s" % d)
+    say("cache (build output, dependency snapshots, toolchain caches of xcfs): %s%s"
+        % (cache, "  %s" % human(du_kb(cache)) if os.path.isdir(cache) else "  (none)"))
+    say("state: %s" % st)
+    for c in hook_changes:
+        say("hooks in %s: %s" % (hook_path, c))
+    say("left alone: your configs in %s and in repositories (.xcfs.json), hooks in a repository's own settings "
+        "(`xcfs hook uninstall <repo> --apply`), the program itself" % state.config_home())
+    if not apply:
+        say("dry-run: nothing removed. re-run with --apply.")
+        a.result(worktrees=[p for p, _ in wts], slots=[s["src"] for _, s in slots], pools=pool_dirs, cache=cache,
+                 state=st, hooks=hook_changes, applied=False, kept=[])
+        return 0
+    kept = []
+    quiet = lambda *_: None
+    for p, r in wts:
+        if not os.path.isdir(p):
+            continue
+        try:
+            worktree.remove_worktree(p, True, quiet=True)
+        except Fail as e:
+            kept.append({"path": p, "why": str(e)})
+    for slot, s in slots:
+        if s["state"] == "leased":
+            try:
+                pool.release(slot, s, settings, rewarm=False, out=quiet)
+            except Fail as e:
+                kept.append({"path": s["src"], "why": str(e)})
+    for repo in repos:
+        try:
+            pool.resize(repo, 0, config.load_config(repo, validate=False), settings)
+        except Fail as e:
+            kept.append({"path": repo, "why": "its pool: %s" % e})
+    with state.registry(write=False) as reg:
+        kept += [{"path": s["src"], "why": "slot is %s" % s["state"]} for s in reg["slots"].values()
+                 if not any(k["path"] == s["src"] for k in kept)]
+    if kept:
+        for k in kept:
+            say("  KEPT  %s  (%s)" % (k["path"], k["why"]))
+        a.result(applied=True, kept=kept, removed_state=False)
+        raise Fail("%d worktree(s) or slot(s) hold unsaved work or could not be removed; everything else that belonged "
+                   "to removed checkouts is gone. Save the work, then run `xcfs uninstall --apply` again"
+                   % len(kept), DIRTY, kept=kept, applied=True)
+    for root, rec in built:   # build output (and sessions, simulators) of checkouts that are not worktrees or slots
+        try:
+            cfg = config.load_config(config.main_checkout(root), validate=False) if os.path.isdir(root) else {}
+            builds.retire_outputs(root, cfg, rec.get("kind", "checkout"))
+        except Fail as e:
+            warn("%s: %s" % (root, e))
+    for ad in all_cache_adapters():   # whatever adapters created and recorded for checkouts: none is in use now
+        try:
+            ad.orphans([], True)
+        except Fail as e:
+            warn("%s: %s" % (ad.name, e))
+    if hook_changes:
+        hooks.save_settings(hook_path, hook_new)
+    for d in pool_dirs:
+        trash_and_delete(d, os.path.join(os.path.dirname(d), worktree.TRASH))
+    removed = []
+    for d in (cache, st):
+        if own_dir(d):
+            background_delete(d) if d == cache else shutil.rmtree(d, ignore_errors=True)
+            removed.append(d)
+        elif os.path.isdir(d):
+            warn("%s does not look like a directory of xcfs's own; left in place" % d)
+    say("removed: %d worktree(s), %d slot(s), %s" % (len(wts), len(slots), ", ".join(removed) or "nothing else"))
+    say("what is left is the program: `brew uninstall xcfs`, or delete the checkout and the link you installed")
+    a.result(applied=True, kept=[], removed=removed, hooks=hook_changes, worktrees=[p for p, _ in wts],
+             slots=[s["src"] for _, s in slots])
+    return 0

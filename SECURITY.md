@@ -28,5 +28,6 @@ checkout's build session, which quits after `sessionIdleMinutes` (30) unused.
   or `XCFS_SWIFT_DRIVER=native`, turns it off; `xcfs doctor` shows whether it is in use.
 - **What it writes:** its state (`~/.local/state/xcfs`), its caches (`~/Library/Caches/xcfs`), its pools
   (`~/Library/Developer/xcfs/pools`), the worktrees it creates, and simulators it creates for its checkouts.
+- **Removing it:** `xcfs uninstall` lists all of the above and `xcfs uninstall --apply` removes it.
 - **What it deletes:** only what its registry says it created, only with `--apply`, and never something that holds
   unsaved work. Global DerivedData it did not create is removed only with `gc --foreign --apply`.

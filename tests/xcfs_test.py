@@ -1795,6 +1795,48 @@ def t71_session_end_hook_returns_what_the_session_opened():
     assert hook("session-end", "not json")[0] == 0 and hook("session-end", {})[0] == 0
 
 
+@test
+def t72_uninstall_lists_then_removes_everything_but_unsaved_work():
+    base = SB + "/u72"   # a state, cache and pool of its own: uninstall removes them whole
+    E = dict(toy_env(), XCFS_STATE=base + "/state", XCFS_CACHE=base + "/cache", XCFS_POOL_ROOT=base + "/pool",
+             CLAUDE_CONFIG_DIR=base + "/claude")
+    repo = toy_repo("r72", slots=1)
+    if xcfs("new", repo, "u72-probe", env=E)["_code"] == 3:
+        assert xcfs("trust", repo, env=E)["_code"] == 0
+    clean = xcfs("new", repo, "u72-a", env=E); assert clean["_code"] == 0, clean
+    clean = clean["worktree"]
+    dirty = xcfs("new", repo, "u72-b", env=E)["worktree"]
+    assert xcfs("build", clean, env=E)["_code"] == 0
+    assert xcfs("pool", "warm", repo, env=E)["_code"] == 0
+    slot = xcfs("checkout", repo, "u72-c", env=E)["worktree"]
+    assert xcfs("hook", "install", "--apply", env=E)["applied"]
+    open(dirty + "/toy.txt", "a").write("wip\n")
+    # a dry run by default: it lists, and removes nothing
+    r = xcfs("uninstall", env=E)
+    assert r["_code"] == 0 and not r["applied"] and clean in r["worktrees"] and slot in r["slots"] and len(r["hooks"]) == 3, r
+    assert os.path.isdir(clean) and os.path.isdir(slot) and os.path.isdir(base + "/cache")
+    # unsaved work is kept, and so is the state that knows about it
+    r = xcfs("uninstall", "--apply", env=E)
+    assert r["_code"] == 5 and [k["path"] for k in r["kept"]] == [dirty], r
+    assert os.path.isdir(dirty) and not os.path.exists(clean) and not os.path.exists(slot), (clean, slot)
+    assert dirty in json.load(open(base + "/state/registry.json"))["worktrees"]
+    assert "wip" in open(dirty + "/toy.txt").read()
+    # once the work is saved, everything goes: worktrees, pool, cache, state, hooks — not the repository or its config
+    sh("git", "-C", dirty, "commit", "-qam", "saved")
+    r = xcfs("uninstall", "--apply", env=E)
+    assert r["_code"] == 0 and r["kept"] == [], r
+    assert wait_for(lambda: not os.path.exists(dirty) and not os.path.exists(base + "/cache")), os.listdir(base)
+    assert not os.path.exists(base + "/state") and wait_for(lambda: not os.listdir(base + "/pool") or
+                                                             all(n.startswith(".") for n in os.listdir(base + "/pool")))
+    assert "hooks" not in json.load(open(base + "/claude/settings.json"))
+    assert os.path.isfile(repo + "/.xcfs.json") and "u72-b" in branches(repo), "the commit stays on its branch"
+    # a directory that is not xcfs's own is never removed whole, wherever a variable points
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs import maint
+    assert not maint.own_dir(os.path.expanduser("~")) and not maint.own_dir("/") and not maint.own_dir("/Users")
+    assert not maint.own_dir(os.path.dirname(os.path.expanduser("~")))
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

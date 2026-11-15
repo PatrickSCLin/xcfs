@@ -5,6 +5,8 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+- `xcfs uninstall [--apply]`: list everything xcfs made on the machine and remove it; what holds unsaved work is
+  kept.
 - `xcfs hook install | uninstall | status [repo] [--apply]`: put the Claude Code hooks in the user's or a
   repository's settings, or take them out; other hooks are kept, nothing is written without `--apply`.
 - `xcfs hook session-end`: the session-end hook as a command (no `jq` needed); the earlier `xcfs reap` line in a

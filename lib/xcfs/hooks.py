@@ -201,6 +201,16 @@ def planned(data, install):
     return out, changes
 
 
+def save_settings(path, data):
+    real = os.path.realpath(path)   # a settings file that is a link (managed elsewhere) stays a link
+    os.makedirs(os.path.dirname(real), exist_ok=True)
+    tmp = "%s.%d.tmp" % (real, os.getpid())
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    os.replace(tmp, real)
+
+
 def cmd_settings(a, sub):
     path = settings_file(a.pos[1] if len(a.pos) > 1 else None)
     data = load_settings(path)
@@ -219,13 +229,7 @@ def cmd_settings(a, sub):
         warn("xcfs is not on PATH: the hooks call `xcfs`, so put it there")
     applied = bool(changes) and a.flag("apply")
     if applied:
-        real = os.path.realpath(path)   # a settings file that is a link (managed elsewhere) stays a link
-        os.makedirs(os.path.dirname(real), exist_ok=True)
-        tmp = "%s.%d.tmp" % (real, os.getpid())
-        with open(tmp, "w") as f:
-            json.dump(new, f, indent=2, ensure_ascii=False)
-            f.write("\n")
-        os.replace(tmp, real)
+        save_settings(path, new)
         say("written" + ("; the hooks take effect in sessions started from now on" if sub == "install" else ""))
     elif changes:
         say("dry-run: nothing written. re-run with --apply.")

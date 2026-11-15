@@ -44,6 +44,9 @@ Maintenance
                                                                 carried files; --write saves .xcfs.json, --user
                                                                 ~/.config/xcfs/<repo>.json
   xcfs trust <repo>                                             approve the commands a repository's config runs
+  xcfs uninstall [--apply]                                      everything xcfs made on this machine (worktrees, pools,
+                                                                caches, state, hooks) and, with --apply, its removal;
+                                                                what holds unsaved work is kept
 
 Every command takes --json and then prints exactly one JSON object. Nothing is deleted without --apply.
 
@@ -207,7 +210,7 @@ def cmd_pool(a):
 
 
 COMMANDS = {"new": worktree.cmd_new, "rm": worktree.cmd_rm, "reap": worktree.cmd_reap, "adopt": worktree.cmd_adopt,
-            "ls": worktree.cmd_ls, "gc": maint.cmd_gc, "doctor": maint.cmd_doctor, "init": maint.cmd_init,
+            "ls": worktree.cmd_ls, "gc": maint.cmd_gc, "uninstall": maint.cmd_uninstall, "doctor": maint.cmd_doctor, "init": maint.cmd_init,
             "trust": maint.cmd_trust, "hook": hooks.cmd_hook, "build": cmd_build, "check": cmd_check, "test": cmd_test, "run": cmd_run,
             "checkout": cmd_checkout, "release": cmd_release, "pool": cmd_pool}
 
