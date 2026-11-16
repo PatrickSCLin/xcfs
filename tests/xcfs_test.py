@@ -458,6 +458,10 @@ def t27_help_and_version_answer_without_side_effects():
         r = subprocess.run([PY, XCFS, *args], capture_output=True, text=True, env=ENV)
         assert r.returncode == 0 and r.stdout.startswith("xcfs"), (args, r.returncode, r.stdout[:80], r.stderr[:200])
     assert reg() == before, "help changed the registry"
+    # the Claude Code plugin is listed in marketplaces by version: it moves with the CLI
+    v = subprocess.run([PY, XCFS, "--version"], capture_output=True, text=True, env=ENV).stdout.split()[1]
+    plugin = json.load(open(os.path.join(HERE, "..", "plugins", "xcfs", ".claude-plugin", "plugin.json")))
+    assert plugin.get("version") == v, ("plugin.json version", plugin.get("version"), "xcfs", v)
 
 TOY = r"""#!/usr/bin/env python3
 import json, os, sys

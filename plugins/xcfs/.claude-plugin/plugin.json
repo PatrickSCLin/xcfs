@@ -1,5 +1,6 @@
 {
   "name": "xcfs",
+  "version": "0.3.1",
   "description": "Worktrees Claude Code creates come from xcfs (built pool slots of an Xcode project), and the session's end returns them; a skill tells the agent how to build, check and test through xcfs.",
   "homepage": "https://github.com/PatrickSCLin/xcfs",
   "license": "MIT",
