@@ -106,6 +106,21 @@ def free_kb():
     return int(sh("df", "-k", SB).splitlines()[-1].split()[3])
 
 
+def devoffsets(path, at=(0,)):
+    """Where on the device the file's bytes at these offsets are (F_LOG2PHYS). A clonefile copy shares its source's
+    blocks, so the offsets are equal; a real copy has blocks of its own."""
+    import fcntl, struct
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        out = []
+        for a in at:
+            os.lseek(fd, a, os.SEEK_SET)
+            out.append(struct.unpack("=Iqq", fcntl.fcntl(fd, 49, bytes(20)))[2])  # 49: F_LOG2PHYS, <sys/fcntl.h>
+        return out
+    finally:
+        os.close(fd)
+
+
 def test(fn):
     name = fn.__name__
     if ONLY and name.split("_")[0] not in ONLY:
@@ -128,14 +143,23 @@ CFG = {"seed": ["deps"], "carry": ["local.xcconfig"]}
 @test
 def t01_new_seeds_by_clone_and_registers():
     repo = mkrepo("r01", seed_mb=300, cfg=CFG)
-    before = free_kb(); r = xcfs("new", repo, "feat/a"); used = before - free_kb()
+    os.sync(); before = free_kb()
+    r = xcfs("new", repo, "feat/a")
+    os.sync(); used = before - free_kb()
     wt = r.get("worktree", "")
-    assert r["_code"] == 0, r
-    assert os.path.isfile(wt + "/deps/blob.bin") and os.path.isfile(wt + "/local.xcconfig")
-    assert reg()[wt]["state"] == "ready" and "feat/a" in branches(repo)
-    assert used < 30 * 1024, "300MB seed cost %d KB on disk: not cloned" % used
-    assert xcfs("rm", wt, "--apply")["_code"] == 0
-    return "300MB seed cost %dKB; new %.2fs" % (max(used, 0), r["_sec"])
+    try:
+        assert r["_code"] == 0, r
+        assert os.path.isfile(wt + "/deps/blob.bin") and os.path.isfile(wt + "/local.xcconfig")
+        assert reg()[wt]["state"] == "ready" and "feat/a" in branches(repo)
+        # cloned, not copied: the copy's blocks are the source's. (Free space before and after is only reported: other
+        # writers on the machine move it, by 38-52 MB at times on a busy runner, more than a clone costs.)
+        at = (0, 150 << 20, (300 << 20) - 1)
+        src, dst = devoffsets(repo + "/deps/blob.bin", at), devoffsets(wt + "/deps/blob.bin", at)
+        assert src == dst, "the 300MB seed was copied, not cloned: blocks at %s, source at %s" % (dst, src)
+    finally:
+        rm = xcfs("rm", wt, "--apply") if wt else {"_code": 0}   # a failure must not leave it to t24's reap
+    assert rm["_code"] == 0, rm
+    return "300MB seed cost %dKB of free space; new %.2fs" % (max(used, 0), r["_sec"])
 
 
 @test
