@@ -11,6 +11,8 @@ What changed for people and scripts that use xcfs. The interface that is kept st
   plain worktrees of the same day: the next batch 248–264 s against 347–363 s, 11–13 GB against 15–16 GB, and 0 of 6
   test runs killed against 3 of 6. The README, the charts and the benchmark page use them; Wikipedia no longer has
   numbers with the driver only.
+- Benchmarks: Xcode.app beside xcfs on one slot, measured headless (`bench/xcode-app-beside.sh`): Xcode.app builds
+  its own copy once, both build side by side, and retiring the slot removes its DerivedData.
 - Builds through `xcodebuild` report where their time went too (`breakdown`: starting xcodebuild, preparing —
   packages, dependency graph, build description —, the build's tasks, the rest), from when its lines arrived.
 - `xcfs doctor` shows the experimental driver's frontend gate (places, and how many are in use) when the driver is on.

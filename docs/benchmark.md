@@ -98,6 +98,26 @@ back at the baseline (68 s against 40 s); the tests themselves take the same tim
 gains hold without the driver: a sixth to a third less memory, nothing left in DerivedData, no test run killed by another
 agent's.
 
+### Xcode.app on a slot
+
+A person opening a slot in Xcode.app while agents build in it, measured headless on Ice Cubes: an `xcodebuild`
+without `-derivedDataPath` builds the way Xcode.app does, into the global DerivedData keyed by the project's path
+([script](../bench/xcode-app-beside.sh), [output](../bench/results/xcode-app-beside-icecubes-20261117.txt); one run):
+
+| step | result |
+|---|---|
+| the Xcode.app-style build on a slot xcfs had built | a full build of its own: 63.0 s, 1.5 GB in the global DerivedData; it does not reuse xcfs's output (another DerivedData, other build parameters) |
+| `xcfs build` after it | 1.7 s, still incremental: neither build disturbs the other |
+| the Xcode.app-style build again | 6.0 s |
+| a public function added to `Models`, both building at once | both succeed, together in 38.4 s |
+| `xcfs gc` | the Xcode.app bucket is the slot's own (its workspace path is inside the slot), not reported as foreign |
+| `xcfs release` | goes ahead: Xcode.app keeps no process inside the slot that xcfs can see; the bucket stays with the slot |
+| retiring the slot | the bucket is removed with it |
+
+So Xcode.app and xcfs can share a slot: Xcode.app builds its own copy once (time and disk), and cleanup finds it.
+What xcfs cannot see is an editor's unsaved buffers: release a slot, or let an agent switch its branch, only after
+saving in Xcode.app, since the files change under it as after `git checkout`.
+
 ### A pool at rest
 
 Three Ice Cubes slots warmed, then left alone ([bench/pool-idle.py](../bench/pool-idle.py)):

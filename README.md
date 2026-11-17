@@ -149,6 +149,9 @@ Then start agents as usual (`claude -w feature-x`, subagents with worktree isola
 - **CI.** Fresh machines and one build per job: no pool survives between jobs, and remote build caches are out of
   scope ([docs/build-systems.md](docs/build-systems.md)).
 - **Bazel projects:** incremental builds are Bazel's own; xcfs helps with the wait for a checkout and with cleanup.
+- **Opening a slot in Xcode.app** works beside the agents, but Xcode.app builds its own copy the first time (63 s and
+  1.5 GB on Ice Cubes) and xcfs cannot see unsaved editor buffers: save before a slot is released
+  ([measured](docs/benchmark.md#xcodeapp-on-a-slot)).
 
 ## Requirements
 

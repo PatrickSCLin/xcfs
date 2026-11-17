@@ -1,0 +1,27 @@
+== warm one slot
+True
+warm 96.2s
+slot: <work>/pool/IceCubesApp-d281bb.noindex/slot-1/IceCubesApp
+== Xcode.app-style build, cold
+exit 0, 63.0s
+bucket: ~/Library/Developer/Xcode/DerivedData/IceCubesApp-flqlbvgqhrmztqedvbpixbwoxtwb 1.5G
+== xcfs build after it
+ok True 1.7s driver session
+== Xcode.app-style build again
+exit 0, 6.0s
+== an edit, both building at once
+edit: Packages/Models/Sources/Models/Account.swift
+xcfs: ok True 32.3s
+xcode.app-style: exit 0
+both done in 38.4s
+== doctor and gc
+  ok   [xcode] session regression check on 27.2 (27B52): passed (cold build 1.0s, no-op build 0.0s, edit 0.3s, compile error 0.1s, buildFiles 0.1s, recovery 0.2s)
+  ok   [xcode] build session: running (driver auto)
+  ok   [xcode] simulator <udid>: Shutdown, iOS-27-2-iPhone19-4
+20 cache(s) look orphaned or stale; they were not created through xcfs, so they are left alone (see them with --foreign)
+== release
+released True
+after release, bucket kept: ~/Library/Developer/Xcode/DerivedData/IceCubesApp-flqlbvgqhrmztqedvbpixbwoxtwb
+== retire the pool
+retired ['<work>/pool/IceCubesApp-d281bb.noindex/slot-1']
+buckets of the slot left after retire:        0

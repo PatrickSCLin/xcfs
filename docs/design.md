@@ -203,7 +203,8 @@ Collected from two months of a worktree script in daily use, where every special
   [xcode-versions.md](xcode-versions.md)).
 - The Metal toolchain hand-over to the session (written from the prototype's recipe; the sample has no Metal).
 - Intel Macs (the filesystem check reads the 64-bit-inode `statfs` layout there; not run).
-- Signed device builds; running the same slot in Xcode.app at the same time (Xcode.app would build its own copy).
+- Signed device builds. (Xcode.app on a slot while xcfs builds in it was checked headless on Ice Cubes: it builds its
+  own copy once, both build side by side, and retiring the slot removes its DerivedData; see benchmark.md.)
 - Large CocoaPods monoliths, app extensions, watchOS / macOS / visionOS destinations, Tuist or Bazel generated projects.
 - Git LFS.
 - Any toolchain other than Xcode. The adapter protocol has been checked against the Xcode adapter and a toy external
