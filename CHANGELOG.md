@@ -5,6 +5,13 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ## Unreleased
 
+### Fixed
+
+- `xcfs test` boots the checkout's simulator itself and leaves it booted until the checkout is released: when
+  `xcodebuild` booted it, it shut it down again after the run, so every test paid a boot (a second test on the same
+  Wikipedia slot: 31 s before, 9.8 s now). A slot handed out starts booting its simulator in the background (adapter
+  op `lease`), so the first test seldom waits for it. A booted simulator holds memory while the slot is leased.
+
 ### Added
 
 - Benchmarks: three agents on Wikipedia iOS with xcfs's default (no experimental driver), two runs with 0.3.1 beside

@@ -25,6 +25,7 @@ Operations and what they return:
     test          context, args {config, only, timeout}    -> result
     run           context, args {config, timeout}          -> result
     warm          context, args {timeout}                  -> result   (a full build of what a slot keeps ready)
+    lease         context                     -> {}                    (a slot was handed out: get ready, do not wait)
     release       context                     -> {}                    (free resources: simulators, ports)
     retire        context                     -> {}                    (resources are going away for good)
     ownedCaches   args {root}                 -> {"paths": [...]}      (caches outside root that belong to root)
@@ -115,6 +116,10 @@ class Adapter:
     def start(self, ctx, args):
         """`xcfs session start`: whatever makes the next build start sooner (a build server), without building."""
         return {"ok": True, "seconds": 0, "diagnostics": [], "skipped": "%s keeps nothing running" % self.name}
+
+    def lease(self, ctx):
+        """A slot was handed out to an agent: get ready for its work (a simulator to boot, say), without waiting."""
+        pass
 
     def release(self, ctx):
         pass
@@ -241,6 +246,9 @@ class ExternalAdapter(Adapter):
     def warm(self, ctx, args):
         out = self._opt("warm", ctx, **args)
         return out if out is not None else Adapter.warm(self, ctx, args)
+
+    def lease(self, ctx):
+        self._opt("lease", ctx)
 
     def release(self, ctx):
         self._opt("release", ctx)

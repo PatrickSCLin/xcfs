@@ -2197,6 +2197,41 @@ def t87_xcodebuild_time_is_broken_down():
     assert xcodebuild_breakdown(100.0, 1.0, [], [])["startup_seconds"] == 1.0
 
 
+@test
+def t88_tests_run_on_a_simulator_xcfs_booted():
+    """A test run that boots the simulator itself shuts it down again, so xcfs boots the checkout's simulator first
+    and leaves it booted until the checkout is released; a lease starts the boot in the background."""
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapter import Context
+    from xcfs.adapters import xcode as xa
+    calls = []
+
+    class Recording(xa.XcodeAdapter):
+        def driver(self, ctx): return "xcodebuild"
+        def simulator(self, ctx): return "SIM-1"
+        def boot(self, udid): calls.append(("boot", udid))
+
+        def xcodebuild(self, ctx, action, conf_name, conf, extra=(), destination=None, log_name=None, timeout=None,
+                       dd=None):
+            calls.append(("xcodebuild", action, destination))
+            return {"ok": True, "seconds": 1.0, "_lines": ["Executed 2 tests, with 0 failures (0 unexpected)"]}
+    entry = {"adapter": "xcode", "project": "App.xcodeproj", "scheme": "App",
+             "configurations": {"sim": {"configuration": "Debug", "destination": "generic/platform=iOS Simulator"}}}
+    r = Recording().test(Context("slot", SB, SB, {}, entry, SB + "/b88"), {})
+    assert calls == [("boot", "SIM-1"), ("xcodebuild", "test", "id=SIM-1")], calls
+    assert r["tests"] == 2 and "simulator_boot_seconds" in r, r
+    started = []
+    saved = xa.subprocess.Popen
+    xa.subprocess.Popen = lambda argv, **kw: started.append(argv)
+    try:
+        ctx = Context("slot", SB, SB, {}, entry, SB + "/b88", resources={"simulator": "SIM-2"})
+        xa.XcodeAdapter().lease(ctx)
+        xa.XcodeAdapter().lease(Context("slot", SB, SB, {}, entry, SB + "/b88"))   # no simulator yet: nothing
+    finally:
+        xa.subprocess.Popen = saved
+    assert started == [["xcrun", "simctl", "boot", "SIM-2"]], started
+
+
 def main():
     bad = [r for r in results if not r[1]]
     print("\n%d passed, %d failed, python %s" % (len(results) - len(bad), len(bad), sh(PY, "--version")))

@@ -437,6 +437,10 @@ def checkout(repo, branch, start, session, settings, wait=0):
                 worktree.switch(worktree.path_of(src, rel), nsrc, branch)
                 repos[rel].update(branch=branch, made_branch=False)
         after_switch(slot, row, repo, cfg)
+        try:
+            builds.for_each_adapter(src, repo, cfg, "slot", "lease", slot)
+        except Fail as e:
+            warn("could not prepare the slot for its lease: %s" % e)
     except BaseException:
         # Give the slot back untouched: back to its baseline, no lease.
         try:

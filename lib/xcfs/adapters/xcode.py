@@ -636,13 +636,26 @@ class XcodeAdapter(Adapter):
                 action, dd = "test-without-building", built["derived_data"]
         if args.get("scheme"):   # a test scheme of its own (a package's tests, say)
             ctx.entry = dict(ctx.entry, scheme=args["scheme"])
-        dest = conf.get("testDestination") or "id=" + self.simulator(ctx)
+        boot_seconds = None
+        dest = conf.get("testDestination")
+        if not dest:   # the checkout's own simulator, booted first and left booted (released with the checkout):
+            udid = self.simulator(ctx)   # a test run that boots it itself shuts it down again, so every test pays a
+            t0 = time.time()             # boot (23 s on Wikipedia under load)
+            try:
+                self.boot(udid)
+                boot_seconds = round(time.time() - t0, 1)
+            except (Fail, OSError, subprocess.SubprocessError) as e:
+                warn("could not boot the checkout's simulator first: %s" % str(e)[:200])
+            dest = "id=" + udid
         bundle = os.path.join(ctx.build_dir, "results", "%s-%s.xcresult" % (time.strftime("%Y%m%d-%H%M%S"), name))
         extra = ["-resultBundlePath", bundle]
         for t in args.get("only") or []:
             extra.append("-only-testing:" + t)
         r = self.xcodebuild(ctx, action, name, conf, extra, destination=dest, timeout=args.get("timeout"), dd=dd)
         unmap_paths(ctx, r.get("diagnostics", []))
+        if boot_seconds is not None:
+            r["simulator_boot_seconds"] = boot_seconds
+            r["seconds"] = round(r["seconds"] + boot_seconds, 2)
         if built:
             r.update(built_by="session", build_seconds=built["seconds"], test_seconds=r["seconds"],
                      seconds=round(built["seconds"] + r["seconds"], 2), test_targets=built.get("test_targets"),
@@ -843,6 +856,17 @@ class XcodeAdapter(Adapter):
 
     def own_processes(self, ctx):
         return self.xcode_helpers(ctx.root)
+
+    def lease(self, ctx):
+        """A slot handed out: start booting its simulator in the background, so that the agent's first test does not
+        wait for it. The boot is not waited for here; `xcfs test` and `xcfs run` wait if it is not done yet."""
+        udid = ctx.resources.get("simulator")
+        if udid:
+            try:
+                subprocess.Popen(["xcrun", "simctl", "boot", udid], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL, start_new_session=True, cwd="/")
+            except OSError:
+                pass
 
     def release(self, ctx):
         for pid in self.xcode_helpers(ctx.root):
