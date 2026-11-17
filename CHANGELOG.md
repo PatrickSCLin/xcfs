@@ -3,6 +3,15 @@
 What changed for people and scripts that use xcfs. The interface that is kept stable is listed in
 [docs/stability.md](docs/stability.md).
 
+## Unreleased
+
+### Added
+
+- Builds through `xcodebuild` report where their time went too (`breakdown`: starting xcodebuild, preparing —
+  packages, dependency graph, build description —, the build's tasks, the rest), from when its lines arrived.
+- `xcfs doctor` shows the experimental driver's frontend gate (places, and how many are in use) when the driver is on.
+- `docs/agents.md`: how a worktree manager or orchestrator hands worktree creation and removal to xcfs.
+
 ## 0.3.1 — 2026-11-16
 
 ### Security

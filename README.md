@@ -438,7 +438,8 @@ What the session takes care of:
 - Each session build says where its time went (`breakdown` in the JSON, one line for people): exporting the project
   description (PIF), starting the session, planning, the build's tasks and the rest, plus compile and link task time
   (summed over parallel tasks). On the sample: a no-op 0.32 s, of which tasks 0.28 s; a new file 1.81 s, of which the
-  PIF export 0.78 s.
+  PIF export 0.78 s. A build through `xcodebuild` has a `breakdown` of its own, from when its output lines arrived:
+  starting `xcodebuild`, preparing (packages, the dependency graph, the build description), the build's tasks.
 
 **What `xcfs check` means.** With the session, it compiles only the given files against the modules of the last
 build of that checkout: upstream modules are not rebuilt, so a pass means "these files compile against what was last
@@ -483,7 +484,7 @@ documented at the top of [lib/xcfs/adapter.py](lib/xcfs/adapter.py). A project l
 ## Tests
 
 ```
-python3 tests/xcfs_test.py                     # 86 end-to-end tests, ~3 min; --only t03,t36 to pick
+python3 tests/xcfs_test.py                     # 87 end-to-end tests, ~3 min; --only t03,t36 to pick
 /usr/bin/python3 tests/xcfs_test.py --python /usr/bin/python3
 tests/sample_e2e.sh                            # the sample: worktree, build/check/test/run, pool, session
 ```

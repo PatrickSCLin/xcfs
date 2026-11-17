@@ -224,6 +224,34 @@ def log_tail(path, size=65536):
         return ""
 
 
+# The first word of a line xcodebuild prints when a build task starts (its build log is one task per paragraph).
+TASK_LINE = re.compile(r"^(SwiftCompile|SwiftEmitModule|SwiftDriver|SwiftMergeGeneratedHeaders|CompileC|CompileSwift"
+                       r"|CompileAssetCatalog|CompileStoryboard|CompileXIB|CompileMetalFile|Ld|Libtool|CodeSign"
+                       r"|PhaseScriptExecution|ProcessInfoPlistFile|ProcessProductPackaging|CopySwiftLibs|CpResource"
+                       r"|CpHeader|CopyPlistFile|GenerateDSYMFile|LinkStoryboards|Touch|Copy|Ditto|ExtractAppIntentsMetadata"
+                       r"|RegisterExecutionPolicyException|Validate|EmitSwiftModule|MergeSwiftModule|ScanDependencies)\s")
+
+
+def xcodebuild_breakdown(t0, total, lines, stamps):
+    """Where an `xcodebuild` run's wall time went, from when its lines arrived: starting xcodebuild (until its first
+    line), preparing (packages, the dependency graph, the build description: until the first build task), the build's
+    tasks (until the last one started, plus the result line), and the rest. With no task at all (a no-op), everything
+    after the start counts as preparing."""
+    if not stamps:
+        return {"startup_seconds": round(total, 2), "prepare_seconds": 0.0, "tasks_seconds": 0.0, "other_seconds": 0.0,
+                "tasks": 0}
+    first = stamps[0] - t0
+    task_at = [stamps[i] - t0 for i, l in enumerate(lines) if TASK_LINE.match(l)]
+    done = next((stamps[i] - t0 for i, l in enumerate(lines) if l.startswith("** ") and l.rstrip().endswith("**")),
+                stamps[-1] - t0)
+    if task_at:
+        prepare, tasks = task_at[0] - first, max(0.0, done - task_at[0])
+    else:
+        prepare, tasks = max(0.0, done - first), 0.0
+    return {"startup_seconds": round(first, 2), "prepare_seconds": round(prepare, 2), "tasks_seconds": round(tasks, 2),
+            "other_seconds": round(max(0.0, total - first - prepare - tasks), 2), "tasks": len(task_at)}
+
+
 def parse_diagnostics(lines, limit_warnings=100):
     seen, out, warnings = set(), [], 0
     for line in lines:
@@ -467,11 +495,13 @@ class XcodeAdapter(Adapter):
         log = os.path.join(ctx.build_dir, "logs", "%s-%s-%s.log" % (time.strftime("%Y%m%d-%H%M%S"), action, conf_name))
         self.prune_logs(os.path.dirname(log))
         env = dict(os.environ, NSUnbufferedIO="YES")
-        lines = []
-        code, secs = run_streaming(cmd, cwd, env, log, timeout or 3600, lines.append)
+        lines, stamps = [], []
+        t0 = time.time()
+        code, secs = run_streaming(cmd, cwd, env, log, timeout or 3600,
+                                   lambda l: (lines.append(l), stamps.append(time.time())))
         return {"ok": code == 0, "timeout": code is None, "seconds": round(secs, 2), "log": log,
                 "diagnostics": parse_diagnostics(lines), "derived_data": dd, "configuration": conf_name,
-                "driver": "xcodebuild", "_lines": lines}
+                "driver": "xcodebuild", "breakdown": xcodebuild_breakdown(t0, secs, lines, stamps), "_lines": lines}
 
     def build_settings(self, ctx, conf):
         """The config's build settings, plus the caches Xcode shares between all projects when DerivedData is in its
@@ -981,6 +1011,10 @@ class XcodeAdapter(Adapter):
             checks.append({"ok": True, "message": "experimental Swift driver (patched): %s" % (
                 wrapper if wrapper else why + ("; the next build starts building it" if buildable else "") +
                 "; builds use Xcode's own driver")})
+            if wrapper:
+                n, busy = sd.gate_status()
+                checks.append({"ok": True, "message": "frontend gate: %d place(s) for compile jobs across every build "
+                               "(XCFS_FRONTEND_JOBS, else four per core), %d in use now" % (n, busy)})
         from . import xcode_session
         checks += xcode_session.doctor(self, root, entry)
         return checks

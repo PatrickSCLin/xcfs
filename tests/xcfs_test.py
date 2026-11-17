@@ -1618,6 +1618,11 @@ def t65_driver_frontends_go_through_a_shared_gate():
         starts = sorted(float(x) for x in open(log).read().split())
         assert len(starts) == 2, starts
         return starts[1] - starts[0]
+    held = subprocess.Popen([gate, "-frontend", "-c"], env=env)    # the doctor sees a place in use while it runs
+    time.sleep(0.8)
+    assert sd.gate_status(r)[1] == 1, sd.gate_status(r)
+    held.wait()
+    assert sd.gate_status(r)[1] == 0
     assert gap("-c") >= 1.9, "two compile jobs ran at once with one place"
     assert gap("-emit-module") < 1.5, "emitting a module never waits"
     env["XCFS_FRONTEND_JOBS"] = "2"
@@ -2174,6 +2179,22 @@ def t86_driver_wrapper_works_in_any_path():
     assert p.returncode == 0, p.stderr
     got = open(out).read().splitlines()
     assert got == [tools + "/swift-frontend", "-frontend", "-c", "--driver-mode=swiftc", "a b.swift"], got
+
+
+@test
+def t87_xcodebuild_time_is_broken_down():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "lib"))
+    from xcfs.adapters.xcode import xcodebuild_breakdown
+    lines = ["Command line invocation:\n", "Resolve Package Graph\n", "note: Building targets in dependency order\n",
+             "SwiftCompile normal arm64 /a/b.swift (in target 'A' from project 'P')\n",
+             "Ld /dd/A normal (in target 'A' from project 'P')\n", "** BUILD SUCCEEDED **\n"]
+    stamps = [100.5, 101.0, 103.0, 104.0, 109.0, 110.0]
+    b = xcodebuild_breakdown(100.0, 10.5, lines, stamps)
+    assert b == {"startup_seconds": 0.5, "prepare_seconds": 3.5, "tasks_seconds": 6.0, "other_seconds": 0.5,
+                 "tasks": 2}, b
+    noop = xcodebuild_breakdown(100.0, 3.0, lines[:3] + lines[5:], [100.4, 101.0, 102.0, 102.9])
+    assert noop["tasks"] == 0 and noop["tasks_seconds"] == 0 and noop["prepare_seconds"] == 2.5, noop
+    assert xcodebuild_breakdown(100.0, 1.0, [], [])["startup_seconds"] == 1.0
 
 
 def main():

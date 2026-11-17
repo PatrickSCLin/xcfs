@@ -100,6 +100,32 @@ slot's path, so a shell function can replace the habit:
 xwt() { cd "$(xcfs checkout "$(git rev-parse --show-toplevel)" "$1" --json | jq -r .worktree)"; }
 ```
 
+## Worktree managers and orchestrators
+
+A tool that creates worktrees for agents itself — a worktree manager, an orchestrator that starts several agents, a
+script around an agent CLI — can hand the creation to xcfs with the same three commands Claude Code's hooks call. Each
+reads one JSON object on stdin; only `worktree-create` writes to stdout, and only the path:
+
+```
+echo '{"name": "feature-x", "cwd": "/path/to/repo", "session_id": "run-42"}' | xcfs hook worktree-create
+#   -> /path/to/repo-wt-worktree-feature-x   (a built slot when one is free, else a new xcfs worktree)
+echo '{"worktree_path": "/path/to/repo-wt-worktree-feature-x"}' | xcfs hook worktree-remove
+echo '{"session_id": "run-42"}' | xcfs hook session-end     # everything run-42 opened, if it holds no unsaved work
+```
+
+- The branch is `worktree-<name>`, from the remote's default branch; `XCFS_HOOK_BASE=head` starts it from the
+  current `HEAD` of `cwd` instead. The repository is the one `cwd` is in.
+- A non-zero exit from `worktree-create` means no worktree was made; from `worktree-remove`, that it was kept (unsaved
+  work, or a process outside the calling tool working in it). `session-end` always exits 0 and writes what it left to
+  `last-reap.json` in xcfs's state directory.
+- The calling tool's own processes (the parent of the hook, above any shell, and everything it started) do not count as
+  using the worktree when it asks for the removal; any other process does.
+- Before starting a batch of agents, `xcfs pool status <repo> --json` says in `summary.<repo>` how many slots are
+  `ready` (built at the baseline), how many are `free`, `leased` and `warming`, and `next_ready_in_seconds`; start as
+  many agents as there are ready slots, or let the rest wait with `xcfs checkout ... --wait 600`.
+- A tool that prefers the commands to the hook protocol uses `xcfs checkout`, `xcfs release` and `xcfs reap` with
+  `--json`, as in [the contract](#the-contract).
+
 ## Session-end hook
 
 When the session ends, remove every worktree it opened and return every slot it leased, as long as they hold no

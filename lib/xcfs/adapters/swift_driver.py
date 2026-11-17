@@ -105,6 +105,32 @@ def root(info=None):
     return os.path.join(state.cache_dir(), "swift-driver", re.sub(r"[^A-Za-z0-9._-]", "_", name))
 
 
+def gate_status(r=None):
+    """The frontend gate of an install: (places, frontends compiling now). Places: $XCFS_FRONTEND_JOBS, else four per
+    core, as the gate itself decides; a place is in use while its lock file is locked."""
+    import fcntl
+    try:
+        n = int(os.environ.get("XCFS_FRONTEND_JOBS") or 0)
+    except ValueError:
+        n = 0
+    n = n if n > 0 else 4 * (os.cpu_count() or 4)
+    d = os.path.join(r or root(), "frontend-places")
+    busy = 0
+    for name in (os.listdir(d) if os.path.isdir(d) else []):
+        try:
+            fd = os.open(os.path.join(d, name), os.O_RDWR)
+        except OSError:
+            continue
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except BlockingIOError:
+            busy += 1
+        finally:
+            os.close(fd)
+    return n, busy
+
+
 def status():
     """(SWIFT_EXEC wrapper or None, why not, whether building it could help)."""
     info = selected()
