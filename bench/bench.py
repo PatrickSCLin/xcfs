@@ -170,6 +170,10 @@ class MemorySampler(threading.Thread):
                         by[name] = by.get(name, 0) + table[p][1]
                 self.peak_by = sorted(by.items(), key=lambda kv: -kv[1])[:6]
             self.min_free = min(self.min_free, free_kb())
+            if len(self.samples) % 10 == 1:   # simulators run outside this process tree: count the booted ones
+                out = subprocess.run(["xcrun", "simctl", "list", "devices", "booted"], capture_output=True,
+                                     text=True).stdout
+                self.booted = max(getattr(self, "booted", 0), out.count("(Booted)"))
 
     def stop(self):
         self.done.set()
@@ -177,6 +181,7 @@ class MemorySampler(threading.Thread):
         kbs = [k for k, _ in self.samples] or [0]
         return {"peak_rss_kb": max(kbs), "mean_rss_kb": int(sum(kbs) / len(kbs)),
                 "peak_processes": max([n for _, n in self.samples] or [0]), "samples": len(self.samples),
+                "peak_booted_simulators": getattr(self, "booted", 0),
                 "peak_disk_kb": self.free0 - self.min_free, "disk_kb_at_end": self.free0 - free_kb(),
                 "peak_by_process": getattr(self, "peak_by", [])}
 
