@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """bench.py <profile.json> --source <local clone> [--agents N] [--work DIR] [--cache DIR]
            [--phases plain,xcfs,round,round-xcfs,round-plain,concurrent,concurrent-plain,overlap,tasks,tasks-plain,
-                     tasks-cold]
+                     tasks-cold,tasks-reuse,tasks-advance]
            [--xcfs PATH] [--reuse-from RESULTS.json]   (sides not in --phases are taken from that earlier run)
 
 Compare N parallel checkouts made the plain way (git worktree + the project's own setup and build) with the same N
@@ -31,6 +31,9 @@ def arg(name, default=None):
 PROFILE_PATH = sys.argv[1]
 PROFILE = json.load(open(PROFILE_PATH))
 SOURCE = os.path.realpath(arg("--source"))
+# The commit every side starts from: the source checkout's HEAD (xcfs's pool is pinned to it too, so that a moved
+# default branch upstream cannot make the sides build different code); a phase that moves the baseline changes it.
+BASELINE = subprocess.run(["git", "-C", SOURCE, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 N = int(arg("--agents", PROFILE.get("agents", 3)))
 WORK = os.path.realpath(arg("--work", os.path.join(os.path.dirname(SOURCE), "xcfs-bench-work")))
 PHASES = arg("--phases", "plain,xcfs").split(",")
@@ -334,6 +337,8 @@ def run_xcfs(variant, overrides):
     cfg = json.loads(json.dumps(PROFILE["xcfs"]["config"]))
     for t in cfg.get("toolchains", []):
         t.update(overrides)
+    if not cfg.get("repos"):   # the pool's baseline is the commit the plain side starts from
+        cfg["repos"] = [{"path": ".", "baseline": {"ref": BASELINE}}]
     cfg_dir = os.path.join(d, "config", "xcfs")
     os.makedirs(cfg_dir, exist_ok=True)
     json.dump(cfg, open(os.path.join(cfg_dir, os.path.basename(SOURCE) + ".json"), "w"), indent=1)
@@ -452,6 +457,8 @@ def xcfs_variant_env(d, overrides):
     cfg = json.loads(json.dumps(PROFILE["xcfs"]["config"]))
     for t in cfg.get("toolchains", []):
         t.update(overrides)
+    if not cfg.get("repos"):   # the pool's baseline is the commit the plain side starts from
+        cfg["repos"] = [{"path": ".", "baseline": {"ref": BASELINE}}]
     cfg_dir = os.path.join(d, "config", "xcfs")
     os.makedirs(cfg_dir, exist_ok=True)
     json.dump(cfg, open(os.path.join(cfg_dir, os.path.basename(SOURCE) + ".json"), "w"), indent=1)
@@ -635,29 +642,73 @@ def run_task_steps(root, task, n, verify, log):
     return rows
 
 
-def plain_task(agent):
-    """One agent's task the plain way: worktree + setup, first build, each step verified by xcodebuild (a check is a
-    build; a test runs the task's test scheme on the simulator the profile names), removal."""
-    P, task = PROFILE["plain"], PROFILE["tasks"][int(agent) - 1]
-    dest = os.path.join(WORK, "%s-wt-task%s" % (os.path.basename(SOURCE), agent))
-    branch, log = "xcfs-bench/task" + agent, "task-plain" + agent
-    t0, rows = time.time(), []
-    with CREATE_LOCK:
-        tc = sum(shell(fmt(c, dest=dest, branch=branch), SOURCE, log)[0] for c in P["create"])
-    tb, code, _ = shell(fmt(P["build"], dest=dest), dest, log)
-    rows.append({"step": "first build", "verify": "build", "seconds": tb, "ok": code == 0, "as_expected": code == 0})
+KILLED = "signal kill"   # "Test crashed with signal kill while preparing to run tests": another run took the simulator
+TEST_TRIES = 3
+
+
+def shell_watched(cmd, cwd, log):
+    """shell(), and whether this run's output says a test run was killed."""
+    path = os.path.join(LOG, log + ".log")
+    start = os.path.getsize(path) if os.path.exists(path) else 0
+    t, code, _ = shell(cmd, cwd, log)
+    with open(path, errors="replace") as f:
+        f.seek(start)
+        return t, code, KILLED in f.read()
+
+
+def plain_verify(dest, log, kills):
+    """How a plain agent verifies a step: a check builds the package's own scheme when the task names one (the app's
+    otherwise); a test runs the task's test scheme on the simulator the profile names, and runs again when another
+    agent's test run killed it (up to TEST_TRIES, every try counted in the time; kills counted in `kills`)."""
+    P = PROFILE["plain"]
 
     def verify(kind, f, task):
-        cmd = fmt(P["test"], dest=dest, scheme=task["test"],
-                  only=" -only-testing:" + task["only"] if task.get("only") else "") if kind == "test" \
-            else fmt(P["build"], dest=dest)
+        if kind == "test":
+            cmd = fmt(P["test"], dest=dest, scheme=task["test"],
+                      only=" -only-testing:" + task["only"] if task.get("only") else "")
+            total = 0.0
+            for _ in range(TEST_TRIES):
+                t, code, killed = shell_watched(cmd, dest, log)
+                total += t
+                if not killed:
+                    break
+                kills.append(task["name"])
+            return round(total, 1), code == 0
+        if kind == "check" and P.get("check") and task.get("checkScheme"):
+            cmd = fmt(P["check"], dest=dest, scheme=task["checkScheme"])
+        else:
+            cmd = fmt(P["build"], dest=dest)
         t, code, _ = shell(cmd, dest, log)
         return t, code == 0
-    rows += run_task_steps(dest, task, int(time.time()) % 100000 * 10 + int(agent), verify, log)
+    return verify
+
+
+def plain_task(agent, dest=None, branch=None, keep=False, tag="task", build_only=False):
+    """One agent's task the plain way: worktree + setup (or a kept worktree switched to a new branch), first build,
+    each step verified by xcodebuild, then removal (or the worktree kept, with its DerivedData, for the next task)."""
+    P, task = PROFILE["plain"], PROFILE["tasks"][int(agent) - 1]
+    dest = dest or os.path.join(WORK, "%s-wt-%s%s" % (os.path.basename(SOURCE), tag, agent))
+    branch, log = branch or "xcfs-bench/%s%s" % (tag, agent), "%s-plain%s" % (tag, agent)
+    t0, rows, kills = time.time(), [], []
     with CREATE_LOCK:
-        tr = shell(fmt(P["remove"], dest=dest, branch=branch), SOURCE, log)[0]
+        if os.path.isdir(dest):   # a kept worktree: a new branch from the baseline, its build output kept
+            tc = shell("git switch -q -c %s %s" % (branch, BASELINE), dest, log)[0]
+        else:
+            tc = sum(shell(fmt(c, dest=dest, branch=branch), SOURCE, log)[0] for c in P["create"])
+            shell("git switch -q --detach %s && git branch -f %s %s && git switch -q %s"
+                  % (BASELINE, branch, BASELINE, branch), dest, log)
+    tb, code, _ = shell(fmt(P["build"], dest=dest), dest, log)
+    rows.append({"step": "first build", "verify": "build", "seconds": tb, "ok": code == 0, "as_expected": code == 0})
+    if not build_only:
+        rows += run_task_steps(dest, task, int(time.time()) % 100000 * 10 + int(agent), plain_verify(dest, log, kills),
+                               log)
+    tr = 0.0
+    if not keep:
+        with CREATE_LOCK:
+            tr = shell(fmt(P["remove"], dest=dest, branch=branch), SOURCE, log)[0]
     return {"agent": int(agent), "task": task["name"], "create_seconds": round(tc, 1), "remove_seconds": tr,
-            "total_seconds": round(time.time() - t0, 1), "steps": rows, "left": owned_caches(dest)}
+            "total_seconds": round(time.time() - t0, 1), "steps": rows, "tests_killed": len(kills),
+            "left": [] if keep else owned_caches(dest)}
 
 
 def xcfs_task(variant, agent):
@@ -711,6 +762,7 @@ def run_tasks_plain():
         if "steps" in a:
             a["left_kb"] = 0
     RESULTS["tasks"]["plain"] = dict({"wall_seconds": wall, "agents": agents,
+                                      "tests_killed": sum(a.get("tests_killed", 0) for a in agents),
                                       "left_kb": du_kb(*[c for l in left for c in l])}, **mem)
     say("tasks[plain]: %.1fs wall, peak memory %s, peak disk %s" % (wall, gb(mem["peak_rss_kb"]), gb(mem["peak_disk_kb"])))
     for i, l in enumerate(left, 1):
@@ -718,6 +770,107 @@ def run_tasks_plain():
             subprocess.run(["chmod", "-R", "u+w", c], capture_output=True)
             shutil.rmtree(c, ignore_errors=True)
         subprocess.run(["git", "-C", SOURCE, "branch", "-D", "xcfs-bench/task%d" % i], capture_output=True)
+
+
+def set_baseline(sha):
+    """Move every side's starting commit (and the pool's baseline, in the variant's config) to sha."""
+    global BASELINE
+    BASELINE = subprocess.run(["git", "-C", SOURCE, "rev-parse", sha], capture_output=True, text=True,
+                              check=True).stdout.strip()
+    if XENV:
+        f = os.path.join(XENV["XDG_CONFIG_HOME"], "xcfs", os.path.basename(SOURCE) + ".json")
+        cfg = json.load(open(f))
+        cfg["repos"] = [{"path": ".", "baseline": {"ref": BASELINE}}]
+        json.dump(cfg, open(f, "w"), indent=1)
+
+
+def commits_between(a, b):
+    return int(subprocess.run(["git", "-C", SOURCE, "rev-list", "--count", "%s..%s" % (a, b)], capture_output=True,
+                              text=True).stdout.strip() or 0)
+
+
+def batch(key, fn, n, extra=None):
+    sampler = MemorySampler()
+    sampler.start()
+    results, wall = concurrently(fn, n)
+    mem = sampler.stop()
+    agents = summarize_tasks(results)
+    for a in agents:
+        a.pop("left", None)
+    RESULTS["tasks"][key] = dict({"wall_seconds": wall, "agents": agents,
+                                  "tests_killed": sum(a.get("tests_killed", 0) for a in agents)},
+                                 **dict(mem, **(extra or {})))
+    say("tasks[%s]: %.1fs wall, peak memory %s, tests killed %d" % (key, wall, gb(mem["peak_rss_kb"]),
+                                                                  RESULTS["tasks"][key]["tests_killed"]))
+    return RESULTS["tasks"][key]
+
+
+def run_tasks_reuse(advance_from=None):
+    """Plain worktrees kept between batches: the first batch creates three and builds them cold; each next batch
+    switches every worktree to a new branch from the baseline (`git switch -c`), its DerivedData kept, so its first
+    build is incremental. With advance_from, the worktrees are created and built at that older commit first (the
+    previous day's work, not compared), and the measured batch starts after the baseline moved to the source's HEAD."""
+    n, head = len(PROFILE["tasks"]), BASELINE
+    tag = "reuse-adv" if advance_from else "reuse"
+    dests = [os.path.join(WORK, "%s-wt-%s%d" % (os.path.basename(SOURCE), tag, i)) for i in range(1, n + 1)]
+    rounds = int(PROFILE.get("taskRounds", 1))
+    key = None
+    try:
+        if advance_from:
+            set_baseline(advance_from)
+            moved = commits_between(BASELINE, head)
+            batch("plain, kept worktrees, built at the earlier baseline (%d commits back; not compared)" % moved,
+                  lambda a: plain_task(a, keep=True, tag=tag, branch="xcfs-bench/%s-r0-%s" % (tag, a),
+                                       build_only=True), n)
+            set_baseline(head)
+            rounds = 1
+        for rnd in range(1, rounds + 1):
+            key = "plain, kept worktrees" + (", after the baseline moved %d commits" % moved if advance_from else
+                                             "" if rnd == 1 else ", the next %d agents" % n)
+            batch(key, lambda a, rnd=rnd: plain_task(a, keep=True, tag=tag,
+                                                     branch="xcfs-bench/%s-r%d-%s" % (tag, rnd, a)), n)
+    finally:
+        set_baseline(head)
+        left = [c for d in dests for c in owned_caches(d)]
+        if key:
+            RESULTS["tasks"][key]["left_kb"] = du_kb(*left)
+        for d in dests:
+            if os.path.isdir(d):
+                shell("git worktree remove --force '%s'" % d, SOURCE, "%s-remove" % tag)
+        for c in left:
+            subprocess.run(["chmod", "-R", "u+w", c], capture_output=True)
+            shutil.rmtree(c, ignore_errors=True)
+        branches = subprocess.run(["git", "-C", SOURCE, "for-each-ref", "--format=%(refname:short)",
+                                   "refs/heads/xcfs-bench/%s-*" % tag], capture_output=True, text=True).stdout.split()
+        for b in branches:
+            subprocess.run(["git", "-C", SOURCE, "branch", "-D", b], capture_output=True)
+
+
+def run_tasks_advance_xcfs(variant, overrides, advance_from):
+    """A pool kept at an older baseline (the previous day's), then the baseline moves to the source's HEAD: the idle
+    slots follow it (timed, `xcfs pool warm`), then the agents work."""
+    global XENV
+    head = BASELINE
+    xcfs_variant_env(os.path.join(WORK, "tasks-advance-" + variant), overrides)
+    n = len(PROFILE["tasks"])
+    set_baseline(advance_from)
+    moved = commits_between(BASELINE, head)
+    tw0, code, _, out = xcfs("pool", "warm", SOURCE, "--slots", str(n), log_name="tasks-warm")
+    set_baseline(head)
+    if code != 0:
+        raise SystemExit("warm-up at the earlier baseline failed: %s" % out.get("error"))
+    sampler = MemorySampler()
+    sampler.start()
+    tw, code, _, out = xcfs("pool", "warm", SOURCE, log_name="tasks-warm")
+    warm_mem = sampler.stop()
+    if code != 0:
+        raise SystemExit("following the baseline failed: %s" % out.get("error"))
+    key = "xcfs (%s), after the baseline moved %d commits" % (variant, moved)
+    r = batch(key, lambda a: xcfs_task("adv-" + variant, a), n,
+              {"warm_seconds": tw, "warm_peak_rss_kb": warm_mem["peak_rss_kb"], "earlier_warm_seconds": tw0})
+    r["wall_with_warm_seconds"] = round(tw + r["wall_seconds"], 1)
+    xcfs("pool", "resize", SOURCE, "0", log_name="tasks-warm")
+    XENV = {}
 
 
 def run_tasks_xcfs(variant, overrides):
@@ -958,6 +1111,19 @@ def main():
                     retire_after_failure()
                     RESULTS["tasks"]["xcfs (%s)" % name] = {"failed": str(e)}
                     say("tasks[xcfs %s]: FAILED: %s" % (name, e))
+        if "tasks-reuse" in PHASES:
+            run_tasks_reuse()
+        adv = PROFILE.get("advanceFrom")
+        if adv and any(x == "tasks-advance" or x.startswith("tasks-advance:") for x in PHASES):
+            run_tasks_reuse(advance_from=adv)
+        for name, overrides in VARIANTS.items():
+            if adv and ("tasks-advance" in PHASES or "tasks-advance:" + name in PHASES):
+                try:
+                    run_tasks_advance_xcfs(name, overrides, adv)
+                except SystemExit as e:
+                    retire_after_failure()
+                    RESULTS["tasks"]["xcfs (%s), after the baseline moved" % name] = {"failed": str(e)}
+                    say("tasks-advance[xcfs %s]: FAILED: %s" % (name, e))
         for name, overrides in VARIANTS.items():
             if "tasks-cold" in PHASES or "tasks-cold:" + name in PHASES:
                 try:

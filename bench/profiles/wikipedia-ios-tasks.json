@@ -3,6 +3,7 @@
  "description": "https://github.com/wikimedia/wikipedia-ios: Swift and Objective-C, local packages WMFData (imported by ~300 app files) and WMFComponents. Three agents at the same time, each with a small task judged by a build and its own new unit test: a wikitext helper and a URL helper in WMFData, a layout helper in WMFComponents. Each task first writes code that does not compile, fixes it, adds a test class, runs that class and builds the app. Plain: git worktree + scripts/setup_bundle_id ci, xcodebuild into the default DerivedData, tests on the simulator named in the command. xcfs: a pool warmed first (timed), then xcfs check / build / test. One architecture.",
  "agents": 3,
  "taskRounds": 2,
+ "advanceFrom": "cbd497a111",
  "plain": {
   "create": [
    "git worktree add -q -b {branch} {dest}",
@@ -10,7 +11,8 @@
   ],
   "build": "xcodebuild build -project Wikipedia.xcodeproj -scheme Wikipedia -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
   "remove": "git worktree remove --force {dest} && git branch -D {branch}",
-  "test": "xcodebuild test -project Wikipedia.xcodeproj -scheme {scheme} -destination 'platform=iOS Simulator,name=iPhone 18 Pro' CODE_SIGNING_ALLOWED=NO ARCHS=arm64{only}"
+  "test": "xcodebuild test -project Wikipedia.xcodeproj -scheme {scheme} -destination 'platform=iOS Simulator,name=iPhone 18 Pro' CODE_SIGNING_ALLOWED=NO ARCHS=arm64{only}",
+  "check": "xcodebuild build -project Wikipedia.xcodeproj -scheme {scheme} -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64"
  },
  "xcfs": {
   "config": {
@@ -37,7 +39,10 @@
    ]
   },
   "variants": {
-   "defaults": {}
+   "defaults": {},
+   "experimental-driver": {
+    "swiftDriver": "patched"
+   }
   }
  },
  "tasks": [
@@ -76,7 +81,8 @@
      "name": "build the app",
      "verify": "build"
     }
-   ]
+   ],
+   "checkScheme": "WMFData"
   },
   {
    "name": "WMFComponents: grid spacing",
@@ -113,7 +119,8 @@
      "name": "build the app",
      "verify": "build"
     }
-   ]
+   ],
+   "checkScheme": "WMFComponents"
   },
   {
    "name": "WMFData: mobile host",
@@ -150,7 +157,8 @@
      "name": "build the app",
      "verify": "build"
     }
-   ]
+   ],
+   "checkScheme": "WMFData"
   }
  ]
 }

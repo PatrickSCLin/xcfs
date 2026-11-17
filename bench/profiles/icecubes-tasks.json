@@ -9,7 +9,8 @@
   ],
   "build": "xcodebuild build -project IceCubesApp.xcodeproj -scheme IceCubesApp -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
   "remove": "git worktree remove --force {dest} && git branch -D {branch}",
-  "test": "xcodebuild test -project IceCubesApp.xcodeproj -scheme {scheme} -destination 'platform=iOS Simulator,name=iPhone 18 Pro' CODE_SIGNING_ALLOWED=NO ARCHS=arm64"
+  "test": "xcodebuild test -project IceCubesApp.xcodeproj -scheme {scheme} -destination 'platform=iOS Simulator,name=iPhone 18 Pro' CODE_SIGNING_ALLOWED=NO ARCHS=arm64",
+  "check": "xcodebuild build -project IceCubesApp.xcodeproj -scheme {scheme} -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64"
  },
  "xcfs": {
   "config": {
@@ -84,7 +85,8 @@
      "name": "build the app",
      "verify": "build"
     }
-   ]
+   ],
+   "checkScheme": "Models"
   },
   {
    "name": "Timeline: remote filters",
@@ -120,7 +122,8 @@
      "name": "build the app",
      "verify": "build"
     }
-   ]
+   ],
+   "checkScheme": "Timeline"
   },
   {
    "name": "Env: shortest duration at least N seconds",
@@ -156,8 +159,10 @@
      "name": "build the app",
      "verify": "build"
     }
-   ]
+   ],
+   "checkScheme": "Env"
   }
  ],
- "taskRounds": 2
+ "taskRounds": 2,
+ "advanceFrom": "dadaa35d4e"
 }
