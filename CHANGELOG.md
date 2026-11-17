@@ -7,10 +7,12 @@ What changed for people and scripts that use xcfs. The interface that is kept st
 
 ### Fixed
 
-- `xcfs test` boots the checkout's simulator itself and leaves it booted until the checkout is released: when
-  `xcodebuild` booted it, it shut it down again after the run, so every test paid a boot (a second test on the same
-  Wikipedia slot: 31 s before, 9.8 s now). A slot handed out starts booting its simulator in the background (adapter
-  op `lease`), so the first test seldom waits for it. A booted simulator holds memory while the slot is leased.
+- `xcfs test` boots the checkout's own simulator itself and keeps it booted: when `xcodebuild` booted it, it shut it
+  down again after the run, so every test paid a boot and a first launch (on one Ice Cubes slot a first test after a
+  boot took 61 s, a test on a booted, settled simulator 5 s). The simulator now stays booted for
+  `simulatorIdleMinutes` (30) after its last use — warm-up, lease, test, run, release — and a watcher shuts it down
+  then; a booted simulator holds about 3.4 GB. A lease starts booting it in the background if it is not (adapter op
+  `lease`). A plain checkout's tests run on the base device, booted by `xcodebuild` as before.
 
 ### Added
 

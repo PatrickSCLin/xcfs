@@ -2210,6 +2210,7 @@ def t88_tests_run_on_a_simulator_xcfs_booted():
         def driver(self, ctx): return "xcodebuild"
         def simulator(self, ctx): return "SIM-1"
         def boot(self, udid): calls.append(("boot", udid))
+        def keep_booted(self, ctx): calls.append(("keep",)); return True
 
         def xcodebuild(self, ctx, action, conf_name, conf, extra=(), destination=None, log_name=None, timeout=None,
                        dd=None):
@@ -2218,18 +2219,42 @@ def t88_tests_run_on_a_simulator_xcfs_booted():
     entry = {"adapter": "xcode", "project": "App.xcodeproj", "scheme": "App",
              "configurations": {"sim": {"configuration": "Debug", "destination": "generic/platform=iOS Simulator"}}}
     r = Recording().test(Context("slot", SB, SB, {}, entry, SB + "/b88"), {})
-    assert calls == [("boot", "SIM-1"), ("xcodebuild", "test", "id=SIM-1")], calls
+    assert calls == [("boot", "SIM-1"), ("keep",), ("xcodebuild", "test", "id=SIM-1")], calls
+    calls.clear()   # a plain checkout tests on the base device, which is the user's: booted by xcodebuild as before
+    Recording().test(Context("checkout", SB, SB, {}, entry, SB + "/b88"), {})
+    assert calls == [("xcodebuild", "test", "id=SIM-1")], calls
     assert r["tests"] == 2 and "simulator_boot_seconds" in r, r
     started = []
     saved = xa.subprocess.Popen
-    xa.subprocess.Popen = lambda argv, **kw: started.append(argv)
+    xa.subprocess.Popen = lambda argv, **kw: started.append(argv) or type("P", (), {"pid": 999999})
+    saved_settings = xa.state.settings
     try:
+        xa.state.settings = lambda: dict(xa.state.DEFAULT_SETTINGS, simulatorIdleMinutes=30)
         ctx = Context("slot", SB, SB, {}, entry, SB + "/b88", resources={"simulator": "SIM-2"})
         xa.XcodeAdapter().lease(ctx)
         xa.XcodeAdapter().lease(Context("slot", SB, SB, {}, entry, SB + "/b88"))   # no simulator yet: nothing
+        assert started[0] == ["xcrun", "simctl", "boot", "SIM-2"] and "watch_simulator" in started[1][2], started
+        assert SB not in " ".join(started[1]), "the watcher's command line must not name the checkout: %s" % started[1]
+        assert ctx.resources["simulator_idle_until"] > time.time() + 29 * 60 and len(started) == 2, ctx.resources
+        xa.state.settings = lambda: dict(xa.state.DEFAULT_SETTINGS, simulatorIdleMinutes=0)
+        assert xa.XcodeAdapter().keep_booted(Context("slot", SB, SB, {}, entry, SB, resources={"simulator": "S"})) is False
     finally:
-        xa.subprocess.Popen = saved
-    assert started == [["xcrun", "simctl", "boot", "SIM-2"]], started
+        xa.subprocess.Popen, xa.state.settings = saved, saved_settings
+    # the watcher: shuts the simulator down when the deadline passes, and ends early when the checkout is gone
+    os.makedirs(SB + "/bin88", exist_ok=True)
+    open(SB + "/bin88/xcrun", "w").write("#!/bin/sh\necho \"$@\" >> \"$XCRUN_LOG\"\n")
+    os.chmod(SB + "/bin88/xcrun", 0o755)
+    lib = os.path.join(os.path.dirname(HERE), "lib")
+    prog = ("import sys, time; sys.path.insert(0, %r); from xcfs import state; from xcfs.adapters.xcode import "
+            "watch_simulator\nwith state.registry() as reg:\n    reg['builds'][sys.argv[1]] = {'resources': {'xcode': "
+            "{'simulator': 'SIM-9', 'simulator_idle_until': time.time() + 1}}} if sys.argv[2] == 'keep' else {}\n"
+            "watch_simulator(sys.argv[1], 'SIM-9', time.time() + 1)" % lib)
+    for mode, want in (("keep", "simctl shutdown SIM-9"), ("gone", "")):
+        log = SB + "/xcrun88-%s.log" % mode
+        env = dict(os.environ, XCFS_STATE=SB + "/state88-" + mode, XCRUN_LOG=log, PATH=SB + "/bin88:" + os.environ["PATH"])
+        r = subprocess.run([PY, "-c", prog, SB + "/wt88", mode], env=env, capture_output=True, text=True, timeout=60)
+        got = open(log).read().strip() if os.path.exists(log) else ""
+        assert r.returncode == 0 and got == want, (mode, got, r.stderr[-300:])
 
 
 def main():

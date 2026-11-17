@@ -29,6 +29,8 @@ DEFAULT_SETTINGS = {
     "minFreeGB": 0,           # keep this much free on the pool's volume: idle slots are retired (oldest use first)
                               # to make room for a slot being created or warmed; 0: off, a slot is refused instead
     "maxSessions": 0,         # build sessions alive at once (≈0.7 GB resident each); the longest idle stops first; 0: no limit
+    "simulatorIdleMinutes": 30,  # a slot's or worktree's simulator stays booted this long after its last use (a booted
+                                 # one runs a first test in seconds; it holds ~3.4 GB); 0: shut down at once
     "sessionIdleMinutes": 30,  # a checkout's build session (and what it keeps running) quits after this long unused
 }
 

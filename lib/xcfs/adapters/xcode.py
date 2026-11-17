@@ -1,10 +1,10 @@
 """The Xcode adapter: xcodebuild (and, behind a regression check, the swbuild session), DerivedData, simulators."""
-import glob, json, os, plistlib, re, subprocess, time
+import glob, json, os, plistlib, re, subprocess, sys, time
 
 from ..adapter import Adapter
 from .. import state
-from ..util import Fail, USAGE, git_ok, phys, read_json, run, run_streaming, say, trash_and_delete, under, warn, \
-    write_json
+from ..util import Fail, USAGE, git_ok, phys, pid_alive, read_json, run, run_streaming, say, trash_and_delete, under, \
+    warn, write_json
 
 ENTRY_KEYS = {"adapter", "root", "workspace", "project", "package", "scheme", "target", "configurations", "default",
               "warm", "simulator", "packagesDir", "compileCache", "xcodebuildArgs", "buildSettings", "driver", "prepare",
@@ -131,6 +131,32 @@ DRIVER_MODES = ("native", "patched", "api-digests", "auto")
 def driver_mode(entry):
     m = os.environ.get("XCFS_SWIFT_DRIVER") or entry.get("swiftDriver", "native")
     return "patched" if m in ("patched", "api-digests") else "native"
+
+
+def watch_simulator(root, udid, until):
+    """Runs detached: shuts the checkout's simulator down once simulatorIdleMinutes passed since its last use. The
+    deadline it was started with moves with every later use (saved in the checkout's resources once the operation
+    ends); it ends early when the checkout is gone, has another simulator, or another live watcher took over."""
+    until = float(until)
+    while True:
+        with state.registry(write=False) as reg:
+            rec = reg["builds"].get(root)
+        if not rec:
+            return
+        res = (rec.get("resources") or {}).get("xcode") or {}
+        other = res.get("simulator_watcher")
+        if res.get("simulator") not in (None, udid) or (other not in (None, os.getpid()) and pid_alive(other)):
+            return
+        until = max(until, res.get("simulator_idle_until") or 0)
+        left = until - time.time()
+        if left <= 0:
+            run("xcrun", "simctl", "shutdown", udid, check=False, timeout=120)
+            with state.registry() as reg:
+                r = ((reg["builds"].get(root) or {}).get("resources") or {}).get("xcode")
+                if r and (r.get("simulator_idle_until") or 0) <= time.time():
+                    r.pop("simulator_idle_until", None)
+            return
+        time.sleep(min(left, 60))
 
 
 def shared_schemes(root, container):
@@ -638,14 +664,16 @@ class XcodeAdapter(Adapter):
             ctx.entry = dict(ctx.entry, scheme=args["scheme"])
         boot_seconds = None
         dest = conf.get("testDestination")
-        if not dest:   # the checkout's own simulator, booted first and left booted (released with the checkout):
-            udid = self.simulator(ctx)   # a test run that boots it itself shuts it down again, so every test pays a
-            t0 = time.time()             # boot (23 s on Wikipedia under load)
-            try:
-                self.boot(udid)
-                boot_seconds = round(time.time() - t0, 1)
-            except (Fail, OSError, subprocess.SubprocessError) as e:
-                warn("could not boot the checkout's simulator first: %s" % str(e)[:200])
+        if not dest:
+            udid = self.simulator(ctx)
+            if ctx.kind != "checkout":   # its own simulator: booted first and kept booted (simulatorIdleMinutes); a
+                t0 = time.time()         # test run that boots it itself shuts it down again, so every test would pay
+                try:                     # a boot and a first launch (a first test 61 s, a later one 5 s on Ice Cubes)
+                    self.boot(udid)
+                    boot_seconds = round(time.time() - t0, 1)
+                    self.keep_booted(ctx)
+                except (Fail, OSError, subprocess.SubprocessError) as e:
+                    warn("could not boot the checkout's simulator first: %s" % str(e)[:200])
             dest = "id=" + udid
         bundle = os.path.join(ctx.build_dir, "results", "%s-%s.xcresult" % (time.strftime("%Y%m%d-%H%M%S"), name))
         extra = ["-resultBundlePath", bundle]
@@ -697,6 +725,8 @@ class XcodeAdapter(Adapter):
         with open(os.path.join(app, "Info.plist"), "rb") as f:
             bundle_id = plistlib.load(f)["CFBundleIdentifier"]
         self.boot(sim)
+        if ctx.kind != "checkout":
+            self.keep_booted(ctx)
         run("xcrun", "simctl", "install", sim, app, timeout=600)
         out = run("xcrun", "simctl", "launch", "--terminate-running-process", sim, bundle_id, timeout=120).stdout
         m = re.search(r":\s*(\d+)\s*$", out.strip())
@@ -748,7 +778,8 @@ class XcodeAdapter(Adapter):
         try:
             udid = self.simulator(ctx)
             self.boot(udid)
-            run("xcrun", "simctl", "shutdown", udid, check=False, timeout=120)
+            if not self.keep_booted(ctx):
+                run("xcrun", "simctl", "shutdown", udid, check=False, timeout=120)
         except (Fail, OSError, subprocess.SubprocessError) as e:
             warn("could not prepare the slot's simulator: %s" % str(e)[:200])
             return None
@@ -867,6 +898,31 @@ class XcodeAdapter(Adapter):
                                  stderr=subprocess.DEVNULL, start_new_session=True, cwd="/")
             except OSError:
                 pass
+            self.keep_booted(ctx)
+
+    def keep_booted(self, ctx):
+        """Whether the checkout's simulator may stay booted: with simulatorIdleMinutes, until that long after its last
+        use (warm-up, lease, test, run, release); a watcher process shuts it down then. Returns False with 0."""
+        minutes = float(state.settings().get("simulatorIdleMinutes") or 0)
+        udid = ctx.resources.get("simulator")
+        if minutes <= 0 or not udid:
+            return False
+        ctx.resources["simulator_idle_until"] = time.time() + minutes * 60
+        pid = ctx.resources.get("simulator_watcher")
+        if not (pid and pid_alive(pid)):
+            from .xcode_session import lib_root
+            # The checkout's path goes in the environment, not on the command line: a process whose command line
+            # names a checkout counts as using it, and the watcher must never keep its own checkout from release.
+            code = ("import os, sys; sys.path.insert(0, %r); from xcfs.adapters.xcode import watch_simulator; "
+                    "watch_simulator(os.environ['XCFS_SIMULATOR_ROOT'], *sys.argv[1:])" % lib_root())
+            try:
+                p = subprocess.Popen([sys.executable, "-c", code, udid, str(ctx.resources["simulator_idle_until"])],
+                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True, cwd="/", env=dict(os.environ, XCFS_SIMULATOR_ROOT=ctx.root))
+                ctx.resources["simulator_watcher"] = p.pid
+            except OSError:
+                return False
+        return True
 
     def release(self, ctx):
         for pid in self.xcode_helpers(ctx.root):
@@ -874,12 +930,15 @@ class XcodeAdapter(Adapter):
                 os.kill(pid, 15)
             except OSError:
                 pass
-        if ctx.resources.get("simulator"):
+        if ctx.resources.get("simulator") and not (ctx.kind == "slot" and self.keep_booted(ctx)):
             run("xcrun", "simctl", "shutdown", ctx.resources["simulator"], check=False, timeout=120)
         from . import xcode_session
         xcode_session.stop(ctx)
 
     def retire(self, ctx):
+        ctx.resources.pop("simulator_idle_until", None)   # retiring: shut down now, whatever the idle setting
+        if ctx.resources.get("simulator"):
+            run("xcrun", "simctl", "shutdown", ctx.resources["simulator"], check=False, timeout=120)
         self.release(ctx)
         if ctx.resources.get("simulator"):
             delete_simulator(ctx.resources["simulator"])

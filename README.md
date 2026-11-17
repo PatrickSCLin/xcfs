@@ -70,8 +70,10 @@ three runs each; xcfs: the run after the fixes those apps led to (two on Ice Cub
 experimental driver), no build failed, and plain worktrees left 1.5–6 GB behind each, xcfs nothing.
 [Table](docs/benchmark.md#zero-configuration-on-projects-xcfs-was-not-developed-on).
 
-A pool at rest (three Ice Cubes slots): 2.3 GB resident and no CPU while idle; after 30 minutes without a build each
-slot's session quits and nothing stays resident (`sessionIdleMinutes`); 6.0 GB on disk for the three.
+A pool at rest (three Ice Cubes slots): 2.3 GB resident in build sessions and no CPU while idle, plus about 3.4 GB per
+slot whose simulator is still booted (each stays booted 30 minutes after its last use, `simulatorIdleMinutes`, so that
+an agent's first test runs in seconds); after 30 minutes without a build the sessions quit too (`sessionIdleMinutes`)
+and nothing stays resident; 6.0 GB on disk for the three.
 [Details](docs/benchmark.md#a-pool-at-rest). The charts are drawn from the raw results by `scripts/charts.py`.
 
 ## Use it with an AI agent
@@ -382,6 +384,7 @@ state, from one lease to the next; returning a slot keeps its server (and the an
 | `warmJobs` | 0 | slots one warm-up builds side by side; 0 means one per 16 GB of memory (a 64 GB machine warms up to 4 at a time) |
 | `minFreeGB` | 0 | keep this much free on the pool's volume: to make room for a slot being created or warmed, idle slots of other projects are retired, least recently used first (they hold nothing that is not rebuildable; their pools keep the smaller size). 0: a slot that does not fit is refused (exit 11) and nothing else is touched |
 | `maxSessions` | 0 | build sessions alive at once (each ≈0.7 GB resident): before one starts, the longest-idle others beyond the limit stop (never one that is building; a stopped one starts again on its checkout's next build). 0: no limit |
+| `simulatorIdleMinutes` | 30 | a slot's or worktree's own simulator stays booted this long after its last use (warm-up, lease, test, run, release): a booted one runs an agent's first test in seconds (5 s against 61 s just after a boot, Ice Cubes), and holds about 3.4 GB while booted. 0: shut down as soon as a slot is released |
 | `sessionIdleMinutes` | 30 | a checkout's build session (and its `swbuild` and build service, ≈0.7 GB resident) quits after this long unused; the next build starts it again |
 
 | variable | |
