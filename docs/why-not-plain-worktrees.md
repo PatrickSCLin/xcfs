@@ -11,7 +11,7 @@ Xcode 27.2, one simulator architecture; [Ice Cubes](https://github.com/Dimillian
 Xcode keys DerivedData by the project's path, so every worktree gets a bucket of its own:
 
 - **Every worktree builds from nothing.** Three agents with a real task each, at once: a batch takes 284–302 s on Ice
-  Cubes and 375–387 s on Wikipedia, every time, because every new worktree's first build is cold (160 s on Ice Cubes
+  Cubes and 347–387 s on Wikipedia, every time, because every new worktree's first build is cold (160 s on Ice Cubes
   with three building side by side).
 - **The buckets outlive the worktrees.** `git worktree remove` deletes the checkout and leaves its DerivedData: 1.5 GB
   per worktree on Ice Cubes, 2.9 GB on Wikipedia, in a folder nothing cleans up.
@@ -60,9 +60,9 @@ This is the right idea, and it is what xcfs's pool is. What it takes to make it 
 - an incremental build session instead of `xcodebuild`'s fixed cost (a no-op 5.9 → 0.9 s on Ice Cubes), and a check
   of single files (1–4 s).
 
-With that, the next batch of three agents takes 138–151 s on Ice Cubes instead of 284–302 s, at 8–12 GB instead of
-24–25, and removal leaves nothing behind; with the opt-in experimental Swift driver, 111–121 s, and on Wikipedia
-(measured with the driver only) 187–203 s instead of 375–387 s. The first batch on a fresh pool is slower than
+With that, the next batch of three agents takes 138–151 s on Ice Cubes instead of 284–302 s and 248–264 s on Wikipedia
+instead of 347–363 s, at 8–12 and 11–13 GB instead of 24–25 and 15–16, and removal leaves nothing behind; with the
+opt-in experimental Swift driver, 111–121 s and 187–203 s. The first batch on a fresh pool is slower than
 plain worktrees (it pays for the warm-up), and starting without a warm-up is slower still (451 s on Ice Cubes, one
 run): warm the pool before the agents need it.
 

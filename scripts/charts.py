@@ -34,18 +34,22 @@ def rng(values):
 # now. The charts label them by what they are.
 ICE = "tasks-icecubes-%s--results-ice-cubes-arm64-three-agents-real-tasks--20261115-%s.json"
 WIKI = "tasks-wikipedia-%s--results-wikipedia-ios-arm64-three-agents-real-tasks--20261115-%s.json"
+WIKI2 = "tasks-wikipedia-nodriver-%s--results-wikipedia-ios-arm64-three-agents-real-tasks--20261117-%s.json"
 TASKS = {
     "Ice Cubes": {
         "plain": [ICE % ("v4-rep1", "062620"), ICE % ("v4-rep2", "064126")],
         "xcfs": [ICE % ("v4-rep2", "064126"), ICE % ("v4-rep3", "073552"), ICE % ("v4-rep4", "075201")],
         "driver": [ICE % ("v5-rep5", "094011"), ICE % ("v5-rep6", "094853")],
     },
-    "Wikipedia iOS": {   # measured with the driver only
-        "plain": [WIKI % ("rep1", "161441"), WIKI % ("rep2", "163328")],
-        "xcfs": [],
+    "Wikipedia iOS": {   # with the driver on 2026-11-15 (0.2); without it on 2026-11-17 (0.3.1, where it is the default)
+        "plain": [WIKI % ("rep1", "161441"), WIKI % ("rep2", "163328"), WIKI2 % ("rep1", "200836"),
+                  WIKI2 % ("rep2", "202910")],
+        "xcfs": [WIKI2 % ("rep1", "200836"), WIKI2 % ("rep2", "202910")],
         "driver": [WIKI % ("rep1", "161441"), WIKI % ("rep2", "163328")],
     },
 }
+# Results written by 0.3 or later name xcfs without the driver "xcfs (defaults)": the files of these runs.
+DEFAULTS_ARE_NATIVE = {WIKI2 % ("rep1", "200836"), WIKI2 % ("rep2", "202910")}
 WITH, WITHOUT = "xcfs (defaults)", "xcfs (defaults-without-driver-patch)"
 NEXT = ", the next 3 agents on the same pool"
 
@@ -69,12 +73,12 @@ def zero_file(profile, stamp):
 
 def side(files, key):
     """(fresh pool with warm-up, next batch, peak memory while the agents work) ranges, or None if not measured."""
-    runs = [load(f)["tasks"] for f in files]
+    runs = [(load(f)["tasks"], WITH if f in DEFAULTS_ARE_NATIVE else key) for f in files]
     if not runs:
         return None
-    return {"fresh": rng([r[key]["wall_with_warm_seconds"] for r in runs]),
-            "next": rng([r[key + NEXT]["wall_with_warm_seconds"] for r in runs]),
-            "mem": rng([r[k]["peak_rss_kb"] / 2 ** 20 for r in runs for k in (key, key + NEXT)])}
+    return {"fresh": rng([r[k]["wall_with_warm_seconds"] for r, k in runs]),
+            "next": rng([r[k + NEXT]["wall_with_warm_seconds"] for r, k in runs]),
+            "mem": rng([r[x]["peak_rss_kb"] / 2 ** 20 for r, k in runs for x in (k, k + NEXT)])}
 
 
 def task_numbers():

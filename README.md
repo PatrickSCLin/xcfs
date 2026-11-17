@@ -24,10 +24,10 @@ Measured on public apps, three agents at once unless noted, on one machine: **Ma
 
 | when several agents each get a worktree | plain `git worktree` + `xcodebuild` | xcfs |
 |---|---|---|
-| every new worktree builds from nothing | every batch waits for cold builds: 284–302 s on Ice Cubes, 375–387 s on Wikipedia | slots stay built; the next batch on a pool: 138–151 s on Ice Cubes (111–121 s with the opt-in experimental driver; Wikipedia, measured with it only: 187–203 s) |
+| every new worktree builds from nothing | every batch waits for cold builds: 284–302 s on Ice Cubes, 347–363 s on Wikipedia | slots stay built; the next batch on a pool: 138–151 s on Ice Cubes, 248–264 s on Wikipedia (111–121 s and 187–203 s with the opt-in experimental driver) |
 | DerivedData outlives the worktree | 1.5 GB per worktree left in the global DerivedData (Ice Cubes), 2.9 GB (Wikipedia) | build output lives with the checkout and goes with it: nothing left |
-| memory | 24–25 GB, 15–16 GB at the peak | 8–12 GB; 5–8 GB (with the experimental driver) |
-| agents test on the simulator they all name | a test run killed by another agent's: 1 of 6 runs (Ice Cubes), 2 of 6 (Wikipedia) | one simulator per checkout: none |
+| memory | 24–25 GB, 15–16 GB at the peak | 8–12 GB, 11–13 GB |
+| agents test on the simulator they all name | a test run killed by another agent's: 1 of 6 runs (Ice Cubes), 5 of 12 (Wikipedia) | one simulator per checkout: none |
 | dependencies resolved and fetched again for every worktree | each worktree resolves its packages, installs its pods | the dependency layer is cloned in (APFS clonefile, blocks shared) |
 | `xcodebuild`'s fixed cost on every build | a no-op build: 5.9 s (Ice Cubes, one agent) | a persistent build session: 0.9 s; `xcfs check` compiles one file in 1–4 s |
 | a public declaration in a widely imported module recompiles everything that imports it | 25 s (Ice Cubes), 35 s (Wikipedia) | the same by default; 6 s, 15 s with the experimental Swift driver, opt-in (`"swiftDriver": "patched"`) |
@@ -43,11 +43,12 @@ All charts: MacBook Pro, Apple M1 Max (10 cores), 64 GB, macOS 27.2, Xcode 27.2,
 </picture>
 
 Three agents start at once, each with a task defined in advance: add a function, get a compile error, fix it, add a
-unit test, run it, build the app. The pool pays its warm-up once (three Ice Cubes slots: 214–226 s), so the first
-batch on a fresh pool is slower than plain worktrees; every later batch is 1.9–2.2× faster. The purple bars are the
-experimental Swift driver, opt-in: later batches faster still (2.3–2.7×), the warm-up longer; Wikipedia was measured
-with it only. MacBook Pro, M1 Max, 64 GB, macOS 27.2, Xcode 27.2, one architecture; whiskers are the range over two
-or three runs.
+unit test, run it, build the app. The pool pays its warm-up once (three slots: 214–226 s on Ice Cubes, 264–283 s on
+Wikipedia), so the first batch on a fresh pool is slower than plain worktrees; every later batch is 1.9–2.2× faster on
+Ice Cubes and 1.3–1.5× on Wikipedia, where each task's public declaration in a module ~300 app files import makes the
+final app build and the next re-warm recompile them. The purple bars are the experimental Swift driver, opt-in, which
+narrows exactly that: later batches faster still (2.3–2.7× and 1.8–2.1×), the warm-up longer. MacBook Pro, M1 Max, 64 GB, macOS 27.2, Xcode 27.2, one architecture; whiskers are the
+range over two or three runs.
 [Tables and method](docs/benchmark.md#three-agents-real-tasks-at-the-same-time).
 
 <picture>
@@ -55,8 +56,8 @@ or three runs.
   <img alt="Peak memory while the agents work and what removal leaves behind" src="docs/img/agents-memory-disk-light.svg">
 </picture>
 
-The same runs. xcfs's warm-up itself peaks at 24–25 GB on Ice Cubes (10 GB on Wikipedia, with the experimental driver)
-while it builds three slots side by side; `warmJobs` builds fewer at once (a smaller machine; not measured on one).
+The same runs. xcfs's warm-up itself peaks at 24–25 GB on Ice Cubes and 12–15 GB on Wikipedia while it builds three
+slots side by side; `warmJobs` builds fewer at once (a smaller machine; not measured on one).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/zero-config-round-dark.svg">

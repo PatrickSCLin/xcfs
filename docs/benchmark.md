@@ -45,7 +45,7 @@ Ranges over clean runs (plain 2, each xcfs cell 2–3; nothing else ran on the m
 What it says:
 
 - **From the second batch on, xcfs is 1.9–2.2× faster** (2.3–2.7× with the experimental driver), and agents work in
-  a third of the memory: the slots are built,
+  a third to a half of the memory: the slots are built,
   each build is incremental, and a check compiles one file.
 - **A fresh pool's first batch is slower than plain worktrees** (17–32 %; 35–48 % with the experimental driver): warming three slots (three cold builds
   side by side, and each slot's simulator booted once) takes longer than three plain cold builds, because each warm-up
@@ -76,18 +76,27 @@ gate of four places per core, 40 on the 10-core machine, keeps it at 22–25 GB,
 
 The same design on a larger app with Swift and Objective-C ([profile](../bench/profiles/wikipedia-ios-tasks.json)):
 a wikitext helper and a URL helper added to `WMFData` (imported by ~300 app files), a layout helper added to
-`WMFComponents`; each task runs its own new test class (`-only-testing`, `xcfs test --only`). Two runs each:
+`WMFComponents`; each task runs its own new test class (`-only-testing`, `xcfs test --only`). Two runs of each
+side; xcfs without the driver was measured with 0.3.1, two days after the driver's runs (made with 0.2), each next to
+plain worktrees of its own day ([bench/run-public.sh](../bench/run-public.sh) `wikipedia`):
 
-| | plain worktrees | xcfs + experimental driver (opt-in; xcfs without it was not measured here) |
-|---|---|---|
-| warm-up before the agents (a fresh pool) | — | 278–279 s |
-| the agents' wall time, warm-up excluded | 375–387 s | 241–259 s |
-| **a fresh pool, warm-up included** | **375–387 s** | **520–537 s** (slower) |
-| **the next three agents** (warm-up of the released slots included) | **375–387 s** | **187–203 s** |
-| peak memory while the agents work | 15.3–15.7 GB | 7.1–8.2 GB |
-| peak memory during the warm-up | — | 10.2–10.3 GB |
-| left on disk after removal | 8.8–8.9 GB of global DerivedData | nothing |
-| builds or tests with an unexpected result | 2 of 6 test runs ("Test crashed with signal kill while preparing to run tests": the shared simulator) | 0 |
+| | plain worktrees | xcfs | xcfs + experimental driver (opt-in) |
+|---|---|---|---|
+| warm-up before the agents (a fresh pool) | — | 264–283 s | 278–279 s |
+| the agents' wall time, warm-up excluded | 347–363 s; 375–387 s beside the driver's runs | 230–265 s | 241–259 s |
+| **a fresh pool, warm-up included** | **347–363 s**; 375–387 s | **494–548 s** (slower) | **520–537 s** (slower) |
+| **the next three agents** (warm-up of the released slots included) | **347–363 s**; 375–387 s | **248–264 s** | **187–203 s** |
+| peak memory while the agents work | 15.3–16.2 GB | 10.8–13.1 GB | 7.1–8.2 GB |
+| peak memory during the warm-up | — | 11.9–15.4 GB | 10.2–10.3 GB |
+| left on disk after removal | 8.8–8.9 GB of global DerivedData | nothing | nothing |
+| builds or tests with an unexpected result | 5 of 12 test runs ("Test crashed with signal kill while preparing to run tests": the shared simulator) | 0 | 0 |
+
+On Wikipedia the next batch is 1.3–1.5× faster than plain worktrees without the driver and 1.8–2.1× with it. Each
+task adds a public declaration to `WMFData` or `WMFComponents`, which ~300 app files import: the agent's final app
+build recompiles them (49–97 s without the driver, 30–63 s with it), and so does the re-warm of each returned slot,
+back at the baseline (68 s against 40 s); the tests themselves take the same time either way (63–117 s). The other
+gains hold without the driver: a sixth to a third less memory, nothing left in DerivedData, no test run killed by another
+agent's.
 
 ### A pool at rest
 
