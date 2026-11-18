@@ -1618,8 +1618,14 @@ def t65_driver_frontends_go_through_a_shared_gate():
         starts = sorted(float(x) for x in open(log).read().split())
         assert len(starts) == 2, starts
         return starts[1] - starts[0]
+    if os.path.exists(log):
+        os.remove(log)
     held = subprocess.Popen([gate, "-frontend", "-c"], env=env)    # the doctor sees a place in use while it runs
-    time.sleep(0.8)
+    # wait for the fake frontend to start (it holds the place from then on, for 2 s), not a fixed time: the gate's
+    # first /usr/bin/python3 on a fresh CI runner can take longer than a second to start
+    deadline = time.time() + 30
+    while not os.path.exists(log) and time.time() < deadline:
+        time.sleep(0.05)
     assert sd.gate_status(r)[1] == 1, sd.gate_status(r)
     held.wait()
     assert sd.gate_status(r)[1] == 0
