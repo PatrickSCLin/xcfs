@@ -13,7 +13,101 @@ where it was on by default: a column "xcfs" is xcfs as it is by default now (the
 `"swiftDriver": "native"`), and "xcfs + experimental driver" is what 0.2 ran by default. In the raw results the two
 are named `xcfs (defaults-without-driver-patch)` and `xcfs (defaults)`.
 
+## Three agents: kept worktrees and a moving main
+
+The fairest comparison, measured on 2026-11-18 with xcfs 0.3.1 and the simulator fix (two runs of each side, nothing
+else running; raw results `fair-icecubes-rep1`, `-rep2`, `fair-wikipedia-rep1`, `-rep2` in
+[bench/results](../bench/results/README.md)). Three agents start at once, each with the task of the profile
+([Ice Cubes](../bench/profiles/icecubes-tasks.json), [Wikipedia](../bench/profiles/wikipedia-ios-tasks.json)). Four
+ways to give them checkouts:
+
+- **a new worktree per batch**, removed afterwards — what agent tools do by default (`claude -w`, worktree isolation).
+  Every batch builds cold. Its numbers come from the earlier runs below (2026-11-15 and -17; this side does not involve
+  xcfs, so its version does not matter, but their memory peaks did not count simulators).
+- **kept worktrees**: three worktrees created once and kept; each next batch switches every worktree to a new branch from
+  the baseline (`git switch -c`), its DerivedData kept, so the agents' first builds are incremental. Someone has to script
+  this (and its cleanup) by hand.
+- **xcfs**: a pool of three slots, warmed first; returned slots are re-warmed at the baseline, and when main moves, the
+  idle slots follow it — both in the background, before the agents ask. Shown apart from the agents' time.
+- **xcfs + the experimental driver** (`"swiftDriver": "patched"`, opt-in), on Ice Cubes.
+
+Plain sides check a change by building the task's package scheme (not the app), and run a test killed by another
+agent's again (up to three tries, all counted). "After main moved": the worktrees and the pool were at a commit 30
+merges back (30 commits on Ice Cubes, 208 on Wikipedia), then the baseline moved to the measured commit. Times are what
+the agents wait for builds, checks and tests, not their whole task.
+
+**Ice Cubes**
+
+| | new worktree per batch | kept worktrees | xcfs | xcfs + driver |
+|---|---|---|---|---|
+| the first batch (agents' time) | 284–312 s | 286–305 s | 94–118 s, after a 501–509 s warm-up | 89–107 s, after a 571–572 s warm-up |
+| **the next batch** | 284–312 s | 161 s | **46–97 s** (+31–82 s re-warm before) | **36–80 s** (+27–57 s) |
+| **after main moved 30 commits** | 284–312 s | 257–279 s | **77 s** (+287–302 s following main before) | **70 s** (+339–342 s) |
+| build processes' memory, next batch | — | 7.4–8.0 GB | 4.9–9.0 GB | 7.2–8.3 GB |
+| booted simulators (≈3.4 GB each) | 1 | 1 | 3 | 3 |
+| a fresh pool's warm-up, peak memory | — | — | 21.2–21.7 GB | 21.5–22.1 GB |
+| test runs killed by another agent's | 0 of 3 here; 1 of 6 earlier | 0 of 18 | 0 | 0 |
+| left on disk | 4.6–4.7 GB per batch, never cleaned | 4.7–4.8 GB, until removed by hand | nothing after removal | nothing |
+
+**Wikipedia iOS**
+
+| | new worktree per batch | kept worktrees | xcfs |
+|---|---|---|---|
+| the first batch (agents' time) | 347–387 s | 343–474 s | 277–281 s, after a 511–521 s warm-up |
+| **the next batch** | 347–387 s | 185–186 s | **130–185 s** (+72–74 s re-warm before) |
+| **after main moved 208 commits** | 347–387 s | 217–254 s | **174–189 s** (+258–268 s following main before) |
+| build processes' memory, next batch | — | 14.4–16.0 GB | 9.0–11.7 GB |
+| booted simulators (≈3.4 GB each) | 1 | 1 | 3 |
+| a fresh pool's warm-up, peak memory | — | — | 13.5–13.6 GB |
+| test runs killed by another agent's | 5 of 12 earlier | 3 of 18 | 0 |
+| left on disk | 8.8–8.9 GB per batch, never cleaned | 8.9 GB, until removed by hand | nothing after removal |
+
+Every side ran twice in the night of 2026-11-18; xcfs ran twice more that morning, after the warm-up started waiting
+for each new simulator to settle (858f236). The first-batch figures come from those later runs, since that change
+moved work from the first batch into the warm-up; their next batches (77–97 s on Ice Cubes, 130–138 s on Wikipedia)
+go through the same code as the night's and are included in the ranges. Ice Cubes' next batch was slower in the
+morning in every step, the app build through the build session too (46–66 against 18–32 s), which the change does not
+touch: the spread is the machine's, so the ratios to kept worktrees below also quote the runs that measured both sides
+together.
+
+What it says:
+
+- **Against what agent tools do by default, xcfs is 2.9–6.8× faster on Ice Cubes and 1.9–3.0× on Wikipedia** in what
+  the agents wait for, from the second batch on, and leaves nothing behind.
+- **A fresh pool's first batch is 2.4–3.3× faster than new worktrees on Ice Cubes and 1.2–1.4× on Wikipedia, after a
+  warm-up of 501–521 s.** A new simulator's first boot keeps 4–9 cores busy for about four minutes; the warm-up now
+  waits for that, so the agents start on a quiet machine. Before, the warm-up took 216–292 s and the first batch
+  213–321 s. Counted in, a fresh pool is slower than plain worktrees (595–627 against 284–312 s on Ice Cubes, 791–798
+  against 347–387 s on Wikipedia): warm the pool before the agents need it, which is what it is for.
+- **Where the 161 against 46–53 s on Ice Cubes (the runs that measured both) comes from**, step by step: the first build of a kept worktree recompiles
+  what the previous task changed (17–35 s; xcfs's re-warm did that before), a check builds the package's scheme
+  (4–12 s) where `xcfs check` compiles the one file (1–3.5 s), the tests run 39–78 s on the shared simulator against
+  7–15 s on a slot's booted one, and the final app build takes 44–52 s through `xcodebuild` against 18–32 s through the
+  build session.
+- **Against worktrees kept and switched by a script**, xcfs is still 1.7–3.5× faster on Ice Cubes (3–3.5× in the
+  runs that measured both sides), and as fast to 2.1× faster counting the re-warm it does in advance (77–160 against
+  161 s). On Wikipedia it is as fast to 1.4× faster for the next batch, and 1.1–1.5× faster after main moved; counting
+  the re-warm, the next batch is slower than kept worktrees (204–257 against 185–186 s). Each Wikipedia task adds a public
+  declaration to a module ~300 app files import; every side pays for recompiling them somewhere, and xcfs pays it in
+  the background.
+- **When main moves**, kept worktrees rebuild what changed while the agents wait; xcfs's slots follow main before they
+  ask (287–302 s and 258–268 s of background work for 30 and 208 commits), which needs the machine to have that time
+  before the agents start. Counted in, xcfs is slower (Ice Cubes 364–379 against 257–279 s, Wikipedia 431–457 against
+  217–254 s). A script could pre-build kept worktrees in the background as well; that was not measured.
+- **Why following 30 commits costs nearly a cold build**: those commits touch low-level modules, so a plain worktree
+  following them alone recompiles 1,769 Swift files too (60 s, against 85 s cold). A slot alone takes 92.5 s: the same
+  build (≈55 s) plus exporting the project description again (38 s, packages resolved). Three slots following at once
+  share the CPU and their exports overlap, 270 s each; running the exports one after another is a planned improvement.
+- **Memory**: xcfs's build processes use about as much as kept worktrees', but each slot has its own booted simulator
+  (≈3.4 GB of footprint each, measured with `footprint`) where plain sides share one. That is the price of no test run
+  ever being killed by another agent's; `simulatorIdleMinutes` bounds how long they stay booted.
+- **What changed to get there**: `xcfs test` used to let `xcodebuild` boot the slot's simulator and shut it down after
+  every run, so each test paid a boot and a first launch (Wikipedia's test steps took 90–110 s against 31–43 s in kept
+  worktrees). xcfs now keeps the simulator booted ([CHANGELOG](../CHANGELOG.md)).
+
 ## Three agents, real tasks, at the same time
+
+Earlier runs (0.2 and 0.3.1, before the simulator fix), which compared xcfs with a new worktree per batch only.
 
 The measure closest to what xcfs is for: three agents start at once on one app, each with a small task defined in
 advance and judged by a build and the package's own tests. On [Ice Cubes](#ice-cubes) (one architecture): a public

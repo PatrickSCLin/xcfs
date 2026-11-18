@@ -29,6 +29,9 @@ Three agents, real tasks (`icecubes-tasks.json`): plain `tasks-icecubes-v4-rep1`
 (`v4-rep1`, `-rep3`, `-rep4` hold the defaults before the gate). Agents at the same time: `concurrent2-*` (slots warmed
 one after another), `concurrent3-*` (side by side). Warm-up memory with and without the gate: `warmjobs-icecubes-*`.
 
+The fair comparison (2026-11-18): `fair-icecubes-rep1`, `-rep2`, `fair-wikipedia-rep1`, `-rep2` (`bench.py --phases
+tasks-plain,tasks:…,tasks-reuse,tasks-advance:…`); xcfs again after the warm-up started waiting for new simulators to
+settle: `settled-icecubes-rep1`, `-rep2`, `settled-wikipedia-rep1`, `-rep2` (`--phases tasks:…`).
 Xcode.app beside xcfs on one slot: `xcode-app-beside-icecubes-20261117.txt` (`bench/xcode-app-beside.sh`). Wikipedia
 without the experimental driver: `tasks-wikipedia-nodriver-rep1`, `-rep2`.
 Two worktrees sharing one DerivedData: `shared-deriveddata-icecubes-20261115.txt` (`bench/shared-deriveddata.sh`).

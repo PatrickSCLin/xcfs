@@ -1,0 +1,1924 @@
+{
+ "profile": "Ice Cubes (arm64, three agents, real tasks)",
+ "agents": 3,
+ "started": "20261118-022927",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "98098b9c"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {},
+ "concurrent": {},
+ "tasks": {
+  "plain": {
+   "wall_seconds": 312.0,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.3,
+     "remove_seconds": 0.2,
+     "total_seconds": 283.3,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 160.8,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 4.3,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 5.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 27.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 84.8,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 282.2,
+     "unexpected": 0,
+     "left_kb": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.3,
+     "remove_seconds": 0.1,
+     "total_seconds": 312.0,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 160.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 5.6,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 7.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 98.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 38.7,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 310.4,
+     "unexpected": 0,
+     "left_kb": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.3,
+     "remove_seconds": 0.2,
+     "total_seconds": 298.4,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 159.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 4.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 5.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 60.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 66.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 295.5,
+     "unexpected": 0,
+     "left_kb": 0
+    }
+   ],
+   "tests_killed": 0,
+   "left_kb": 4892824,
+   "peak_rss_kb": 25647472,
+   "mean_rss_kb": 6106685,
+   "peak_processes": 83,
+   "samples": 246,
+   "peak_booted_simulators": 1,
+   "peak_disk_kb": 5090152,
+   "disk_kb_at_end": 4814024,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     21541856
+    ],
+    [
+     "SWBBuildService",
+     3348368
+    ],
+    [
+     "xcodebuild",
+     737056
+    ],
+    [
+     "swift-plugin-server",
+     18336
+    ],
+    [
+     "ps",
+     1856
+    ]
+   ]
+  },
+  "xcfs (defaults)": {
+   "warm_seconds": 242.8,
+   "warm_peak_rss_kb": 27292304,
+   "warm_peak_disk_kb": 6833172,
+   "wall_seconds": 212.7,
+   "wall_with_warm_seconds": 455.5,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 21.6,
+     "remove_seconds": 1.7,
+     "total_seconds": 212.7,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 13.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 6.9,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 9.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 125.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 34.1,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 189.4,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 20.0,
+     "remove_seconds": 3.8,
+     "total_seconds": 198.0,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 13.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 11.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 22.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 112.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 14.8,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 173.9,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 20.7,
+     "remove_seconds": 1.7,
+     "total_seconds": 212.2,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 12.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 8.1,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 17.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 120.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 31.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 189.7,
+     "unexpected": 0
+    }
+   ],
+   "peak_rss_kb": 8915552,
+   "mean_rss_kb": 4296947,
+   "peak_processes": 81,
+   "samples": 111,
+   "peak_booted_simulators": 3,
+   "peak_disk_kb": 1671308,
+   "disk_kb_at_end": 1673812,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     5647184
+    ],
+    [
+     "SWBBuildService",
+     2227968
+    ],
+    [
+     "swift-plugin-server",
+     435008
+    ],
+    [
+     "(swift-frontend)",
+     338864
+    ],
+    [
+     "python3",
+     188768
+    ],
+    [
+     "swbuild",
+     57008
+    ]
+   ]
+  },
+  "xcfs (defaults), the next 3 agents on the same pool": {
+   "warm_seconds": 32.1,
+   "warm_peak_rss_kb": 3356144,
+   "warm_peak_disk_kb": 20004,
+   "wall_seconds": 53.1,
+   "wall_with_warm_seconds": 85.2,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.2,
+     "remove_seconds": 1.6,
+     "total_seconds": 50.0,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 0.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 1.2,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 2.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 11.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 32.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 48.1,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.2,
+     "remove_seconds": 4.7,
+     "total_seconds": 48.3,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 1.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 3.4,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 3.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 15.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 20.1,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 43.4,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.2,
+     "remove_seconds": 1.5,
+     "total_seconds": 53.1,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 0.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 1.6,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 2.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 14.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 32.4,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 51.2,
+     "unexpected": 0
+    }
+   ],
+   "peak_rss_kb": 5136624,
+   "mean_rss_kb": 3344597,
+   "peak_processes": 32,
+   "samples": 23,
+   "peak_booted_simulators": 3,
+   "peak_disk_kb": 147692,
+   "disk_kb_at_end": 148220,
+   "peak_by_process": [
+    [
+     "SWBBuildService",
+     2522768
+    ],
+    [
+     "swift-frontend",
+     2232096
+    ],
+    [
+     "python3",
+     159920
+    ],
+    [
+     "swift-plugin-server",
+     148880
+    ],
+    [
+     "swbuild",
+     43168
+    ],
+    [
+     "embeddedBinaryValidationUtility",
+     25184
+    ]
+   ],
+   "reclaimed_kb_at_retire": 2480580
+  },
+  "xcfs (experimental-driver)": {
+   "warm_seconds": 295.6,
+   "warm_peak_rss_kb": 20727584,
+   "warm_peak_disk_kb": 39480,
+   "wall_seconds": 222.2,
+   "wall_with_warm_seconds": 517.8,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 30.8,
+     "remove_seconds": 1.6,
+     "total_seconds": 222.2,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 10.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 12.8,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 8.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 126.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 30.9,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 189.8,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 31.4,
+     "remove_seconds": 2.9,
+     "total_seconds": 213.7,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 14.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 12.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 8.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 126.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 17.5,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 179.1,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 32.2,
+     "remove_seconds": 2.8,
+     "total_seconds": 215.3,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 15.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 14.2,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 11.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 120.8,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 19.1,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 180.3,
+     "unexpected": 0
+    }
+   ],
+   "peak_rss_kb": 9500080,
+   "mean_rss_kb": 2721541,
+   "peak_processes": 78,
+   "samples": 104,
+   "peak_booted_simulators": 3,
+   "peak_disk_kb": 1887036,
+   "disk_kb_at_end": 1886972,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     5273008
+    ],
+    [
+     "SWBBuildService",
+     1946336
+    ],
+    [
+     "(swift-frontend)",
+     816864
+    ],
+    [
+     "ld",
+     548752
+    ],
+    [
+     "swift-plugin-server",
+     292400
+    ],
+    [
+     "swift-driver",
+     240416
+    ]
+   ]
+  },
+  "xcfs (experimental-driver), the next 3 agents on the same pool": {
+   "warm_seconds": 26.6,
+   "warm_peak_rss_kb": 6479328,
+   "warm_peak_disk_kb": 21380,
+   "wall_seconds": 35.9,
+   "wall_with_warm_seconds": 62.5,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.2,
+     "remove_seconds": 1.7,
+     "total_seconds": 35.9,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 1.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 1.3,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 2.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 6.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 23.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 33.9,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.2,
+     "remove_seconds": 2.7,
+     "total_seconds": 30.8,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 1.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 1.8,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 1.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 9.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 13.9,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 27.8,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.2,
+     "remove_seconds": 1.8,
+     "total_seconds": 31.7,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 1.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 1.8,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 1.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 8.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 16.4,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 29.6,
+     "unexpected": 0
+    }
+   ],
+   "peak_rss_kb": 8407104,
+   "mean_rss_kb": 3125332,
+   "peak_processes": 75,
+   "samples": 26,
+   "peak_booted_simulators": 3,
+   "peak_disk_kb": 45804,
+   "disk_kb_at_end": 45804,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     6397360
+    ],
+    [
+     "SWBBuildService",
+     1000864
+    ],
+    [
+     "swift-plugin-server",
+     457664
+    ],
+    [
+     "swift-driver",
+     284960
+    ],
+    [
+     "python3",
+     200720
+    ],
+    [
+     "swbuild",
+     63184
+    ]
+   ],
+   "reclaimed_kb_at_retire": 2090288
+  },
+  "plain, kept worktrees": {
+   "wall_seconds": 285.8,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.7,
+     "remove_seconds": 0.0,
+     "total_seconds": 260.9,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 154.8,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 4.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 5.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 29.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 65.6,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 259.7,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.4,
+     "remove_seconds": 0.0,
+     "total_seconds": 285.8,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 154.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 5.9,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 7.6,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 77.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 39.2,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 284.2,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.4,
+     "remove_seconds": 0.0,
+     "total_seconds": 272.4,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 152.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 4.9,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 5.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 40.2,
+       "ok": false,
+       "as_expected": false
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 66.2,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 269.3,
+     "unexpected": 1
+    }
+   ],
+   "tests_killed": 0,
+   "peak_rss_kb": 23963632,
+   "mean_rss_kb": 6475938,
+   "peak_processes": 67,
+   "samples": 228,
+   "peak_booted_simulators": 1,
+   "peak_disk_kb": 1225000,
+   "disk_kb_at_end": 83792,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     19707888
+    ],
+    [
+     "SWBBuildService",
+     3506544
+    ],
+    [
+     "xcodebuild",
+     729040
+    ],
+    [
+     "swift-plugin-server",
+     18336
+    ],
+    [
+     "ps",
+     1824
+    ]
+   ]
+  },
+  "plain, kept worktrees, the next 3 agents": {
+   "wall_seconds": 161.1,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.0,
+     "remove_seconds": 0.0,
+     "total_seconds": 133.6,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 34.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 4.1,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 5.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 38.8,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 50.6,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 133.5,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.0,
+     "remove_seconds": 0.0,
+     "total_seconds": 160.3,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 17.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 12.3,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 7.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 78.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 44.5,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 160.2,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.0,
+     "remove_seconds": 0.0,
+     "total_seconds": 161.1,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 33.8,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 4.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 6.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 70.8,
+       "ok": false,
+       "as_expected": false
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 45.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 160.9,
+     "unexpected": 1
+    }
+   ],
+   "tests_killed": 0,
+   "peak_rss_kb": 7793024,
+   "mean_rss_kb": 4183659,
+   "peak_processes": 49,
+   "samples": 120,
+   "peak_booted_simulators": 1,
+   "peak_disk_kb": 287724,
+   "disk_kb_at_end": 137936,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     5104864
+    ],
+    [
+     "SWBBuildService",
+     1641584
+    ],
+    [
+     "xcodebuild",
+     655696
+    ],
+    [
+     "swift-plugin-server",
+     389040
+    ],
+    [
+     "ps",
+     1840
+    ]
+   ],
+   "left_kb": 4990392
+  },
+  "plain, kept worktrees, built at the earlier baseline (30 commits back; not compared)": {
+   "wall_seconds": 134.5,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.3,
+     "remove_seconds": 0.0,
+     "total_seconds": 134.5,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 133.6,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 133.6,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.3,
+     "remove_seconds": 0.0,
+     "total_seconds": 133.4,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 131.9,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 131.9,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.5,
+     "remove_seconds": 0.0,
+     "total_seconds": 132.8,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 130.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 130.3,
+     "unexpected": 0
+    }
+   ],
+   "tests_killed": 0,
+   "peak_rss_kb": 21414720,
+   "mean_rss_kb": 8456852,
+   "peak_processes": 66,
+   "samples": 113,
+   "peak_booted_simulators": 0,
+   "peak_disk_kb": 4437492,
+   "disk_kb_at_end": 4457972,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     17680128
+    ],
+    [
+     "SWBBuildService",
+     2974736
+    ],
+    [
+     "xcodebuild",
+     704848
+    ],
+    [
+     "swift-plugin-server",
+     53168
+    ],
+    [
+     "ps",
+     1840
+    ]
+   ]
+  },
+  "plain, kept worktrees, after the baseline moved 30 commits": {
+   "wall_seconds": 256.8,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.0,
+     "remove_seconds": 0.0,
+     "total_seconds": 233.6,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 129.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 4.4,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 5.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 27.8,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 66.8,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 233.5,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.0,
+     "remove_seconds": 0.0,
+     "total_seconds": 256.8,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 130.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 5.9,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 7.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 73.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 38.9,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 256.7,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.0,
+     "remove_seconds": 0.0,
+     "total_seconds": 239.5,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 130.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 4.7,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 5.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 33.7,
+       "ok": false,
+       "as_expected": false
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 65.8,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "tests_killed": 0,
+     "wait_seconds": 239.3,
+     "unexpected": 1
+    }
+   ],
+   "tests_killed": 0,
+   "peak_rss_kb": 25052000,
+   "mean_rss_kb": 6184932,
+   "peak_processes": 88,
+   "samples": 199,
+   "peak_booted_simulators": 1,
+   "peak_disk_kb": 1290684,
+   "disk_kb_at_end": 1230588,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     21390736
+    ],
+    [
+     "SWBBuildService",
+     2716448
+    ],
+    [
+     "xcodebuild",
+     704368
+    ],
+    [
+     "(swift-frontend)",
+     238608
+    ],
+    [
+     "ps",
+     1840
+    ]
+   ],
+   "left_kb": 5018832
+  },
+  "xcfs (defaults), after the baseline moved 30 commits": {
+   "wall_seconds": 76.5,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.4,
+     "remove_seconds": 1.5,
+     "total_seconds": 75.8,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 2.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 1.2,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 1.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 37.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 31.5,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 73.8,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.4,
+     "remove_seconds": 3.8,
+     "total_seconds": 63.0,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 2.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 3.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 3.6,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 35.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 13.9,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 58.5,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.4,
+     "remove_seconds": 1.5,
+     "total_seconds": 76.5,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 2.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 1.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 2.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 38.8,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 30.0,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 74.5,
+     "unexpected": 0
+    }
+   ],
+   "tests_killed": 0,
+   "peak_rss_kb": 10804528,
+   "mean_rss_kb": 5814003,
+   "peak_processes": 69,
+   "samples": 59,
+   "peak_booted_simulators": 3,
+   "peak_disk_kb": 583180,
+   "disk_kb_at_end": 582284,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     5968992
+    ],
+    [
+     "SWBBuildService",
+     4133200
+    ],
+    [
+     "swift-plugin-server",
+     447024
+    ],
+    [
+     "python3",
+     192816
+    ],
+    [
+     "swbuild",
+     60176
+    ],
+    [
+     "ps",
+     2320
+    ]
+   ],
+   "warm_seconds": 301.9,
+   "warm_peak_rss_kb": 19760480,
+   "earlier_warm_seconds": 195.8,
+   "wall_with_warm_seconds": 378.4
+  },
+  "xcfs (experimental-driver), after the baseline moved 30 commits": {
+   "wall_seconds": 70.4,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "Models: display name or handle",
+     "create_seconds": 0.4,
+     "remove_seconds": 1.6,
+     "total_seconds": 70.4,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 2.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add the helper (with a typo)",
+       "verify": "check",
+       "seconds": 1.8,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 2.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 36.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 25.5,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 68.3,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "Timeline: remote filters",
+     "create_seconds": 0.4,
+     "remove_seconds": 3.0,
+     "total_seconds": 64.0,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 2.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add isRemote (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 3.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 1.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 38.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 15.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 60.4,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "Env: shortest duration at least N seconds",
+     "create_seconds": 0.4,
+     "remove_seconds": 1.6,
+     "total_seconds": 67.7,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 2.1,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add atLeast(seconds:) (an optional not unwrapped)",
+       "verify": "check",
+       "seconds": 2.2,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "return the duration",
+       "verify": "check",
+       "seconds": 2.0,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a unit test and run the package's tests",
+       "verify": "test",
+       "seconds": 38.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 20.6,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 65.6,
+     "unexpected": 0
+    }
+   ],
+   "tests_killed": 0,
+   "peak_rss_kb": 10269920,
+   "mean_rss_kb": 3723982,
+   "peak_processes": 84,
+   "samples": 51,
+   "peak_booted_simulators": 3,
+   "peak_disk_kb": 524696,
+   "disk_kb_at_end": 506996,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     6614640
+    ],
+    [
+     "SWBBuildService",
+     2023552
+    ],
+    [
+     "(swift-frontend)",
+     563712
+    ],
+    [
+     "swift-plugin-server",
+     497776
+    ],
+    [
+     "swift-driver",
+     280688
+    ],
+    [
+     "python3",
+     204064
+    ]
+   ],
+   "warm_seconds": 338.9,
+   "warm_peak_rss_kb": 21353296,
+   "earlier_warm_seconds": 249.9,
+   "wall_with_warm_seconds": 409.3
+  }
+ }
+}

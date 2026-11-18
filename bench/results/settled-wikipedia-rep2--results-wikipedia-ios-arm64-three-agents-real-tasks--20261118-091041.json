@@ -1,0 +1,387 @@
+{
+ "profile": "Wikipedia iOS (arm64, three agents, real tasks)",
+ "agents": 3,
+ "started": "20261118-091041",
+ "machine": {
+  "model": "MacBookPro18,4",
+  "cpu": "Apple M1 Max",
+  "cores": "10",
+  "memory_gb": 64,
+  "macos": "27.2",
+  "xcode": "Xcode 27.2 Build version 27B52",
+  "source_commit": "0919f3eafd"
+ },
+ "plain": {},
+ "xcfs": {},
+ "round": {},
+ "concurrent": {},
+ "tasks": {
+  "xcfs (defaults)": {
+   "warm_seconds": 510.6,
+   "warm_peak_rss_kb": 14147088,
+   "warm_peak_disk_kb": 4012784,
+   "wall_seconds": 280.6,
+   "wall_with_warm_seconds": 791.2,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "WMFData: wikitext heading level",
+     "create_seconds": 0.4,
+     "remove_seconds": 1.8,
+     "total_seconds": 280.6,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 16.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add headingLevel(of:) (a typo)",
+       "verify": "check",
+       "seconds": 2.5,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 4.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a test class and run it",
+       "verify": "test",
+       "seconds": 184.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 70.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 278.1,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "WMFComponents: grid spacing",
+     "create_seconds": 0.4,
+     "remove_seconds": 2.8,
+     "total_seconds": 261.4,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 16.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add spacing(forColumns:) (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 5.3,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 5.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a test suite and run it",
+       "verify": "test",
+       "seconds": 179.6,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 51.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 257.9,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "WMFData: mobile host",
+     "create_seconds": 0.4,
+     "remove_seconds": 1.9,
+     "total_seconds": 280.4,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 16.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add wmf_isMobileWikipediaHost (a method that does not exist)",
+       "verify": "check",
+       "seconds": 2.4,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the call",
+       "verify": "check",
+       "seconds": 4.8,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a test class and run it",
+       "verify": "test",
+       "seconds": 184.7,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 69.7,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 277.9,
+     "unexpected": 0
+    }
+   ],
+   "peak_rss_kb": 12386000,
+   "mean_rss_kb": 4606316,
+   "peak_processes": 54,
+   "samples": 227,
+   "peak_booted_simulators": 3,
+   "peak_disk_kb": 7220524,
+   "disk_kb_at_end": 7198232,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     9423824
+    ],
+    [
+     "SWBBuildService",
+     2200176
+    ],
+    [
+     "(swift-frontend)",
+     443968
+    ],
+    [
+     "python3",
+     159936
+    ],
+    [
+     "swift-plugin-server",
+     84944
+    ],
+    [
+     "swbuild",
+     60224
+    ]
+   ]
+  },
+  "xcfs (defaults), the next 3 agents on the same pool": {
+   "warm_seconds": 74.2,
+   "warm_peak_rss_kb": 12821584,
+   "warm_peak_disk_kb": 248040,
+   "wall_seconds": 129.8,
+   "wall_with_warm_seconds": 204.0,
+   "agents": [
+    {
+     "agent": 1,
+     "task": "WMFData: wikitext heading level",
+     "create_seconds": 0.4,
+     "remove_seconds": 1.9,
+     "total_seconds": 129.1,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 18.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add headingLevel(of:) (a typo)",
+       "verify": "check",
+       "seconds": 2.4,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the typo",
+       "verify": "check",
+       "seconds": 4.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a test class and run it",
+       "verify": "test",
+       "seconds": 27.9,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 73.0,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 126.6,
+     "unexpected": 0
+    },
+    {
+     "agent": 2,
+     "task": "WMFComponents: grid spacing",
+     "create_seconds": 0.4,
+     "remove_seconds": 4.0,
+     "total_seconds": 123.1,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 18.4,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add spacing(forColumns:) (switch not exhaustive)",
+       "verify": "check",
+       "seconds": 5.9,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "make the switch exhaustive",
+       "verify": "check",
+       "seconds": 5.5,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a test suite and run it",
+       "verify": "test",
+       "seconds": 29.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 59.3,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 118.4,
+     "unexpected": 0
+    },
+    {
+     "agent": 3,
+     "task": "WMFData: mobile host",
+     "create_seconds": 0.4,
+     "remove_seconds": 1.9,
+     "total_seconds": 129.8,
+     "steps": [
+      {
+       "step": "first build",
+       "verify": "build",
+       "seconds": 18.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add wmf_isMobileWikipediaHost (a method that does not exist)",
+       "verify": "check",
+       "seconds": 1.7,
+       "ok": false,
+       "as_expected": true
+      },
+      {
+       "step": "fix the call",
+       "verify": "check",
+       "seconds": 5.2,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "add a test class and run it",
+       "verify": "test",
+       "seconds": 28.3,
+       "ok": true,
+       "as_expected": true
+      },
+      {
+       "step": "build the app",
+       "verify": "build",
+       "seconds": 73.9,
+       "ok": true,
+       "as_expected": true
+      }
+     ],
+     "release_ok": true,
+     "wait_seconds": 127.4,
+     "unexpected": 0
+    }
+   ],
+   "peak_rss_kb": 12319520,
+   "mean_rss_kb": 5822385,
+   "peak_processes": 50,
+   "samples": 108,
+   "peak_booted_simulators": 3,
+   "peak_disk_kb": 404684,
+   "disk_kb_at_end": 378660,
+   "peak_by_process": [
+    [
+     "swift-frontend",
+     8445808
+    ],
+    [
+     "SWBBuildService",
+     3151728
+    ],
+    [
+     "(swift-frontend)",
+     342912
+    ],
+    [
+     "swift-plugin-server",
+     146320
+    ],
+    [
+     "python3",
+     138368
+    ],
+    [
+     "swbuild",
+     64640
+    ]
+   ],
+   "reclaimed_kb_at_retire": 311948
+  }
+ }
+}

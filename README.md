@@ -24,14 +24,23 @@ Measured on public apps, three agents at once unless noted, on one machine: **Ma
 
 | when several agents each get a worktree | plain `git worktree` + `xcodebuild` | xcfs |
 |---|---|---|
-| every new worktree builds from nothing | every batch waits for cold builds: 284–302 s on Ice Cubes, 347–363 s on Wikipedia | slots stay built; the next batch on a pool: 138–151 s on Ice Cubes, 248–264 s on Wikipedia (111–121 s and 187–203 s with the opt-in experimental driver) |
-| DerivedData outlives the worktree | 1.5 GB per worktree left in the global DerivedData (Ice Cubes), 2.9 GB (Wikipedia) | build output lives with the checkout and goes with it: nothing left |
-| memory | 24–25 GB, 15–16 GB at the peak | 8–12 GB, 11–13 GB |
-| agents test on the simulator they all name | a test run killed by another agent's: 1 of 6 runs (Ice Cubes), 5 of 12 (Wikipedia) | one simulator per checkout: none |
+| agent tools give every task a new worktree, which builds from nothing | every batch of three waits 284–312 s (Ice Cubes), 347–387 s (Wikipedia) | slots stay built: the next batch waits **46–97 s** and **130–185 s** |
+| main moves on every day | even kept worktrees rebuild what changed when the agents start: 257–279 s (30 commits), 217–254 s (208 commits) | idle slots follow main in the background, when the machine has time before the agents start (overnight, or a while after main moved): the agents then wait **77 s** and **174–189 s** |
+| DerivedData outlives the worktree | 4.6–4.7 GB left per batch of three (Ice Cubes), 8.8–8.9 GB (Wikipedia) | build output lives with the checkout and goes with it: **nothing left** |
+| agents test on the simulator they all name | a test run killed by another agent's: 3 of 18 on Wikipedia, 1 of 6 on Ice Cubes in earlier runs | one simulator per checkout: **none killed** |
 | dependencies resolved and fetched again for every worktree | each worktree resolves its packages, installs its pods | the dependency layer is cloned in (APFS clonefile, blocks shared) |
 | `xcodebuild`'s fixed cost on every build | a no-op build: 5.9 s (Ice Cubes, one agent) | a persistent build session: 0.9 s; `xcfs check` compiles one file in 1–4 s |
 | a public declaration in a widely imported module recompiles everything that imports it | 25 s (Ice Cubes), 35 s (Wikipedia) | the same by default; 6 s, 15 s with the experimental Swift driver, opt-in (`"swiftDriver": "patched"`) |
 | cleanup scripts guess by path or age | `rm -rf` and hope | a registry: nothing with unsaved work, nothing xcfs did not create, is deleted |
+| what it costs | nothing kept between batches | a pool: 6.0 GB on disk for three Ice Cubes slots; a fresh pool's warm-up takes 8–9 minutes (each new simulator's first boot settles before the agents start) and peaks at 21–26 GB of memory (12–17 GB on Wikipedia); each slot's simulator holds ~3.4 GB while booted (30 minutes after its last use) |
+
+The times are what the agents wait for builds, checks and tests, not their whole task, and not xcfs's background work:
+the re-warm of returned slots (31–82 s on Ice Cubes, 72–74 s on Wikipedia) and the following of main (287–302 s,
+258–268 s, three slots at once). That work needs the machine to have time before the agents start. Counted in, xcfs is
+slower than worktrees kept and switched by a script after main moved (Ice Cubes 364–379 against 257–279 s, Wikipedia
+431–457 against 217–254 s) and on Wikipedia's next batch (204–257 against 185–186 s); a script could pre-build kept
+worktrees in the background too, which was not measured
+([all of it](docs/benchmark.md#three-agents-kept-worktrees-and-a-moving-main)).
 
 ## Benchmarks
 
@@ -39,25 +48,28 @@ All charts: MacBook Pro, Apple M1 Max (10 cores), 64 GB, macOS 27.2, Xcode 27.2,
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/agents-wall-time-dark.svg">
-  <img alt="Three agents, real tasks: wall time per batch, plain worktrees against xcfs" src="docs/img/agents-wall-time-light.svg">
+  <img alt="Three agents with real tasks: how long they wait per batch with new worktrees, kept worktrees, xcfs and the experimental driver" src="docs/img/agents-wall-time-light.svg">
 </picture>
 
 Three agents start at once, each with a task defined in advance: add a function, get a compile error, fix it, add a
-unit test, run it, build the app. The pool pays its warm-up once (three slots: 214–226 s on Ice Cubes, 264–283 s on
-Wikipedia), so the first batch on a fresh pool is slower than plain worktrees; every later batch is 1.9–2.2× faster on
-Ice Cubes and 1.3–1.5× on Wikipedia, where each task's public declaration in a module ~300 app files import makes the
-final app build and the next re-warm recompile them. The purple bars are the experimental Swift driver, opt-in, which
-narrows exactly that: later batches faster still (2.3–2.7× and 1.8–2.1×), the warm-up longer. MacBook Pro, M1 Max, 64 GB, macOS 27.2, Xcode 27.2, one architecture; whiskers are the
-range over two or three runs.
-[Tables and method](docs/benchmark.md#three-agents-real-tasks-at-the-same-time).
+unit test, run it, build the app. Three ways to give them checkouts: a new worktree per batch, as agent tools do by
+default; three worktrees kept between batches and switched to a new branch by a script, their DerivedData kept; and an
+xcfs pool. Two runs of each on 2026-11-18 (xcfs 0.3.1 with the simulator fix), and two more of xcfs that day after
+its warm-up started waiting for new simulators to settle (the first-batch bars, and part of the next-batch range); the
+new-worktree bars come from earlier runs (2026-11-15 and -17), since that side does not involve xcfs. Counting only
+what the agents wait for (not xcfs's warm-up, re-warm and following of main, done beforehand): on Ice Cubes xcfs is
+2.9–6.8× faster than new worktrees and 1.7–3.5× faster than kept ones; on Wikipedia 1.9–3.0× faster than new
+worktrees, and as fast as kept ones or up to 1.4× faster. A fresh pool's first batch waits 2.4–3.3× less than new
+worktrees on Ice Cubes and 1.2–1.4× less on Wikipedia, after a warm-up of about eight and a half minutes.
+[Tables and method](docs/benchmark.md#three-agents-kept-worktrees-and-a-moving-main).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/agents-memory-disk-dark.svg">
-  <img alt="Peak memory while the agents work and what removal leaves behind" src="docs/img/agents-memory-disk-light.svg">
+  <img alt="DerivedData left behind after the agents' worktrees are removed" src="docs/img/agents-memory-disk-light.svg">
 </picture>
 
-The same runs. xcfs's warm-up itself peaks at 24–25 GB on Ice Cubes and 12–15 GB on Wikipedia while it builds three
-slots side by side; `warmJobs` builds fewer at once (a smaller machine; not measured on one).
+Removing a plain worktree leaves its DerivedData in the global folder, where nothing cleans it up; a batch of three left
+4.6–4.7 GB (Ice Cubes) and 8.8–8.9 GB (Wikipedia). An xcfs checkout's build output goes with it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/zero-config-round-dark.svg">
@@ -66,9 +78,9 @@ slots side by side; `warmJobs` builds fewer at once (a smaller machine; not meas
 
 Six public apps, four of them never built while xcfs was developed, each with a config that only names the project, the
 scheme and the destination. One agent's round: checkout, build, five edits each checked, a final build, cleanup. Plain:
-three runs each; xcfs: the run after the fixes those apps led to (two on Ice Cubes). 2–4× less time (3–10× with the
-experimental driver), no build failed, and plain worktrees left 1.5–6 GB behind each, xcfs nothing.
-[Table](docs/benchmark.md#zero-configuration-on-projects-xcfs-was-not-developed-on).
+three runs each; xcfs: the run after the fixes those apps led to (two on Ice Cubes), with xcfs 0.2 (2026-11-14). 2–4×
+less time (3–10× with the experimental driver), no build failed, and plain worktrees left 1.5–6 GB behind each, xcfs
+nothing. [Table](docs/benchmark.md#zero-configuration-on-projects-xcfs-was-not-developed-on).
 
 A pool at rest (three Ice Cubes slots): 2.3 GB resident in build sessions and no CPU while idle, plus about 3.4 GB per
 slot whose simulator is still booted (each stays booted 30 minutes after its last use, `simulatorIdleMinutes`, so that
@@ -146,8 +158,9 @@ Then start agents as usual (`claude -w feature-x`, subagents with worktree isola
 - **One checkout, day to day.** Without parallel checkouts there is no pool to reuse; what remains is the build
   session (a no-op build 5.9 → 0.9 s, a small edit 8 → 3–4 s on Ice Cubes), `xcfs check`, and `xcfs session start`
   when the project is opened, so that the first build does not wait for the session and the project description.
-- **The first batch on a fresh pool**, as above: the warm-up costs more than plain worktrees' cold builds, and
-  skipping it is slower still (451 s against 284–302 s on Ice Cubes, one run): warm the pool before the agents need it.
+- **The first batch on a fresh pool**, as above: the warm-up (501–521 s) costs more than plain worktrees' cold builds,
+  and skipping it is slower still (451 s against 284–312 s on Ice Cubes, one run): warm the pool before the agents
+  need it.
 - **CI.** Fresh machines and one build per job: no pool survives between jobs, and remote build caches are out of
   scope ([docs/build-systems.md](docs/build-systems.md)).
 - **Bazel projects:** incremental builds are Bazel's own; xcfs helps with the wait for a checkout and with cleanup.
@@ -225,8 +238,8 @@ run it again); your configs stay. Then `brew uninstall xcfs`.
 patched swift-driver in the background and uses it once it passes its self-test: after a public declaration is added
 to a widely imported module, it recompiles only the files that use what changed (Ice Cubes 25 → 6 s, Wikipedia
 35 → 15 s). It is off by default: it means building and running a compiler driver that is not Apple's. In the
-three-agent tasks it made the next batches faster (111–121 vs 138–151 s) and the fresh pool slower (408–419 vs
-354–376 s, warm-up included). See
+three-agent tasks on Ice Cubes it made the agents' wait 36–80 s against 46–97 s for the next batch and 70 against 77 s
+after main moved, and the fresh pool's warm-up longer (571–572 against 501–509 s). See
 [its notes](lib/xcfs/adapters/swiftdriver/README.md) and [docs/incremental-swift.md](docs/incremental-swift.md).
 
 Measured on a large app (≈1,800 targets) with prototypes of the same mechanisms: a no-op build 34–36 s → ≈4 s, a

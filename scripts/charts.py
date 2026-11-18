@@ -13,9 +13,9 @@ OUT = os.path.join(ROOT, "docs", "img")
 
 THEMES = {
     "light": {"text": "#1f2328", "muted": "#59636e", "grid": "#d1d9e0", "plain": "#8c959f", "xcfs": "#0969da",
-              "xcfs2": "#80b9f2", "opt": "#8250df", "opt2": "#c8b3f5", "whisker": "#1f2328"},
+              "xcfs2": "#80b9f2", "opt": "#8250df", "opt2": "#c8b3f5", "plain2": "#c4cbd3", "whisker": "#1f2328"},
     "dark": {"text": "#e6edf3", "muted": "#9198a1", "grid": "#3d444d", "plain": "#6e7681", "xcfs": "#4493f8",
-             "xcfs2": "#1f4f8f", "opt": "#a371f7", "opt2": "#4c2f8a", "whisker": "#e6edf3"},
+             "xcfs2": "#1f4f8f", "opt": "#a371f7", "opt2": "#4c2f8a", "plain2": "#484f58", "whisker": "#e6edf3"},
 }
 FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 
@@ -116,11 +116,11 @@ def fmt(lo, hi, unit):
     return (r(hi) if r(lo) == r(hi) else "%s–%s" % (r(lo), r(hi))) + unit
 
 
-def hbar_chart(groups, legend, unit, scale_max, theme, width=760, label_w=150, title=None):
+def hbar_chart(groups, legend, unit, scale_max, theme, width=760, label_w=150, title=None, right=250):
     """groups: [(group label, [(series key, (lo, hi), note or None)])]; legend: [(series key, label)]."""
     t = THEMES[theme]
     bar_h, gap, group_gap, top = 18, 6, 18, 34 if title else 10
-    plot_x, plot_w = label_w, width - label_w - 250   # room on the right for the longest label
+    plot_x, plot_w = label_w, width - label_w - right   # room on the right for the longest label
     rows = sum(len(b) for _, b in groups)
     height = top + rows * (bar_h + gap) + len(groups) * group_gap + 44
     svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" font-family="%s" '
@@ -164,41 +164,106 @@ def write(name, make):
 
 NOT_MEASURED = (0.0, 0.0)
 
+# ------------------------------------------------------------------ the fair comparison (2026-11-18, xcfs 0.3.1+)
+FAIR = {"Ice Cubes": ["fair-icecubes-rep1--results-ice-cubes-arm64-three-agents-real-tasks--20261118-022927.json",
+                      "fair-icecubes-rep2--results-ice-cubes-arm64-three-agents-real-tasks--20261118-032927.json"],
+        "Wikipedia": ["fair-wikipedia-rep1--results-wikipedia-ios-arm64-three-agents-real-tasks--20261118-042542.json",
+                      "fair-wikipedia-rep2--results-wikipedia-ios-arm64-three-agents-real-tasks--20261118-051030.json"]}
+# A new worktree per batch (what agent tools do by default) builds cold whatever came before; measured in every run
+# that had it, on several days and xcfs versions (it does not use xcfs).
+COLD = {"Ice Cubes": ([ICE % ("v4-rep1", "062620"), ICE % ("v4-rep2", "064126"),
+                       "tasks-icecubes-v2-rep1--results-ice-cubes-arm64-three-agents-real-tasks--20261115-034835.json",
+                       "tasks-icecubes-v2-rep2--results-ice-cubes-arm64-three-agents-real-tasks--20261115-041047.json"],
+                      FAIR["Ice Cubes"][:1]),
+        "Wikipedia": ([WIKI % ("rep1", "161441"), WIKI % ("rep2", "163328"), WIKI2 % ("rep1", "200836"),
+                       WIKI2 % ("rep2", "202910")], [])}
 
-def wall_bars(n):
-    bars = [("plain", n["plain"], "every batch")]
-    if n["xcfs"]:
-        bars += [("xcfs", n["xcfs"]["next"], "the next batch on the pool"),
-                 ("xcfs2", n["xcfs"]["fresh"], "a fresh pool, warm-up included")]
-    else:
-        bars += [("xcfs", NOT_MEASURED, "xcfs without the driver: not measured on this app")]
-    bars += [("opt", n["driver"]["next"], "next batch, with the experimental driver"),
-             ("opt2", n["driver"]["fresh"], "fresh pool + warm-up, with the driver")]
-    return bars
+
+# The same pools after the warm-up started waiting for new simulators to settle (2026-11-18, later that morning): the
+# first batch as it is now, and two more runs of the next batch (the same code path as above).
+SETTLED = {"Ice Cubes": ["settled-icecubes-rep1--results-ice-cubes-arm64-three-agents-real-tasks--20261118-080123.json",
+                         "settled-icecubes-rep2--results-ice-cubes-arm64-three-agents-real-tasks--20261118-084434.json"],
+           "Wikipedia": ["settled-wikipedia-rep1--results-wikipedia-ios-arm64-three-agents-real-tasks--20261118-082740.json",
+                         "settled-wikipedia-rep2--results-wikipedia-ios-arm64-three-agents-real-tasks--20261118-091041.json"]}
+
+
+def fair_numbers():
+    out = {}
+    for app, files in FAIR.items():
+        runs = [load(f)["tasks"] for f in files]
+        later = [load(f)["tasks"] for f in SETTLED[app]]
+
+        def get(prefix, field="wall_seconds", among=None, exact=False):
+            vals = [v[field] for r in (among if among is not None else runs) for k, v in r.items()
+                    if (k == prefix if exact else k.startswith(prefix)) and v.get(field) is not None]
+            return rng(vals) if vals else None
+        cold = [load(f)["tasks"]["plain"] for f in COLD[app][0] + COLD[app][1]]
+        out[app] = {
+            "cold": rng([c["wall_seconds"] for c in cold]),
+            "kept_first": get("plain, kept worktrees", exact=True),
+            "kept_next": get("plain, kept worktrees, the next"),
+            "kept_adv": get("plain, kept worktrees, after the baseline moved"),
+            "xcfs_first": get("xcfs (defaults)", among=later, exact=True),
+            "xcfs_first_warm": get("xcfs (defaults)", "warm_seconds", among=later, exact=True),
+            "drv_first": get("xcfs (experimental-driver)", among=later, exact=True),
+            "drv_first_warm": get("xcfs (experimental-driver)", "warm_seconds", among=later, exact=True),
+            "xcfs_next": get("xcfs (defaults), the next", among=runs + later),
+            "xcfs_next_warm": get("xcfs (defaults), the next", "warm_seconds", among=runs + later),
+            "xcfs_adv": get("xcfs (defaults), after the baseline moved"),
+            "xcfs_adv_warm": get("xcfs (defaults), after the baseline moved", "warm_seconds"),
+            "drv_next": get("xcfs (experimental-driver), the next", among=runs + later),
+            "drv_adv": get("xcfs (experimental-driver), after the baseline moved"),
+            "cold_left": rng([c["left_kb"] / 2 ** 20 for c in cold if c.get("left_kb")]),
+            "moved": next((int(k.split("moved ")[1].split()[0]) for r in runs for k in r if "after the baseline moved" in k
+                           and k.startswith("xcfs")), None),
+        }
+    return out
+
+
+def secs(r):
+    lo, hi = r
+    return fmt(lo, hi, " s")
+
+
+def fair_groups(fn):
+    groups = []
+    for app, n in fn.items():
+        for case, kept, x, xw, what, d in (
+                ("a fresh pool's first batch", n["kept_first"], n["xcfs_first"], n["xcfs_first_warm"], "warm-up first",
+                 n["drv_first"] and (n["drv_first"], n["drv_first_warm"])),
+                ("the next batch", n["kept_next"], n["xcfs_next"], n["xcfs_next_warm"], "re-warm, done beforehand",
+                 n["drv_next"] and (n["drv_next"], None)),
+                ("after main moved %d commits" % n["moved"], n["kept_adv"], n["xcfs_adv"], n["xcfs_adv_warm"],
+                 "following main, beforehand", n["drv_adv"] and (n["drv_adv"], None))):
+            bars = [("plain", n["cold"], "new worktree each batch"),
+                    ("plain2", kept, "kept worktrees"),
+                    ("xcfs", x, "xcfs (+%s %s)" % (secs(xw), what))]
+            if d:
+                bars.append(("opt", d[0], "xcfs + driver" + (" (+%s warm-up first)" % secs(d[1]) if d[1] else "")))
+            groups.append(("%s, %s" % (app, case), bars))
+    return groups
 
 
 def main():
-    tn = task_numbers()
+    fn = fair_numbers()
     write("agents-wall-time", lambda theme: hbar_chart(
-        [(app, wall_bars(n)) for app, n in tn.items()],
-        [("plain", "plain worktrees + xcodebuild"), ("xcfs", "xcfs, pool reused"), ("xcfs2", "xcfs, fresh pool"),
-         ("opt", "+ experimental driver (opt-in)")],
-        " s", 620, theme, title="Three agents, real tasks: wall time per batch (shorter is better)"))
+        fair_groups(fn),
+        [("plain", "new worktree per batch"), ("plain2", "kept worktrees"), ("xcfs", "xcfs"),
+         ("opt", "xcfs + driver (opt-in)")],
+        " s", 500, theme, label_w=265, width=1135, right=560,
+        title="Three agents with real tasks: how long they wait for builds and tests per batch (shorter is better)"))
     write("agents-memory-disk", lambda theme: hbar_chart(
-        [(app + ", memory", [("plain", n["plain_mem"], None)] +
-          ([("xcfs", n["xcfs"]["mem"], None)] if n["xcfs"] else
-           [("opt", n["driver"]["mem"], "with the experimental driver")])) for app, n in tn.items()] +
-        [(app + ", left on disk", [("plain", n["plain_left"], "of DerivedData"), ("xcfs", NOT_MEASURED, "nothing")])
-         for app, n in tn.items()],
-        [("plain", "plain git worktrees"), ("xcfs", "xcfs"), ("opt", "xcfs + experimental driver (opt-in)")],
-        " GB", 30, theme, label_w=190,
-        title="Peak memory while the agents work, and what removal leaves behind (less is better)"))
+        [(app, [("plain", n["cold_left"], "of DerivedData per batch of three"), ("xcfs", NOT_MEASURED, "nothing")])
+         for app, n in fn.items()],
+        [("plain", "plain git worktrees, removed"), ("xcfs", "xcfs checkouts, removed")],
+        " GB", 12, theme, label_w=150, width=920,
+        title="Left behind on disk after the agents' worktrees are removed (less is better)"))
     zn = zero_numbers()
     write("zero-config-round", lambda theme: hbar_chart(
         [(name, [("plain", p, None), ("xcfs", x, None), ("opt", d, None)]) for name, p, x, d in zn],
         [("plain", "plain worktree"), ("xcfs", "xcfs"), ("opt", "xcfs + experimental driver (opt-in)")],
-        " s", 560, theme,
-        title="One agent's round of work, zero configuration (shorter is better)"))
+        " s", 560, theme, width=840,
+        title="One agent's round of work, zero configuration (shorter is better; xcfs 0.2, 2026-11-14)"))
 
 
 if __name__ == "__main__":

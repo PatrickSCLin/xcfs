@@ -7,9 +7,10 @@
 > WorktreeCreate / WorktreeRemove / SessionEnd hooks (`xcfs hook install --apply`), and every command answers in JSON
 > for other agent tools. macOS on APFS, Xcode, Python 3.9+ standard library; MIT; `brew install PatrickSCLin/xcfs/xcfs`.
 
-Measured with three agents at once on public apps: later batches 1.3–2.2× faster on two apps (1.8–2.7× with the opt-in experimental Swift driver) than plain `git worktree` +
-`xcodebuild` (the first batch on a fresh pool is slower, it pays for the warm-up), less peak memory (8–12 against 24–25 GB on Ice Cubes, 11–13 against 15–16 GB on Wikipedia), and
-nothing left in DerivedData (plain worktrees left 1.5–2.9 GB each).
+Measured with three agents at once on two public apps: from the second batch on, the agents wait 46–97 s (Ice Cubes)
+and 130–185 s (Wikipedia iOS) against 284–312 s and 347–387 s with a new `git worktree` per batch and 161 s and 185–186 s
+with worktrees kept and switched by a script; nothing is left in DerivedData (a new worktree per batch leaves 4.6–8.9 GB
+per batch of three); no test run is killed by another agent's.
 
 ## Docs
 

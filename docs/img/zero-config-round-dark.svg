@@ -1,55 +1,55 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="618" viewBox="0 0 760 618" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
-<text x="0" y="16" fill="#e6edf3" font-size="13" font-weight="600">One agent's round of work, zero configuration (shorter is better)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="618" viewBox="0 0 840 618" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+<text x="0" y="16" fill="#e6edf3" font-size="13" font-weight="600">One agent's round of work, zero configuration (shorter is better; xcfs 0.2, 2026-11-14)</text>
 <text x="0" y="48" fill="#e6edf3" font-weight="600">Kickstarter</text>
-<rect x="150.0" y="34" width="190.3" height="18" rx="2" fill="#6e7681"/>
-<path d="M329.2 43.0 H351.3 M329.2 38.0 V48.0 M351.3 38.0 V48.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
-<text x="357.3" y="48" fill="#e6edf3">279–313 s</text>
-<rect x="150.0" y="58" width="47.5" height="18" rx="2" fill="#4493f8"/>
-<text x="203.5" y="72" fill="#e6edf3">74 s</text>
-<rect x="150.0" y="82" width="21.3" height="18" rx="2" fill="#a371f7"/>
-<text x="177.3" y="96" fill="#e6edf3">33 s</text>
+<rect x="150.0" y="34" width="232.5" height="18" rx="2" fill="#6e7681"/>
+<path d="M369.0 43.0 H396.1 M369.0 38.0 V48.0 M396.1 38.0 V48.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
+<text x="402.1" y="48" fill="#e6edf3">279–313 s</text>
+<rect x="150.0" y="58" width="58.1" height="18" rx="2" fill="#4493f8"/>
+<text x="214.1" y="72" fill="#e6edf3">74 s</text>
+<rect x="150.0" y="82" width="26.1" height="18" rx="2" fill="#a371f7"/>
+<text x="182.1" y="96" fill="#e6edf3">33 s</text>
 <text x="0" y="138" fill="#e6edf3" font-weight="600">Element X</text>
-<rect x="150.0" y="124" width="180.8" height="18" rx="2" fill="#6e7681"/>
-<path d="M319.2 133.0 H342.5 M319.2 128.0 V138.0 M342.5 128.0 V138.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
-<text x="348.5" y="138" fill="#e6edf3">263–299 s</text>
-<rect x="150.0" y="148" width="60.1" height="18" rx="2" fill="#4493f8"/>
-<text x="216.1" y="162" fill="#e6edf3">94 s</text>
-<rect x="150.0" y="172" width="36.9" height="18" rx="2" fill="#a371f7"/>
-<text x="192.9" y="186" fill="#e6edf3">57 s</text>
+<rect x="150.0" y="124" width="221.0" height="18" rx="2" fill="#6e7681"/>
+<path d="M356.8 133.0 H385.2 M356.8 128.0 V138.0 M385.2 128.0 V138.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
+<text x="391.2" y="138" fill="#e6edf3">263–299 s</text>
+<rect x="150.0" y="148" width="73.5" height="18" rx="2" fill="#4493f8"/>
+<text x="229.5" y="162" fill="#e6edf3">94 s</text>
+<rect x="150.0" y="172" width="45.1" height="18" rx="2" fill="#a371f7"/>
+<text x="201.1" y="186" fill="#e6edf3">57 s</text>
 <text x="0" y="228" fill="#e6edf3" font-weight="600">Signal</text>
-<rect x="150.0" y="214" width="206.7" height="18" rx="2" fill="#6e7681"/>
-<path d="M353.9 223.0 H359.4 M353.9 218.0 V228.0 M359.4 218.0 V228.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
-<text x="365.4" y="228" fill="#e6edf3">317–326 s</text>
-<rect x="150.0" y="238" width="70.5" height="18" rx="2" fill="#4493f8"/>
-<text x="226.5" y="252" fill="#e6edf3">110 s</text>
-<rect x="150.0" y="262" width="65.1" height="18" rx="2" fill="#a371f7"/>
-<text x="221.1" y="276" fill="#e6edf3">101 s</text>
+<rect x="150.0" y="214" width="252.6" height="18" rx="2" fill="#6e7681"/>
+<path d="M399.2 223.0 H406.0 M399.2 218.0 V228.0 M406.0 218.0 V228.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
+<text x="412.0" y="228" fill="#e6edf3">317–326 s</text>
+<rect x="150.0" y="238" width="86.1" height="18" rx="2" fill="#4493f8"/>
+<text x="242.1" y="252" fill="#e6edf3">110 s</text>
+<rect x="150.0" y="262" width="79.5" height="18" rx="2" fill="#a371f7"/>
+<text x="235.5" y="276" fill="#e6edf3">101 s</text>
 <text x="0" y="318" fill="#e6edf3" font-weight="600">Home Assistant</text>
-<rect x="150.0" y="304" width="331.1" height="18" rx="2" fill="#6e7681"/>
-<path d="M466.5 313.0 H495.7 M466.5 308.0 V318.0 M495.7 308.0 V318.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
-<text x="501.7" y="318" fill="#e6edf3">492–538 s</text>
-<rect x="150.0" y="328" width="102.8" height="18" rx="2" fill="#4493f8"/>
-<text x="258.8" y="342" fill="#e6edf3">160 s</text>
-<rect x="150.0" y="352" width="63.6" height="18" rx="2" fill="#a371f7"/>
-<text x="219.6" y="366" fill="#e6edf3">99 s</text>
+<rect x="150.0" y="304" width="404.7" height="18" rx="2" fill="#6e7681"/>
+<path d="M536.9 313.0 H572.6 M536.9 308.0 V318.0 M572.6 308.0 V318.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
+<text x="578.6" y="318" fill="#e6edf3">492–538 s</text>
+<rect x="150.0" y="328" width="125.6" height="18" rx="2" fill="#4493f8"/>
+<text x="281.6" y="342" fill="#e6edf3">160 s</text>
+<rect x="150.0" y="352" width="77.7" height="18" rx="2" fill="#a371f7"/>
+<text x="233.7" y="366" fill="#e6edf3">99 s</text>
 <text x="0" y="408" fill="#e6edf3" font-weight="600">Ice Cubes</text>
-<rect x="150.0" y="394" width="97.9" height="18" rx="2" fill="#6e7681"/>
-<path d="M241.7 403.0 H254.0 M241.7 398.0 V408.0 M254.0 398.0 V408.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
-<text x="260.0" y="408" fill="#e6edf3">143–162 s</text>
-<rect x="150.0" y="418" width="24.8" height="18" rx="2" fill="#4493f8"/>
-<path d="M174.5 427.0 H175.1 M174.5 422.0 V432.0 M175.1 422.0 V432.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
-<text x="181.1" y="432" fill="#e6edf3">38–39 s</text>
-<rect x="150.0" y="442" width="10.6" height="18" rx="2" fill="#a371f7"/>
-<path d="M160.2 451.0 H161.0 M160.2 446.0 V456.0 M161.0 446.0 V456.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
-<text x="167.0" y="456" fill="#e6edf3">16–17 s</text>
+<rect x="150.0" y="394" width="119.6" height="18" rx="2" fill="#6e7681"/>
+<path d="M262.1 403.0 H277.1 M262.1 398.0 V408.0 M277.1 398.0 V408.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
+<text x="283.1" y="408" fill="#e6edf3">143–162 s</text>
+<rect x="150.0" y="418" width="30.3" height="18" rx="2" fill="#4493f8"/>
+<path d="M179.9 427.0 H180.7 M179.9 422.0 V432.0 M180.7 422.0 V432.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
+<text x="186.7" y="432" fill="#e6edf3">38–39 s</text>
+<rect x="150.0" y="442" width="12.9" height="18" rx="2" fill="#a371f7"/>
+<path d="M162.4 451.0 H163.4 M162.4 446.0 V456.0 M163.4 446.0 V456.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
+<text x="169.4" y="456" fill="#e6edf3">16–17 s</text>
 <text x="0" y="498" fill="#e6edf3" font-weight="600">Wikipedia iOS</text>
-<rect x="150.0" y="484" width="161.2" height="18" rx="2" fill="#6e7681"/>
-<path d="M308.1 493.0 H314.3 M308.1 488.0 V498.0 M314.3 488.0 V498.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
-<text x="320.3" y="498" fill="#e6edf3">246–256 s</text>
-<rect x="150.0" y="508" width="85.1" height="18" rx="2" fill="#4493f8"/>
-<text x="241.1" y="522" fill="#e6edf3">132 s</text>
-<rect x="150.0" y="532" width="52.7" height="18" rx="2" fill="#a371f7"/>
-<text x="208.7" y="546" fill="#e6edf3">82 s</text>
+<rect x="150.0" y="484" width="197.0" height="18" rx="2" fill="#6e7681"/>
+<path d="M343.2 493.0 H350.8 M343.2 488.0 V498.0 M350.8 488.0 V498.0" stroke="#e6edf3" stroke-width="1.2" fill="none"/>
+<text x="356.8" y="498" fill="#e6edf3">246–256 s</text>
+<rect x="150.0" y="508" width="104.0" height="18" rx="2" fill="#4493f8"/>
+<text x="260.0" y="522" fill="#e6edf3">132 s</text>
+<rect x="150.0" y="532" width="64.4" height="18" rx="2" fill="#a371f7"/>
+<text x="220.4" y="546" fill="#e6edf3">82 s</text>
 <rect x="0" y="576" width="12" height="12" rx="2" fill="#6e7681"/>
 <text x="17" y="586" fill="#9198a1">plain worktree</text>
 <rect x="137" y="576" width="12" height="12" rx="2" fill="#4493f8"/>

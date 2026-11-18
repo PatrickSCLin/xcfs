@@ -1,35 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="342" viewBox="0 0 760 342" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
-<text x="0" y="16" fill="#1f2328" font-size="13" font-weight="600">Peak memory while the agents work, and what removal leaves behind (less is better)</text>
-<text x="0" y="48" fill="#1f2328" font-weight="600">Ice Cubes, memory</text>
-<rect x="190.0" y="34" width="263.2" height="18" rx="2" fill="#8c959f"/>
-<path d="M444.9 43.0 H461.4 M444.9 38.0 V48.0 M461.4 38.0 V48.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="467.4" y="48" fill="#1f2328">23.9–25.4 GB</text>
-<rect x="190.0" y="58" width="106.8" height="18" rx="2" fill="#0969da"/>
-<path d="M278.0 67.0 H315.6 M278.0 62.0 V72.0 M315.6 62.0 V72.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="321.6" y="72" fill="#1f2328">8.3–11.8 GB</text>
-<text x="0" y="114" fill="#1f2328" font-weight="600">Wikipedia iOS, memory</text>
-<rect x="190.0" y="100" width="167.8" height="18" rx="2" fill="#8c959f"/>
-<path d="M353.2 109.0 H362.4 M353.2 104.0 V114.0 M362.4 104.0 V114.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="368.4" y="114" fill="#1f2328">15.3–16.2 GB</text>
-<rect x="190.0" y="124" width="127.5" height="18" rx="2" fill="#0969da"/>
-<path d="M305.4 133.0 H329.6 M305.4 128.0 V138.0 M329.6 128.0 V138.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="335.6" y="138" fill="#1f2328">10.8–13.1 GB</text>
-<text x="0" y="180" fill="#1f2328" font-weight="600">Ice Cubes, left on disk</text>
-<rect x="190.0" y="166" width="49.5" height="18" rx="2" fill="#8c959f"/>
-<path d="M239.5 175.0 H239.5 M239.5 170.0 V180.0 M239.5 170.0 V180.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="245.5" y="180" fill="#1f2328">4.6 GB of DerivedData</text>
-<rect x="190.0" y="190" width="1.0" height="18" rx="2" fill="#0969da"/>
-<text x="196.0" y="204" fill="#1f2328">nothing</text>
-<text x="0" y="246" fill="#1f2328" font-weight="600">Wikipedia iOS, left on disk</text>
-<rect x="190.0" y="232" width="94.5" height="18" rx="2" fill="#8c959f"/>
-<path d="M284.3 241.0 H284.7 M284.3 236.0 V246.0 M284.7 236.0 V246.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="290.7" y="246" fill="#1f2328">8.8–8.9 GB of DerivedData</text>
-<rect x="190.0" y="256" width="1.0" height="18" rx="2" fill="#0969da"/>
-<text x="196.0" y="270" fill="#1f2328">nothing</text>
-<rect x="0" y="300" width="12" height="12" rx="2" fill="#8c959f"/>
-<text x="17" y="310" fill="#59636e">plain git worktrees</text>
-<rect x="172" y="300" width="12" height="12" rx="2" fill="#0969da"/>
-<text x="189" y="310" fill="#59636e">xcfs</text>
-<rect x="239" y="300" width="12" height="12" rx="2" fill="#8250df"/>
-<text x="256" y="310" fill="#59636e">xcfs + experimental driver (opt-in)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="210" viewBox="0 0 920 210" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+<text x="0" y="16" fill="#1f2328" font-size="13" font-weight="600">Left behind on disk after the agents' worktrees are removed (less is better)</text>
+<text x="0" y="48" fill="#1f2328" font-weight="600">Ice Cubes</text>
+<rect x="150.0" y="34" width="201.6" height="18" rx="2" fill="#8c959f"/>
+<path d="M351.0 43.0 H352.2 M351.0 38.0 V48.0 M352.2 38.0 V48.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="358.2" y="48" fill="#1f2328">4.6–4.7 GB of DerivedData per batch of three</text>
+<rect x="150.0" y="58" width="1.0" height="18" rx="2" fill="#0969da"/>
+<text x="156.0" y="72" fill="#1f2328">nothing</text>
+<text x="0" y="114" fill="#1f2328" font-weight="600">Wikipedia</text>
+<rect x="150.0" y="100" width="383.9" height="18" rx="2" fill="#8c959f"/>
+<path d="M533.1 109.0 H534.7 M533.1 104.0 V114.0 M534.7 104.0 V114.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="540.7" y="114" fill="#1f2328">8.8–8.9 GB of DerivedData per batch of three</text>
+<rect x="150.0" y="124" width="1.0" height="18" rx="2" fill="#0969da"/>
+<text x="156.0" y="138" fill="#1f2328">nothing</text>
+<rect x="0" y="168" width="12" height="12" rx="2" fill="#8c959f"/>
+<text x="17" y="178" fill="#59636e">plain git worktrees, removed</text>
+<rect x="235" y="168" width="12" height="12" rx="2" fill="#0969da"/>
+<text x="252" y="178" fill="#59636e">xcfs checkouts, removed</text>
 </svg>

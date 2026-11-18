@@ -1,43 +1,80 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="354" viewBox="0 0 760 354" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
-<text x="0" y="16" fill="#1f2328" font-size="13" font-weight="600">Three agents, real tasks: wall time per batch (shorter is better)</text>
-<text x="0" y="48" fill="#1f2328" font-weight="600">Ice Cubes</text>
-<rect x="150.0" y="34" width="169.9" height="18" rx="2" fill="#8c959f"/>
-<path d="M314.8 43.0 H325.1 M314.8 38.0 V48.0 M325.1 38.0 V48.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="331.1" y="48" fill="#1f2328">284–302 s every batch</text>
-<rect x="150.0" y="58" width="83.9" height="18" rx="2" fill="#0969da"/>
-<path d="M230.1 67.0 H237.7 M230.1 62.0 V72.0 M237.7 62.0 V72.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="243.7" y="72" fill="#1f2328">138–151 s the next batch on the pool</text>
-<rect x="150.0" y="82" width="211.9" height="18" rx="2" fill="#80b9f2"/>
-<path d="M355.8 91.0 H368.0 M355.8 86.0 V96.0 M368.0 86.0 V96.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="374.0" y="96" fill="#1f2328">354–376 s a fresh pool, warm-up included</text>
-<rect x="150.0" y="106" width="67.3" height="18" rx="2" fill="#8250df"/>
-<path d="M214.6 115.0 H220.0 M214.6 110.0 V120.0 M220.0 110.0 V120.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="226.0" y="120" fill="#1f2328">111–121 s next batch, with the experimental driver</text>
-<rect x="150.0" y="130" width="240.1" height="18" rx="2" fill="#c8b3f5"/>
-<path d="M386.8 139.0 H393.4 M386.8 134.0 V144.0 M393.4 134.0 V144.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="399.4" y="144" fill="#1f2328">408–419 s fresh pool + warm-up, with the driver</text>
-<text x="0" y="186" fill="#1f2328" font-weight="600">Wikipedia iOS</text>
-<rect x="150.0" y="172" width="213.1" height="18" rx="2" fill="#8c959f"/>
-<path d="M351.5 181.0 H374.7 M351.5 176.0 V186.0 M374.7 176.0 V186.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="380.7" y="186" fill="#1f2328">347–387 s every batch</text>
-<rect x="150.0" y="196" width="148.6" height="18" rx="2" fill="#0969da"/>
-<path d="M294.1 205.0 H303.2 M294.1 200.0 V210.0 M303.2 200.0 V210.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="309.2" y="210" fill="#1f2328">248–264 s the next batch on the pool</text>
-<rect x="150.0" y="220" width="302.5" height="18" rx="2" fill="#80b9f2"/>
-<path d="M436.8 229.0 H468.1 M436.8 224.0 V234.0 M468.1 224.0 V234.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="474.1" y="234" fill="#1f2328">494–548 s a fresh pool, warm-up included</text>
-<rect x="150.0" y="244" width="113.2" height="18" rx="2" fill="#8250df"/>
-<path d="M258.5 253.0 H267.9 M258.5 248.0 V258.0 M267.9 248.0 V258.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="273.9" y="258" fill="#1f2328">187–203 s next batch, with the experimental driver</text>
-<rect x="150.0" y="268" width="306.7" height="18" rx="2" fill="#c8b3f5"/>
-<path d="M451.7 277.0 H461.7 M451.7 272.0 V282.0 M461.7 272.0 V282.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
-<text x="467.7" y="282" fill="#1f2328">520–537 s fresh pool + warm-up, with the driver</text>
-<rect x="0" y="312" width="12" height="12" rx="2" fill="#8c959f"/>
-<text x="17" y="322" fill="#59636e">plain worktrees + xcodebuild</text>
-<rect x="235" y="312" width="12" height="12" rx="2" fill="#0969da"/>
-<text x="252" y="322" fill="#59636e">xcfs, pool reused</text>
-<rect x="393" y="312" width="12" height="12" rx="2" fill="#80b9f2"/>
-<text x="410" y="322" fill="#59636e">xcfs, fresh pool</text>
-<rect x="544" y="312" width="12" height="12" rx="2" fill="#8250df"/>
-<text x="561" y="322" fill="#59636e">+ experimental driver (opt-in)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1135" height="690" viewBox="0 0 1135 690" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+<text x="0" y="16" fill="#1f2328" font-size="13" font-weight="600">Three agents with real tasks: how long they wait for builds and tests per batch (shorter is better)</text>
+<text x="0" y="48" fill="#1f2328" font-weight="600">Ice Cubes, a fresh pool's first batch</text>
+<rect x="265.0" y="34" width="184.7" height="18" rx="2" fill="#8c959f"/>
+<path d="M441.0 43.0 H458.4 M441.0 38.0 V48.0 M458.4 38.0 V48.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="464.4" y="48" fill="#1f2328">284–312 s new worktree each batch</text>
+<rect x="265.0" y="58" width="183.1" height="18" rx="2" fill="#c4cbd3"/>
+<path d="M442.2 67.0 H453.9 M442.2 62.0 V72.0 M453.9 62.0 V72.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="459.9" y="72" fill="#1f2328">286–305 s kept worktrees</text>
+<rect x="265.0" y="82" width="65.6" height="18" rx="2" fill="#0969da"/>
+<path d="M323.1 91.0 H338.2 M323.1 86.0 V96.0 M338.2 86.0 V96.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="344.2" y="96" fill="#1f2328">94–118 s xcfs (+501–509 s warm-up first)</text>
+<rect x="265.0" y="106" width="60.9" height="18" rx="2" fill="#8250df"/>
+<path d="M320.3 115.0 H331.6 M320.3 110.0 V120.0 M331.6 110.0 V120.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="337.6" y="120" fill="#1f2328">89–107 s xcfs + driver (+571–572 s warm-up first)</text>
+<text x="0" y="162" fill="#1f2328" font-weight="600">Ice Cubes, the next batch</text>
+<rect x="265.0" y="148" width="184.7" height="18" rx="2" fill="#8c959f"/>
+<path d="M441.0 157.0 H458.4 M441.0 152.0 V162.0 M458.4 152.0 V162.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="464.4" y="162" fill="#1f2328">284–312 s new worktree each batch</text>
+<rect x="265.0" y="172" width="99.8" height="18" rx="2" fill="#c4cbd3"/>
+<path d="M364.8 181.0 H364.9 M364.8 176.0 V186.0 M364.9 176.0 V186.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="370.9" y="186" fill="#1f2328">161 s kept worktrees</text>
+<rect x="265.0" y="196" width="44.2" height="18" rx="2" fill="#0969da"/>
+<path d="M293.5 205.0 H325.0 M293.5 200.0 V210.0 M325.0 200.0 V210.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="331.0" y="210" fill="#1f2328">46–97 s xcfs (+31–82 s re-warm, done beforehand)</text>
+<rect x="265.0" y="220" width="36.0" height="18" rx="2" fill="#8250df"/>
+<path d="M287.3 229.0 H314.7 M287.3 224.0 V234.0 M314.7 224.0 V234.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="320.7" y="234" fill="#1f2328">36–80 s xcfs + driver</text>
+<text x="0" y="276" fill="#1f2328" font-weight="600">Ice Cubes, after main moved 30 commits</text>
+<rect x="265.0" y="262" width="184.7" height="18" rx="2" fill="#8c959f"/>
+<path d="M441.0 271.0 H458.4 M441.0 266.0 V276.0 M458.4 266.0 V276.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="464.4" y="276" fill="#1f2328">284–312 s new worktree each batch</text>
+<rect x="265.0" y="286" width="166.1" height="18" rx="2" fill="#c4cbd3"/>
+<path d="M424.2 295.0 H437.9 M424.2 290.0 V300.0 M437.9 290.0 V300.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="443.9" y="300" fill="#1f2328">257–279 s kept worktrees</text>
+<rect x="265.0" y="310" width="47.5" height="18" rx="2" fill="#0969da"/>
+<path d="M312.4 319.0 H312.6 M312.4 314.0 V324.0 M312.6 314.0 V324.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="318.6" y="324" fill="#1f2328">77 s xcfs (+287–302 s following main, beforehand)</text>
+<rect x="265.0" y="334" width="43.5" height="18" rx="2" fill="#8250df"/>
+<path d="M308.3 343.0 H308.6 M308.3 338.0 V348.0 M308.6 338.0 V348.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="314.6" y="348" fill="#1f2328">70 s xcfs + driver</text>
+<text x="0" y="390" fill="#1f2328" font-weight="600">Wikipedia, a fresh pool's first batch</text>
+<rect x="265.0" y="376" width="227.5" height="18" rx="2" fill="#8c959f"/>
+<path d="M480.1 385.0 H504.9 M480.1 380.0 V390.0 M504.9 380.0 V390.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="510.9" y="390" fill="#1f2328">347–387 s new worktree each batch</text>
+<rect x="265.0" y="400" width="253.1" height="18" rx="2" fill="#c4cbd3"/>
+<path d="M477.7 409.0 H558.6 M477.7 404.0 V414.0 M558.6 404.0 V414.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="564.6" y="414" fill="#1f2328">343–474 s kept worktrees</text>
+<rect x="265.0" y="424" width="172.8" height="18" rx="2" fill="#0969da"/>
+<path d="M436.7 433.0 H439.0 M436.7 428.0 V438.0 M439.0 428.0 V438.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="445.0" y="438" fill="#1f2328">277–281 s xcfs (+511–521 s warm-up first)</text>
+<text x="0" y="480" fill="#1f2328" font-weight="600">Wikipedia, the next batch</text>
+<rect x="265.0" y="466" width="227.5" height="18" rx="2" fill="#8c959f"/>
+<path d="M480.1 475.0 H504.9 M480.1 470.0 V480.0 M504.9 470.0 V480.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="510.9" y="480" fill="#1f2328">347–387 s new worktree each batch</text>
+<rect x="265.0" y="490" width="115.2" height="18" rx="2" fill="#c4cbd3"/>
+<path d="M379.9 499.0 H380.4 M379.9 494.0 V504.0 M380.4 494.0 V504.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="386.4" y="504" fill="#1f2328">185–186 s kept worktrees</text>
+<rect x="265.0" y="514" width="97.6" height="18" rx="2" fill="#0969da"/>
+<path d="M345.5 523.0 H379.6 M345.5 518.0 V528.0 M379.6 518.0 V528.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="385.6" y="528" fill="#1f2328">130–185 s xcfs (+72–74 s re-warm, done beforehand)</text>
+<text x="0" y="570" fill="#1f2328" font-weight="600">Wikipedia, after main moved 208 commits</text>
+<rect x="265.0" y="556" width="227.5" height="18" rx="2" fill="#8c959f"/>
+<path d="M480.1 565.0 H504.9 M480.1 560.0 V570.0 M504.9 560.0 V570.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="510.9" y="570" fill="#1f2328">347–387 s new worktree each batch</text>
+<rect x="265.0" y="580" width="146.1" height="18" rx="2" fill="#c4cbd3"/>
+<path d="M399.7 589.0 H422.5 M399.7 584.0 V594.0 M422.5 584.0 V594.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="428.5" y="594" fill="#1f2328">217–254 s kept worktrees</text>
+<rect x="265.0" y="604" width="112.5" height="18" rx="2" fill="#0969da"/>
+<path d="M372.7 613.0 H382.3 M372.7 608.0 V618.0 M382.3 608.0 V618.0" stroke="#1f2328" stroke-width="1.2" fill="none"/>
+<text x="388.3" y="618" fill="#1f2328">174–189 s xcfs (+258–268 s following main, beforehand)</text>
+<rect x="0" y="648" width="12" height="12" rx="2" fill="#8c959f"/>
+<text x="17" y="658" fill="#59636e">new worktree per batch</text>
+<rect x="193" y="648" width="12" height="12" rx="2" fill="#c4cbd3"/>
+<text x="210" y="658" fill="#59636e">kept worktrees</text>
+<rect x="330" y="648" width="12" height="12" rx="2" fill="#0969da"/>
+<text x="347" y="658" fill="#59636e">xcfs</text>
+<rect x="397" y="648" width="12" height="12" rx="2" fill="#8250df"/>
+<text x="414" y="658" fill="#59636e">xcfs + driver (opt-in)</text>
 </svg>

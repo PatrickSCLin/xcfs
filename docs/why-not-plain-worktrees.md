@@ -10,7 +10,7 @@ Xcode 27.2, one simulator architecture; [Ice Cubes](https://github.com/Dimillian
 
 Xcode keys DerivedData by the project's path, so every worktree gets a bucket of its own:
 
-- **Every worktree builds from nothing.** Three agents with a real task each, at once: a batch takes 284–302 s on Ice
+- **Every worktree builds from nothing.** Three agents with a real task each, at once: a batch takes 284–312 s on Ice
   Cubes and 347–387 s on Wikipedia, every time, because every new worktree's first build is cold (160 s on Ice Cubes
   with three building side by side).
 - **The buckets outlive the worktrees.** `git worktree remove` deletes the checkout and leaves its DerivedData: 1.5 GB
@@ -60,11 +60,16 @@ This is the right idea, and it is what xcfs's pool is. What it takes to make it 
 - an incremental build session instead of `xcodebuild`'s fixed cost (a no-op 5.9 → 0.9 s on Ice Cubes), and a check
   of single files (1–4 s).
 
-With that, the next batch of three agents takes 138–151 s on Ice Cubes instead of 284–302 s and 248–264 s on Wikipedia
-instead of 347–363 s, at 8–12 and 11–13 GB instead of 24–25 and 15–16, and removal leaves nothing behind; with the
-opt-in experimental Swift driver, 111–121 s and 187–203 s. The first batch on a fresh pool is slower than
-plain worktrees (it pays for the warm-up), and starting without a warm-up is slower still (451 s on Ice Cubes, one
-run): warm the pool before the agents need it.
+Measured against exactly that — three worktrees kept between batches and switched to a new branch by a script, their
+DerivedData kept — the next batch of three agents waits 46–97 s with xcfs against 161 s on Ice Cubes, and 130–185 s
+against 185–186 s on Wikipedia; after main moved, 77 s against 257–279 s and 174–189 s against 217–254 s. xcfs's
+re-warm of returned slots and its following of main run in the background before the agents ask; the script does
+neither, so its agents wait for both. Each of xcfs's slots keeps its own booted simulator (≈3.4 GB), where the script's
+agents share one and sometimes kill each other's test runs (3 of 18 on Wikipedia). Against a new worktree per batch,
+what agent tools do by default, the next batch is 2.9–6.8× faster on Ice Cubes and 1.9–3.0× on Wikipedia
+([tables](benchmark.md#three-agents-kept-worktrees-and-a-moving-main)). A fresh pool's first batch is 2.4–3.3× and
+1.2–1.4× faster too, after a warm-up of 501–521 s that lets each new simulator settle: warm the pool before the
+agents need it.
 
 ## Build caches and other build systems
 

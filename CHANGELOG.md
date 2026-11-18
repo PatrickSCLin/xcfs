@@ -13,9 +13,18 @@ What changed for people and scripts that use xcfs. The interface that is kept st
   `simulatorIdleMinutes` (30) after its last use — warm-up, lease, test, run, release — and a watcher shuts it down
   then; a booted simulator holds about 3.4 GB. A lease starts booting it in the background if it is not (adapter op
   `lease`). A plain checkout's tests run on the base device, booted by `xcodebuild` as before.
+- A slot's warm-up waits for its new simulator to settle after the first boot (it keeps 4–9 cores busy for about four
+  minutes on an M1 Max), so the agents do not start on a busy machine: a fresh Ice Cubes pool's warm-up 216–243 →
+  501–509 s, its first batch of three agents 213–231 → 94–118 s (the two together 429–474 → 595–627 s).
 
 ### Added
 
+- Benchmarks: the fair comparison (2026-11-18, two runs per app): worktrees kept between batches and switched by a
+  script, and the next batch after main moved 30 (Ice Cubes) and 208 (Wikipedia) commits, plus two more runs of xcfs
+  after the settle change. Against kept worktrees the agents wait 46–97 against 161 s on Ice Cubes and 130–185 against
+  185–186 s on Wikipedia; after main moved, 77 against
+  257–279 s and 174–189 against 217–254 s. The README, the charts, the benchmark page, the comparison page, the index
+  and llms.txt lead with these; the earlier runs stay, dated.
 - Benchmarks: three agents on Wikipedia iOS with xcfs's default (no experimental driver), two runs with 0.3.1 beside
   plain worktrees of the same day: the next batch 248–264 s against 347–363 s, 11–13 GB against 15–16 GB, and 0 of 6
   test runs killed against 3 of 6. The README, the charts and the benchmark page use them; Wikipedia no longer has
