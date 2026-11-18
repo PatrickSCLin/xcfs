@@ -1148,10 +1148,12 @@ def main():
                         retire_after_failure()
                         RESULTS["concurrent"]["xcfs (%s) %s" % (name, phase)] = {"failed": str(e)}
                         say("%s[xcfs %s]: FAILED: %s" % (phase, name, e))
-        if "round" in PHASES or "round-xcfs" in PHASES:
+        if "round" in PHASES or any(x == "round-xcfs" or x.startswith("round-xcfs:") for x in PHASES):
             if "round" in PHASES:
                 run_round_plain()
             for name, overrides in VARIANTS.items():
+                if not ("round" in PHASES or "round-xcfs" in PHASES or "round-xcfs:" + name in PHASES):
+                    continue
                 try:
                     run_round_xcfs(name, overrides)
                 except SystemExit as e:   # a failed variant is a result too; the others still run

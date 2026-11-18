@@ -133,6 +133,43 @@ def driver_mode(entry):
     return "patched" if m in ("patched", "api-digests") else "native"
 
 
+def simulator_cpu(udid):
+    """CPU (percent of one core) of a booted simulator's processes: launchd_sim for that device and what it started."""
+    rows = []
+    for l in run("ps", "-axo", "pid=,ppid=,%cpu=,command=", check=False, cwd="/").stdout.splitlines():
+        p = l.split(None, 3)
+        if len(p) == 4:
+            rows.append(p)
+    kids, cpu = {}, {}
+    for pid, ppid, c, _ in rows:
+        kids.setdefault(ppid, []).append(pid)
+        try:
+            cpu[pid] = float(c)
+        except ValueError:
+            cpu[pid] = 0.0
+    todo = [pid for pid, _, _, cmd in rows if os.path.basename(cmd.split(" ", 1)[0]) == "launchd_sim" and udid in cmd]
+    total, seen = 0.0, set()
+    while todo:
+        pid = todo.pop()
+        if pid not in seen:
+            seen.add(pid)
+            total += cpu.get(pid, 0.0)
+            todo += kids.get(pid, [])
+    return total
+
+
+def wait_settled(udid, limit=300, quiet=50.0, samples=3, every=5.0):
+    """Wait until a booted simulator stays under `quiet` percent CPU for `samples` samples in a row, or `limit`
+    seconds; returns the seconds waited."""
+    t0, calm = time.time(), 0
+    while time.time() - t0 < limit:
+        calm = calm + 1 if simulator_cpu(udid) < quiet else 0
+        if calm >= samples:
+            break
+        time.sleep(every)
+    return round(time.time() - t0, 1)
+
+
 def watch_simulator(root, udid, until):
     """Runs detached: shuts the checkout's simulator down once simulatorIdleMinutes passed since its last use. The
     deadline it was started with moves with every later use (saved in the checkout's resources once the operation
@@ -778,7 +815,12 @@ class XcodeAdapter(Adapter):
         try:
             udid = self.simulator(ctx)
             self.boot(udid)
-            if not self.keep_booted(ctx):
+            if self.keep_booted(ctx):
+                # A new simulator keeps several cores busy for minutes after its first boot (4 minutes, up to nine
+                # cores, on an M1 Max): the warm-up waits for that, so agents do not start on a busy machine.
+                settled = wait_settled(udid)
+                say("  the slot's simulator settled in %.0fs" % settled)
+            else:
                 run("xcrun", "simctl", "shutdown", udid, check=False, timeout=120)
         except (Fail, OSError, subprocess.SubprocessError) as e:
             warn("could not prepare the slot's simulator: %s" % str(e)[:200])

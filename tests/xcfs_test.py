@@ -2240,6 +2240,16 @@ def t88_tests_run_on_a_simulator_xcfs_booted():
         assert xa.XcodeAdapter().keep_booted(Context("slot", SB, SB, {}, entry, SB, resources={"simulator": "S"})) is False
     finally:
         xa.subprocess.Popen, xa.state.settings = saved, saved_settings
+    # a new simulator is busy for minutes after its first boot: the warm-up waits until it is quiet
+    seq = iter([700.0, 400.0, 30.0, 80.0, 20.0, 10.0, 5.0, 99.0])
+    saved_cpu = xa.simulator_cpu
+    xa.simulator_cpu = lambda udid: next(seq)
+    try:
+        assert xa.wait_settled("S", every=0.01) < 1 and next(seq) == 99.0, "three quiet samples in a row end the wait"
+        xa.simulator_cpu = lambda udid: 900.0
+        assert xa.wait_settled("S", limit=0.05, every=0.01) >= 0.05, "never quiet: the limit ends it"
+    finally:
+        xa.simulator_cpu = saved_cpu
     # the watcher: shuts the simulator down when the deadline passes, and ends early when the checkout is gone
     os.makedirs(SB + "/bin88", exist_ok=True)
     open(SB + "/bin88/xcrun", "w").write("#!/bin/sh\necho \"$@\" >> \"$XCRUN_LOG\"\n")
